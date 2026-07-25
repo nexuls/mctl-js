@@ -14,6 +14,31 @@ delete entries that stop being true. Newest-relevant first.
 - Dependencies today: `@opentui/core`, `@opentui/react`, `react` 19. Bun runtime; `bun run dev` only
   script so far. Codebase is still the starter template.
 
+## Phase 1 implementation decisions (2026-07-25)
+
+- **Zod is v4** (`zod@4.x`). In v4, `z.object(...).default({})` type-checks the argument against the
+  schema's **output** type, so `.default({})` fails when nested fields have their own defaults. Use
+  **`.prefault({})`** (input-side default) for composite sections instead — see
+  `types/config.ts` (`defaults`/`backup`/`network`).
+  - **How to apply:** for any object field whose sub-fields all have defaults, wrap with `.prefault({})`,
+    not `.default({})`.
+- **Config JSON key naming:** `servers_dir` and `backups_dir` stay **snake_case** because `plan.md`
+  documents them verbatim as `config.servers_dir` / `config.backups_dir` (a published contract).
+  Everything else in config is camelCase (`configVersion`, `defaultProfile`, …). Intentional exception,
+  not drift.
+- **Secrets + env override convention:** secret keys are **UPPER_SNAKE** (e.g. `CLOUDFLARE_TOKEN`); the
+  env override is `MCTL_<KEY>` (`MCTL_CLOUDFLARE_TOKEN`). `loadSecrets()` overlays *all* `MCTL_*` env
+  vars except a reserved set (`MCTL_LOG_LEVEL`). `secrets.json` is written `0600` and the mode is
+  re-`stat`'d and enforced after writing.
+- **Logger writes to a FILE, never stdout** (`~/.local/state/mctl/logs/mctl.log`) because OpenTUI owns
+  the terminal in TUI mode — console output corrupts the render. Level via `MCTL_LOG_LEVEL`. Pino
+  `redact` masks credential keys as defence-in-depth (real rule: don't pass secrets to the log at all).
+- **argv dispatch uses lazy `import()`** in `src/index.tsx` so the CLI path never loads OpenTUI and the
+  TUI path never loads the CLI router.
+- **CLI stubs are honest:** unimplemented commands print "not implemented yet (Phase N)" and exit 1 —
+  no silent no-ops. `help`/`version` are the only real commands so far.
+- `renderApp()` in `app/App.tsx` owns renderer creation + mount; `index.tsx` stays a pure dispatcher.
+
 ## Key decisions (2026-07-25 — second design pass)
 
 - **No in-memory authoritative state — "MCTL manages, does not hold."** The app caches nothing it

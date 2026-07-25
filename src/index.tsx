@@ -1,16 +1,20 @@
-import { createCliRenderer, TextAttributes } from "@opentui/core";
-import { createRoot } from "@opentui/react";
+/**
+ * MCTL entry point. Single responsibility: dispatch on argv.
+ *
+ *   mctl                → mount the OpenTUI dashboard (interactive)
+ *   mctl <command> …    → run one command, print, exit (scriptable)
+ *
+ * Both paths are thin front-ends over the same core services (plan.md § Dual
+ * Interface). The two subsystems are loaded lazily so the CLI path never pays to
+ * import OpenTUI and the TUI path never loads the CLI router.
+ */
 
-function App() {
-  return (
-    <box alignItems="center" justifyContent="center" flexGrow={1}>
-      <box justifyContent="center" alignItems="flex-end">
-        <ascii-font font="tiny" text="OpenTUI" />
-        <text attributes={TextAttributes.DIM}>What will you build?</text>
-      </box>
-    </box>
-  );
+const argv = process.argv.slice(2);
+
+if (argv.length === 0) {
+  const { renderApp } = await import("./app/App.tsx");
+  await renderApp();
+} else {
+  const { runCli } = await import("./cli/router.ts");
+  process.exit(await runCli(argv));
 }
-
-const renderer = await createCliRenderer();
-createRoot(renderer).render(<App />);
