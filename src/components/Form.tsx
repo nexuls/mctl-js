@@ -1,0 +1,722 @@
+/**
+ * Form — the field wrapper and the full set of form controls, sharing one
+ * consistent look so every settings/create/wizard screen reads the same.
+ *
+ * **Pure-UI, page-layer** (AGENTS.md § 3): every control here is *controlled* —
+ * it renders the `value`/`checked` it's given and reports edits through
+ * `onChange`. None of them hold their own source-of-truth state or touch I/O; the
+ * page (via a hook) owns the form's data.
+ *
+ * ## The field frame
+ * All controls sit inside {@link FormField}: a rounded box that carries the
+ * control's **label on its top border** and an optional **hint on its bottom
+ * border**, and switches its border to the accent colour when the control is
+ * focused. This is the single visual primitive that makes a stack of mixed
+ * controls (text, select, toggle, radios) look like one coherent form.
+ *
+ * ## Adaptive Select
+ * {@link Select} chooses its layout from how much room the options need: a few
+ * short options render side-by-side as tabs (OpenTUI `<tab-select>`); when they
+ * would overflow the field width they become a vertical, scrollable dropdown
+ * list (OpenTUI `<select>`). See {@link optionsFitAsTabs}.
+ */
+
+import type {
+	InputRenderable,
+	SelectOption,
+	TabSelectOption,
+	TextareaRenderable,
+} from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
+import { useRef } from "react";
+import { useTheme } from "../hooks/use-theme.tsx";
+import { onAccent, optionsFitAsTabs, variantColor } from "./support.ts";
+
+export { Label } from "./Label.tsx";
+
+// ---------------------------------------------------------------------------
+// FormGroup — a titled section grouping related fields.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link FormGroup}. */
+export interface FormGroupProps {
+	/** Section heading, drawn bold in the foreground colour. */
+	title?: string;
+	/** Optional supporting line under the heading, muted. */
+	description?: string;
+	/** Gap in cells between the grouped fields. Defaults to 1. */
+	gap?: number;
+	children: React.ReactNode;
+}
+
+/**
+ * A vertical stack of fields under an optional heading. Purely structural — it
+ * adds rhythm and a title, never a border of its own, so the fields' own frames
+ * stay the dominant shapes on screen.
+ */
+export function FormGroup({
+	title,
+	description,
+	gap = 1,
+	children,
+}: FormGroupProps) {
+	const { colors } = useTheme();
+	return (
+		<box flexDirection="column" gap={gap}>
+			{title ? <text fg={colors.foreground}>{title}</text> : null}
+			{description ? <text fg={colors.muted}>{description}</text> : null}
+			{children}
+		</box>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// FormField — the rounded frame every control lives in.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link FormField}. */
+export interface FormFieldProps {
+	/** Label drawn on the top border. */
+	label?: string;
+	/** Hint/help drawn on the bottom border (keep it short — it shares the border line). */
+	hint?: string;
+	/** Marks the field required — appends a `*` to the label. */
+	required?: boolean;
+	/** Whether the contained control is focused; drives the accent border. */
+	focused?: boolean;
+	/** Fixed outer width in cells. Omit to size to the parent (flex). */
+	width?: number;
+	/**
+	 * Signals a validation problem: the border turns the error colour and the hint
+	 * (if any) is shown in error colour context by the caller. Overrides `focused`
+	 * colouring so an invalid field always reads as invalid.
+	 */
+	invalid?: boolean;
+	children: React.ReactNode;
+}
+
+/**
+ * The frame that gives every control its label, hint, and focus affordance. Uses
+ * the box's `title`/`bottomTitle` so the text sits *on* the border rather than
+ * stealing an interior row — which is what lets a text field be a tidy 3 rows
+ * tall (top border + input + bottom border).
+ */
+export function FormField({
+	label,
+	hint,
+	required = false,
+	focused = false,
+	width,
+	invalid = false,
+	children,
+}: FormFieldProps) {
+	const { colors } = useTheme();
+	const borderColor = invalid
+		? colors.error
+		: focused
+			? colors.primary
+			: colors.border;
+	const titleColor = invalid
+		? colors.error
+		: focused
+			? colors.primary
+			: colors.muted;
+
+	return (
+		<box
+			border
+			borderStyle="rounded"
+			borderColor={borderColor}
+			title={label ? (required ? ` ${label} * ` : ` ${label} `) : undefined}
+			titleColor={titleColor}
+			titleAlignment="left"
+			bottomTitle={` ${hint} `}
+			bottomTitleAlignment="left"
+			paddingLeft={1}
+			paddingRight={1}
+			width={width}
+			flexShrink={0}
+		>
+			{children}
+		</box>
+	);
+}
+
+/** {@link FormField} is also exported as `Field` for terse call sites. */
+export const Field = FormField;
+
+// ---------------------------------------------------------------------------
+// Input — single-line text.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link Input}. */
+export interface InputProps {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** Current text value (controlled). */
+	value?: string;
+	/** Placeholder shown when empty. */
+	placeholder?: string;
+	/** Fired on every keystroke with the new value. */
+	onChange?: (value: string) => void;
+	/** Fired when the user presses Enter. */
+	onSubmit?: (value: string) => void;
+	/** Whether this input holds focus. */
+	focused?: boolean;
+	/** Mark the field required. */
+	required?: boolean;
+	/** Mark the field invalid (error border). */
+	invalid?: boolean;
+	/** Fixed outer width in cells. */
+	width?: number;
+}
+
+/**
+ * A single-line text input inside a {@link FormField}. The cursor uses the accent
+ * colour; the field background lifts to `surface` while focused so the active row
+ * is obvious.
+ */
+export function Input({
+	label,
+	hint,
+	value,
+	placeholder,
+	onChange,
+	onSubmit,
+	focused = false,
+	required = false,
+	invalid = false,
+	width,
+}: InputProps) {
+	const { colors } = useTheme();
+	const ref = useRef<InputRenderable | null>(null);
+	return (
+		<FormField
+			label={label}
+			hint={hint}
+			required={required}
+			focused={focused}
+			invalid={invalid}
+			width={width}
+		>
+			<input
+				ref={ref}
+				width="100%"
+				value={value}
+				placeholder={placeholder}
+				focused={focused}
+				onInput={onChange}
+				// A zero-arg submit handler satisfies both onSubmit signatures OpenTUI
+				// merges onto <input> (value-based and event-based); read the committed
+				// text from the renderable so the caller still gets the value.
+				onSubmit={() => {
+					if (ref.current) onSubmit?.(ref.current.value);
+				}}
+				wrapMode="none"
+				backgroundColor="transparent"
+				focusedBackgroundColor={colors.surface}
+				textColor={colors.foreground}
+				placeholderColor={colors.muted}
+				cursorColor={colors.primary}
+				cursorStyle={{
+					style: "line",
+					blinking: true,
+				}}
+			/>
+		</FormField>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// TextArea — multi-line text.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link TextArea}. */
+export interface TextAreaProps {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** Initial text (the textarea edits its own buffer; changes are reported via `onChange`). */
+	value?: string;
+	/** Placeholder shown when empty. */
+	placeholder?: string;
+	/** Fired with the full text whenever the content changes. */
+	onChange?: (value: string) => void;
+	/** Whether this textarea holds focus. */
+	focused?: boolean;
+	/** Visible rows of text (the field is this + 2 for the borders). Defaults to 4. */
+	rows?: number;
+	/** Mark the field required. */
+	required?: boolean;
+	/** Fixed outer width in cells. */
+	width?: number;
+}
+
+/**
+ * A multi-line text editor inside a {@link FormField}. The content-change event
+ * carries no payload, so the current text is read back from the renderable's
+ * `plainText` via a ref — the idiomatic way to observe an OpenTUI edit buffer.
+ */
+export function TextArea({
+	label,
+	hint,
+	value,
+	placeholder,
+	onChange,
+	focused = false,
+	rows = 4,
+	required = false,
+	width,
+}: TextAreaProps) {
+	const { colors } = useTheme();
+	const ref = useRef<TextareaRenderable | null>(null);
+	return (
+		<FormField
+			label={label}
+			hint={hint}
+			required={required}
+			focused={focused}
+			width={width}
+		>
+			<textarea
+				ref={ref}
+				width="100%"
+				height={rows}
+				initialValue={value}
+				placeholder={placeholder}
+				focused={focused}
+				backgroundColor="transparent"
+				focusedBackgroundColor={colors.surface}
+				textColor={colors.foreground}
+				placeholderColor={colors.muted}
+				cursorColor={colors.primary}
+				onContentChange={() => {
+					if (ref.current) onChange?.(ref.current.plainText);
+				}}
+				cursorStyle={{
+					style: "line",
+					blinking: true,
+				}}
+			/>
+		</FormField>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Select — adaptive tabs / dropdown.
+// ---------------------------------------------------------------------------
+
+/** One selectable option. */
+export interface SelectItem<T = string> {
+	/** Visible label. */
+	label: string;
+	/** The value reported through `onChange` when chosen. */
+	value: T;
+	/** Optional secondary text (shown in the dropdown layout). */
+	description?: string;
+}
+
+/** Props for {@link Select}. */
+export interface SelectProps<T = string> {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** The available options. */
+	options: SelectItem<T>[];
+	/** The currently-selected value (controlled). */
+	value?: T;
+	/** Fired with the newly-selected value. */
+	onChange?: (value: T) => void;
+	/** Whether this control holds focus. */
+	focused?: boolean;
+	/** Mark the field required. */
+	required?: boolean;
+	/**
+	 * Fixed outer field width in cells. Also decides the tabs-vs-dropdown cutoff:
+	 * options that fit within it render as side-by-side tabs, otherwise as a
+	 * scrollable dropdown. Defaults to 40.
+	 */
+	width?: number;
+	/** Max visible rows in the dropdown layout before it scrolls. Defaults to 5. */
+	maxVisible?: number;
+}
+
+/**
+ * A single-choice selector that adapts its layout to the options:
+ *
+ *  - **Tabs** (`<tab-select>`) when the labels fit side-by-side within the field
+ *    — fastest to scan for a handful of short choices (runtime, kind, …).
+ *  - **Dropdown** (`<select>`) when they don't — a vertical, scrollable list that
+ *    also shows per-option descriptions (long version lists, Java vendors, …).
+ *
+ * Selection is controlled: the chosen value is located by identity each render,
+ * and both layouts report changes back as the option's `value`.
+ */
+export function Select<T = string>({
+	label,
+	hint,
+	options,
+	value,
+	onChange,
+	focused = false,
+	required = false,
+	width = 40,
+	maxVisible = 5,
+}: SelectProps<T>) {
+	const { colors } = useTheme();
+
+	const selectedIndex = Math.max(
+		0,
+		options.findIndex((o) => o.value === value),
+	);
+	// Interior width available to the control: outer minus the two borders and the
+	// one cell of padding on each side that FormField applies.
+	const inner = width - 4;
+	const asTabs = optionsFitAsTabs(
+		options.map((o) => o.label),
+		inner,
+	);
+
+	const pick = (index: number) => {
+		const opt = options[index];
+		if (opt) onChange?.(opt.value);
+	};
+
+	if (asTabs) {
+		const tabOptions: TabSelectOption[] = options.map((o) => ({
+			name: ` ${o.label} `,
+			description: o.description ?? "",
+			value: o.value,
+		}));
+		return (
+			<FormField
+				label={label}
+				hint={hint}
+				required={required}
+				focused={focused}
+				width={width}
+			>
+				<tab-select
+					width="100%"
+					options={tabOptions}
+					focused={focused}
+					showDescription={false}
+					showUnderline={false}
+          showScrollArrows={true}
+					wrapSelection
+					textColor={colors.muted}
+					focusedBackgroundColor="transparent"
+					selectedBackgroundColor="transparent"
+					selectedTextColor={variantColor(colors, "primary")}
+					onChange={(index) => pick(index)}
+				/>
+			</FormField>
+		);
+	}
+
+	const dropdownOptions: SelectOption[] = options.map((o) => ({
+		name: o.label,
+		description: o.description ?? "",
+		value: o.value,
+	}));
+	const hasDescriptions = options.some((o) => o.description);
+	// One row per option, capped so the list scrolls instead of growing unbounded.
+	const visible = Math.min(options.length, maxVisible);
+	const height = visible * (hasDescriptions ? 2 : 1);
+
+	return (
+		<FormField
+			label={label}
+			hint={hint}
+			required={required}
+			focused={focused}
+			width={width}
+		>
+			<select
+				width="100%"
+				height={height}
+				options={dropdownOptions}
+				selectedIndex={selectedIndex}
+				focused={focused}
+				showDescription={hasDescriptions}
+				showScrollIndicator={options.length > visible}
+				wrapSelection
+				backgroundColor="transparent"
+				focusedBackgroundColor="transparent"
+				textColor={colors.foreground}
+				descriptionColor={colors.muted}
+				selectedBackgroundColor="transparent"
+				selectedTextColor={variantColor(colors, "primary")}
+				selectedDescriptionColor={variantColor(colors, "primary")}
+				onChange={(index) => pick(index)}
+			/>
+		</FormField>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Toggle / Switch — boolean, segmented.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link Toggle}. */
+export interface ToggleProps {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** Current on/off state (controlled). */
+	value: boolean;
+	/** Fired with the new state on toggle. */
+	onChange?: (value: boolean) => void;
+	/** Whether this control holds focus (enables Space/Enter/←/→). */
+	focused?: boolean;
+	/** Labels for the two states. Defaults to `["OFF", "ON"]`. */
+	labels?: [string, string];
+}
+
+/**
+ * A segmented on/off switch inside a {@link FormField}. The active segment fills
+ * — success colour for ON, a neutral surface for OFF — so state is legible at a
+ * glance. Focus enables Space/Enter to flip and ←/→ to set explicitly; a mouse
+ * click anywhere on the switch flips it.
+ */
+export function Toggle({
+	label,
+	hint,
+	value,
+	onChange,
+	focused = false,
+	labels = ["OFF", "ON"],
+}: ToggleProps) {
+	const { colors } = useTheme();
+
+	useKeyboard((key) => {
+		if (!focused) return;
+		if (key.name === "space" || key.name === "return") onChange?.(!value);
+		else if (key.name === "left") onChange?.(false);
+		else if (key.name === "right") onChange?.(true);
+	});
+
+	const [offLabel, onLabel] = labels;
+	return (
+		<FormField label={label} hint={hint} focused={focused}>
+			<box
+				flexDirection="row"
+				flexShrink={0}
+				onMouseDown={() => onChange?.(!value)}
+			>
+				<box
+					backgroundColor={!value ? colors.surface : "transparent"}
+					paddingLeft={1}
+					paddingRight={1}
+				>
+					<text fg={!value ? colors.foreground : colors.muted}>{offLabel}</text>
+				</box>
+				<box
+					backgroundColor={value ? colors.success : "transparent"}
+					paddingLeft={1}
+					paddingRight={1}
+				>
+					<text fg={value ? onAccent(colors) : colors.muted}>{onLabel}</text>
+				</box>
+			</box>
+		</FormField>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Checkbox — single boolean with an inline caption.
+// ---------------------------------------------------------------------------
+
+/** Props for {@link Checkbox}. */
+export interface CheckboxProps {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** The inline caption beside the checkbox glyph (the thing being agreed to). */
+	caption: string;
+	/** Checked state (controlled). */
+	checked: boolean;
+	/** Fired with the new state on toggle. */
+	onChange?: (checked: boolean) => void;
+	/** Whether this control holds focus (enables Space/Enter). */
+	focused?: boolean;
+}
+
+/**
+ * A single checkbox with an inline caption, inside a {@link FormField}. The glyph
+ * fills with the success colour when checked. Focus enables Space/Enter; a mouse
+ * click toggles.
+ */
+export function Checkbox({
+	label,
+	hint,
+	caption,
+	checked,
+	onChange,
+	focused = false,
+}: CheckboxProps) {
+	const { colors } = useTheme();
+
+	useKeyboard((key) => {
+		if (!focused) return;
+		if (key.name === "space" || key.name === "return") onChange?.(!checked);
+	});
+
+	return (
+		<FormField label={label} hint={hint} focused={focused}>
+			<box
+				flexDirection="row"
+				gap={1}
+				alignItems="center"
+				flexShrink={0}
+				onMouseDown={() => onChange?.(!checked)}
+			>
+				<text fg={checked ? colors.success : colors.muted}>
+					{checked ? "[✔]" : "[ ]"}
+				</text>
+				<text fg={colors.foreground}>{caption}</text>
+			</box>
+		</FormField>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Radio / RadioGroup — single choice from a small explicit set.
+// ---------------------------------------------------------------------------
+
+/** One radio option. */
+export interface RadioItem<T = string> {
+	/** Visible label. */
+	label: string;
+	/** Value reported when chosen. */
+	value: T;
+	/** Optional muted description shown after the label. */
+	description?: string;
+}
+
+/** Props for {@link RadioGroup}. */
+export interface RadioGroupProps<T = string> {
+	/** Field label (top border). */
+	label?: string;
+	/** Field hint (bottom border). */
+	hint?: string;
+	/** The options. */
+	options: RadioItem<T>[];
+	/** The selected value (controlled). */
+	value?: T;
+	/** Fired with the newly-selected value. */
+	onChange?: (value: T) => void;
+	/** Whether the group holds focus (enables ↑/↓/j/k to move). */
+	focused?: boolean;
+	/** Lay options in a row instead of a column. Defaults to column. */
+	row?: boolean;
+	/** Mark the field required. */
+	required?: boolean;
+}
+
+/**
+ * A single-choice radio group inside a {@link FormField}. Unlike {@link Select},
+ * this keeps *every* option visible at once — use it for a small, fixed set
+ * where seeing all choices matters (runtime, compression, EULA behaviour). The
+ * selected option shows a filled bullet in the accent colour. Focus enables
+ * ↑/↓ (or j/k) to move; a mouse click selects directly.
+ */
+export function RadioGroup<T = string>({
+	label,
+	hint,
+	options,
+	value,
+	onChange,
+	focused = false,
+	row = false,
+	required = false,
+}: RadioGroupProps<T>) {
+	const { colors } = useTheme();
+	const selectedIndex = Math.max(
+		0,
+		options.findIndex((o) => o.value === value),
+	);
+
+	useKeyboard((key) => {
+		if (!focused || options.length === 0) return;
+		const back = key.name === "up" || key.name === "k" || key.name === "left";
+		const fwd = key.name === "down" || key.name === "j" || key.name === "right";
+		if (back) {
+			const next =
+				options[(selectedIndex - 1 + options.length) % options.length];
+			if (next) onChange?.(next.value);
+		} else if (fwd) {
+			const next = options[(selectedIndex + 1) % options.length];
+			if (next) onChange?.(next.value);
+		}
+	});
+
+	return (
+		<FormField label={label} hint={hint} required={required} focused={focused}>
+			<box flexDirection={row ? "row" : "column"} gap={row ? 2 : 0}>
+				{options.map((opt) => {
+					const selected = opt.value === value;
+					return (
+						<box
+							key={String(opt.value)}
+							flexDirection="row"
+							gap={1}
+							alignItems="center"
+							flexShrink={0}
+							onMouseDown={() => onChange?.(opt.value)}
+						>
+							<text fg={selected ? colors.primary : colors.muted}>
+								{selected ? "◉" : "◯"}
+							</text>
+							<text fg={selected ? colors.foreground : colors.muted}>
+								{opt.label}
+							</text>
+							{opt.description ? (
+								<text fg={colors.muted}> — {opt.description}</text>
+							) : null}
+						</box>
+					);
+				})}
+			</box>
+		</FormField>
+	);
+}
+
+/**
+ * A single radio button, for the rare case a lone option is placed outside a
+ * {@link RadioGroup}. Most forms should reach for `RadioGroup`.
+ */
+export function Radio({
+	label,
+	selected,
+	onSelect,
+}: {
+	/** The option label. */
+	label: string;
+	/** Whether this radio is the chosen one. */
+	selected: boolean;
+	/** Fired when clicked. */
+	onSelect?: () => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<box
+			flexDirection="row"
+			gap={1}
+			alignItems="center"
+			flexShrink={0}
+			onMouseDown={onSelect}
+		>
+			<text fg={selected ? colors.primary : colors.muted}>
+				{selected ? "◉" : "◯"}
+			</text>
+			<text fg={selected ? colors.foreground : colors.muted}>{label}</text>
+		</box>
+	);
+}

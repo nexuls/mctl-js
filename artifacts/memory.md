@@ -155,6 +155,42 @@ delete entries that stop being true. Newest-relevant first.
 - User wants `plan.md` **rich and detailed** (the Rust plan was the depth benchmark), not blunt bullet
   lists — concrete interfaces, tables, diagrams.
 
+## Component library (2026-07-25)
+
+- **`src/components/` is the shared UI kit.** All components are **pure-UI, controlled, and
+  theme-driven**: they read colour from `useTheme().colors` (never hardcode hex), take
+  `value`/`checked` + `onChange` + `focused`, hold no domain state, and do no I/O. Import from the
+  barrel `src/components/index.ts`. Interactive keyboard handling lives inside each control via
+  `useKeyboard` **guarded by `focused`** — that guard is what stops every mounted control from
+  reacting to one keypress (many `useKeyboard` handlers all fire globally).
+- **Variant language:** `support.ts` defines `Variant` (primary/secondary/success/warning/error/
+  info/neutral) → `variantColor(colors, v)`; `onAccent(colors)` returns `colors.background` as the
+  ink to lay on a filled accent (reads on every built-in light/dark variant). Reuse these, don't
+  re-pick roles per component.
+- **The form-field frame** (`FormField`/`Field` in `Form.tsx`): a rounded `<box>` that puts the
+  **label on the top border via `title`** and the **hint on the bottom border via `bottomTitle`**,
+  and swaps `borderColor`/`titleColor` to `primary` on `focused` (`error` on `invalid`). This is why
+  a text field is a tidy 3 rows — the label/hint sit *on* the border, not on interior rows. NOTE:
+  `<box>` has **`titleColor` but no `bottomTitleColor`** — the bottom title can't be coloured
+  independently.
+- **Adaptive `Select`:** few/short options → OpenTUI `<tab-select>` (side-by-side); options that
+  overflow the field width → scrollable `<select>` dropdown (with per-option descriptions). Decided
+  by `optionsFitAsTabs(labels, innerWidth)` where `innerWidth = fieldWidth - 4` (2 border + 2 pad).
+  Pass `width` to a `Select` both to size it and to set the cutoff.
+- **OpenTUI input/textarea value-read gotchas:**
+  - `<input onSubmit>` — OpenTUI merges `InputProps.onSubmit: (value)=>void` with the inherited
+    `TextareaOptions.onSubmit: (SubmitEvent)=>void` into an **intersection**, so a `(value:string)`
+    handler won't type-check. Pass a **zero-arg** handler (assignable to both) and read the value from
+    a `useRef<InputRenderable>().current.value`.
+  - `<textarea>` is uncontrolled: seed with `initialValue`, and its `onContentChange` event is
+    **empty** — read the text back from `ref.current.plainText` (`useRef<TextareaRenderable>`).
+- **`Dialog` modal pattern:** no window manager, so it's two absolute full-screen layers — a dimming
+  backdrop `<box opacity={0.7}>` (own opacity so the page shows through; children would inherit it, so
+  the dialog is a **separate sibling** at higher `zIndex`, full opacity) centred over it.
+- Page **`Tabs`** (custom, mouse + ←/→) are distinct from the `<tab-select>` *form input* — don't
+  conflate. Active-tab underline renders `"─"`, inactive renders **blank spaces** (not a
+  background-coloured glyph) so it's theme-proof.
+
 ## OpenTUI gotchas
 
 - **FrameBuffer has no `<frame-buffer>` JSX intrinsic** in `@opentui/react`. Create a

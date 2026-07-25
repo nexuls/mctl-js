@@ -58,6 +58,29 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
   - Verified: `tsc --noEmit` clean; headless smoke test (registry list/get, custom+reserved+broken
     files, terminal mapping + null fallbacks, config default/override); TUI mounts and renders themed.
 
+- **Component library — shared UI kit (this session):**
+  - `src/components/` now holds the full primitive set, all pure-UI (no I/O), theme-driven
+    via `useTheme().colors`, and controlled (value + onChange + `focused`):
+    - `support.ts` — `Variant`/`SemanticColor` types, `variantColor`/`onAccent`, `clamp`,
+      `optionsFitAsTabs` (the tabs-vs-dropdown width heuristic).
+    - `Label.tsx`, `Kbd.tsx` (1-row filled keycap), `Hint.tsx` (row of `[key] label`).
+    - `Button.tsx` — variants (primary/secondary/success/warning/error/info/neutral) ×
+      kinds (solid/outline/ghost); outline fills on `focused`; Enter/Space when focused.
+    - `ProgressBar.tsx` — determinate block bar, `showPercent`.
+    - `Breadcrumb.tsx`, `Tabs.tsx` (page tabs, underline marker, ←/→ when focused).
+    - `Form.tsx` — `FormField`/`Field` (the rounded frame: **label on top border via
+      `title`, hint on bottom border via `bottomTitle`, accent border when focused**),
+      `FormGroup`, `Input`, `TextArea`, `Select` (**adaptive: `<tab-select>` when options
+      fit, scrollable `<select>` dropdown when not**), `Toggle` (segmented), `Checkbox`,
+      `RadioGroup`/`Radio`.
+    - `Dialog.tsx` — modal overlay (absolute backdrop with `opacity` + centred box, Esc/
+      backdrop-click closes).
+    - `index.ts` — barrel for all of the above (+ re-exports MinecraftHead).
+    - `Gallery.tsx` — living showcase of every component with a Tab focus ring; mounted in
+      `App.tsx` (replaced the MinecraftHead placeholder demo).
+  - Verified: `tsc --noEmit` clean; `bun run src/index.tsx` mounts and renders the gallery
+    (breadcrumb/tabs/buttons/form frames all draw; terminal theme active).
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles and runs.
@@ -79,10 +102,11 @@ Roughly in order:
 
 ## Demo / scratch
 
-- **`components/MinecraftHead.tsx`** — first file under `src/components/`. Renders a Minecraft head
-  (`skin` prop: `steve` | `alex` | `creeper`) into an 8×4-cell FrameBuffer via half-block glyphs. A
-  FrameBuffer showcase, not dashboard code; `App.tsx` mounts all three as a placeholder. Safe to delete
-  or repurpose once the real Dashboard lands. Technique is documented in `memory.md` § OpenTUI gotchas.
+- **`components/MinecraftHead.tsx`** — Renders a Minecraft head into an 8×4-cell FrameBuffer via
+  half-block glyphs. A FrameBuffer showcase, not dashboard code; **no longer mounted** in `App.tsx`
+  (the gallery replaced it) but still exported from the barrel. Technique documented in `memory.md`.
+- **`components/Gallery.tsx`** — the component showcase now mounted in `App.tsx`. Delete/replace it once
+  the real Dashboard + Router land; it exists to eyeball the UI kit for consistency.
 
 ## Notes for the next agent
 
