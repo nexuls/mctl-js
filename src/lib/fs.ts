@@ -22,6 +22,7 @@ import {
   chmod,
   appendFile,
   access,
+  statfs,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -87,6 +88,39 @@ export async function readDirIfExists(
     throw err;
   }
   return ext ? names.filter((n) => n.endsWith(ext)) : names;
+}
+
+/** Free and total capacity of a filesystem, in bytes. */
+export interface DiskUsage {
+  /** Bytes available to an unprivileged process. */
+  free: number;
+  /** Total size of the filesystem. */
+  total: number;
+}
+
+/**
+ * Report the free/total bytes of the filesystem holding `path`. Because the
+ * target (e.g. a not-yet-created data root) may not exist, this walks up to the
+ * nearest existing ancestor before calling `statfs` — the free space of the
+ * filesystem the path *will* live on is what the caller wants to show. Returns
+ * `undefined` if no ancestor is stat-able (never throws), so a UI can degrade to
+ * "unknown" rather than crash.
+ */
+export async function diskFree(path: string): Promise<DiskUsage | undefined> {
+  let probe = path;
+  while (!(await pathExists(probe))) {
+    const parent = dirname(probe);
+    if (parent === probe) break; // reached the filesystem root
+    probe = parent;
+  }
+  try {
+    // `bavail` is blocks available to non-root; `blocks` is the total. Both are
+    // in units of `bsize` bytes.
+    const s = await statfs(probe);
+    return { free: s.bsize * s.bavail, total: s.bsize * s.blocks };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Options for the atomic-write helpers. */

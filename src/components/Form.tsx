@@ -92,7 +92,7 @@ export interface FormFieldProps {
 	 */
 	onFocused?: () => void;
 	/** Fixed outer width in cells. Omit to size to the parent (flex). */
-	width?: number;
+	width?: number | `${number}%` | "auto";
 	/**
 	 * Signals a validation problem: the border turns the error colour and the hint
 	 * (if any) is shown in error colour context by the caller. Overrides `focused`
@@ -181,7 +181,7 @@ export interface InputProps {
 	/** Mark the field invalid (error border). */
 	invalid?: boolean;
 	/** Fixed outer width in cells. */
-	width?: number;
+	width?: number | `${number}%` | "auto";
 }
 
 /**
@@ -427,7 +427,7 @@ export function Select<T = string>({
 					focused={focused}
 					showDescription={false}
 					showUnderline={false}
-          showScrollArrows={true}
+					showScrollArrows={true}
 					wrapSelection
 					textColor={colors.muted}
 					focusedBackgroundColor="transparent"
@@ -528,18 +528,19 @@ export function Toggle({
 
 	const [offLabel, onLabel] = labels;
 	return (
-		<FormField label={label} hint={hint} focused={focused} onFocused={onFocused}>
+		<FormField
+			label={label}
+			hint={hint}
+			focused={focused}
+			onFocused={onFocused}
+		>
 			<box
 				flexDirection="row"
 				flexShrink={0}
 				onMouseDown={() => onChange?.(!value)}
 			>
-				<box
-					backgroundColor={!value ? colors.surface : "transparent"}
-					paddingLeft={1}
-					paddingRight={1}
-				>
-					<text fg={!value ? colors.foreground : colors.muted}>{offLabel}</text>
+				<box paddingLeft={1} paddingRight={1}>
+					<text fg={!value ? colors.error : colors.muted}>{offLabel}</text>
 				</box>
 				<box
 					backgroundColor={value ? colors.success : "transparent"}
@@ -597,7 +598,12 @@ export function Checkbox({
 	});
 
 	return (
-		<FormField label={label} hint={hint} focused={focused} onFocused={onFocused}>
+		<FormField
+			label={label}
+			hint={hint}
+			focused={focused}
+			onFocused={onFocused}
+		>
 			<box
 				flexDirection="row"
 				gap={1}
@@ -605,10 +611,12 @@ export function Checkbox({
 				flexShrink={0}
 				onMouseDown={() => onChange?.(!checked)}
 			>
-				<text fg={checked ? colors.success : colors.muted}>
-					{checked ? "[✔]" : "[ ]"}
+				<text fg={checked ? colors.success : colors.muted} flexShrink={0}>
+					{checked ? "[◉]" : "[○]"}
 				</text>
-				<text fg={colors.foreground}>{caption}</text>
+				<text fg={colors.foreground} truncate wrapMode="none">
+					{caption}
+				</text>
 			</box>
 		</FormField>
 	);
@@ -708,14 +716,23 @@ export function RadioGroup<T = string>({
 							flexShrink={0}
 							onMouseDown={() => onChange?.(opt.value)}
 						>
-							<text fg={selected ? colors.primary : colors.muted}>
-								{selected ? "◉" : "◯"}
+							<text
+								fg={selected ? colors.primary : colors.muted}
+								flexShrink={0}
+							>
+								{selected ? "◉" : "○"}
 							</text>
-							<text fg={selected ? colors.foreground : colors.muted}>
+							<text
+								fg={selected ? colors.foreground : colors.muted}
+								flexShrink={0}
+							>
 								{opt.label}
 							</text>
 							{opt.description ? (
-								<text fg={colors.muted}> — {opt.description}</text>
+								<text fg={colors.muted} truncate wrapMode="none">
+									{" "}
+									— {opt.description}
+								</text>
 							) : null}
 						</box>
 					);

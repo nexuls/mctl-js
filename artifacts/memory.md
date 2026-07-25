@@ -39,6 +39,46 @@ delete entries that stop being true. Newest-relevant first.
   no silent no-ops. `help`/`version` are the only real commands so far.
 - `renderApp()` in `app/App.tsx` owns renderer creation + mount; `index.tsx` stays a pure dispatcher.
 
+## First-run wizard + `mctl init` (2026-07-25)
+
+- **Focus is page-owned via `useFocusRing(ids)`** (`hooks/use-focus-ring.ts`) — OpenTUI has no global
+  focus manager, so a page tracks the active control id and cycles it. **Tab / Shift-Tab** move the ring
+  (handle both `name:"tab"`+`shift` *and* a distinct `name:"backtab"`); the hook exposes
+  `isFocused/setFocus/next/prev`. Convention: pass `focused={ring.isFocused(id)}` + `onFocused={()=>ring.setFocus(id)}`
+  to each control, and `<Input onSubmit={()=>ring.next()}>` so Enter advances fields. This is THE focus
+  primitive for pages going forward (Dashboard/Settings reuse it). Ring `ids` may change between renders
+  (conditional fields) — index is clamped, so a step whose ids depend on a toggle (`PathsStep`,
+  `BackupStep`) just recomputes the array.
+  - **How to apply:** buttons already own their Enter/Space (guarded by `focused`), so the ring needs no
+    button-key logic — just give the focused Button `focused` + `onClick`.
+- **Wizard = welcome splash + 6 steps** in `src/app/setup/` (`SetupWizard.tsx` container). Container owns
+  the `SetupDraft` (a **flat view model**, NOT the config shape — paths carry explicit override toggles,
+  optional fields are "" = use default), the step index, and stage keys (**Enter begins on welcome only;
+  Esc quits from welcome, else steps back**). Steps are self-contained: each owns its ring + renders its
+  fields + a `WizardFooter`. Container renders `<box key={step}>` so each step **remounts fresh** (ring
+  resets to field 0).
+- **The wizard's only I/O is `useSetup().commit`** (`app/setup/use-setup.ts`): `draftToConfig` (pure,
+  also used by the Review step to preview) → `writeConfig` (Zod fills defaults + validates) →
+  `writeSecrets({})` (empty 0600) → `ensureDirTree`. Pages never call `core/config` directly; only this
+  hook does. `commit` carries the **current `themeId`** into config so a theme cycled during setup sticks.
+- **App routing:** `renderApp()` decides `firstRun = !(await configExists())` once and passes it to
+  `<App firstRun>`. `App` renders `<SetupWizard onComplete={()=>flip}>` until setup writes config, then
+  the `Dashboard` placeholder — **in-place, no restart**. The old MinecraftHead demo grid is gone.
+- **`mctl init` mirrors the wizard headlessly** (`cli/commands/init.ts`, lazy-imported from the router).
+  Flags map 1:1 to draft fields; unset → schema defaults (so bare `mctl init` writes a full default
+  config at `~/.mctl`). `--force` to overwrite, `--json`, `--help`; unknown flag → exit 1. Validation is
+  the schema's job (bad kind/relative root → typed `ConfigValidationError`), not the parser's.
+- **Logger flipped to `sync: true`** (`lib/logger.ts`): a fast-failing CLI command's `process.exit`
+  (index.tsx:19) tore down the **async** sonic-boom stream before its fd opened → "sonic boom is not
+  ready yet" stack dump on stderr. Sync file writes remove the race; volume is tiny and it's never the
+  render path, so sync is fine. (Supersedes the earlier `sync:false`.)
+- **`ascii-font` font names** are `tiny | block | shade | slick | huge | grid | pallet` (from
+  `@opentui/core/lib/ascii.font.d.ts`). Welcome hero uses `font="block"` with a 2-colour gradient
+  (`color={[primary, secondary]}`). `<ascii-font>` colours via `color`, not `fg` (already in gotchas).
+- **`lib/fs.diskFree(path)`** walks up to the nearest existing ancestor before `statfs` (the chosen root
+  usually doesn't exist yet) → `{free,total}` bytes; `undefined` on failure (never throws). `useDiskFree`
+  hook debounces it 150ms. `lib/format.formatBytes` humanizes (binary units, "—" for non-finite).
+
 ## Theming (2026-07-25)
 
 - **Themes carry a light/dark *scheme*, not one flat palette + an `appearance` tag.** `Theme.colors`

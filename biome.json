@@ -19,7 +19,10 @@
     },
     "rules": {
       "preset": "recommended",
-      "a11y": "off"
+      "a11y": "off",
+      "suspicious": {
+        "noArrayIndexKey": "off"
+      }
     }
   },
   "javascript": {

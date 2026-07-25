@@ -12,22 +12,45 @@
  */
 
 import { createCliRenderer, TextAttributes } from "@opentui/core";
+import { useState } from "react";
 import { createRoot, useKeyboard, useRenderer } from "@opentui/react";
-import {
-	MinecraftHead,
-	SKINS,
-	type MinecraftSkin,
-} from "../components/MinecraftHead.tsx";
-import { loadConfig, writeConfig } from "../core/config/index.ts";
+import { configExists, loadConfig, writeConfig } from "../core/config/index.ts";
 import { ThemeRegistry } from "../core/theme/registry.ts";
 import { log } from "../lib/logger.ts";
 import { ThemeProvider, useTheme } from "../hooks/use-theme.tsx";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
+import { SetupWizard } from "./setup/index.ts";
 
 const logger = log("app");
 
-/** Root component. Themed shell; `t` cycles themes, `q`/`Esc` quits. */
-function App() {
+/** Props for {@link App}. */
+interface AppProps {
+	/** True when `config.json` is absent — route to the first-run wizard. */
+	firstRun: boolean;
+}
+
+/**
+ * Root component. On first run it shows the setup wizard; once setup has written
+ * config (or on any later run) it shows the dashboard. The wizard owns its own
+ * keyboard; the dashboard offers `t` to cycle themes and `q`/`Esc` to quit.
+ */
+function App({ firstRun }: AppProps) {
+	// Whether the first-run wizard still needs to run. Flipped false when the
+	// wizard completes, so the app transitions into the dashboard in-place without
+	// a restart.
+	const [needsSetup, setNeedsSetup] = useState(firstRun);
+
+	if (needsSetup) {
+		return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
+	}
+	return <Dashboard />;
+}
+
+/**
+ * The dashboard shell — a themed placeholder until the real Dashboard page lands
+ * (Phase 1, task 5). `t` cycles themes; `q`/`Esc` quits.
+ */
+function Dashboard() {
 	const renderer = useRenderer();
 	const { theme, colors: c, appearance, setThemeId, themes } = useTheme();
 
@@ -84,13 +107,6 @@ function App() {
 					to quit
 				</text>
 			</box>
-			<box flexDirection="row" flexWrap="wrap" gap={3} alignItems="center">
-				{Object.keys(SKINS).map((skin) => (
-					<box key={skin} flexDirection="column" alignItems="center">
-						<MinecraftHead skin={skin as MinecraftSkin} />
-					</box>
-				))}
-			</box>
 		</box>
 	);
 }
@@ -107,11 +123,17 @@ export async function renderApp(): Promise<void> {
 	const registry = await new ThemeRegistry().load();
 	const initialThemeId = await loadThemeId();
 
+	// First run = no config.json yet. Decided once here (front-end → core) and
+	// handed to the tree, which routes to the setup wizard rather than the
+	// dashboard until setup completes.
+	const firstRun = !(await configExists());
+
 	const renderer = await createCliRenderer({
 		exitOnCtrlC: true,
 		screenMode: "alternate-screen",
 		clearOnShutdown: false,
 		openConsoleOnError: true,
+		enableMouseMovement: true,
 	});
 
 	// Make everything non-selectable by default. OpenTUI text renderables are
@@ -134,7 +156,7 @@ export async function renderApp(): Promise<void> {
 			initialPalette={initialPalette}
 			onThemeChange={persistThemeId}
 		>
-			<App />
+			<App firstRun={firstRun} />
 		</ThemeProvider>,
 	);
 

@@ -15,7 +15,6 @@
 
 /** Commands recognised by name, with the roadmap phase that implements them. */
 const PLANNED: Record<string, string> = {
-  init: "Phase 1",
   list: "Phase 1",
   status: "Phase 1",
   create: "Phase 2",
@@ -72,6 +71,13 @@ export async function runCli(argv: string[]): Promise<number> {
   if (command === "-v" || command === "--version" || command === "version") {
     console.log(await version());
     return 0;
+  }
+
+  // Real commands are lazy-imported so a `--help`/`--version` invocation stays
+  // cheap and the module graph for each command loads only when it runs.
+  if (command === "init") {
+    const { runInit } = await import("./commands/init.ts");
+    return runInit(argv.slice(1));
   }
 
   const phase = PLANNED[command];

@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
+_Last updated: 2026-07-25 (Phase 1 — first-run setup wizard + `mctl init` landed)_
 
 ---
 
@@ -87,6 +87,39 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
     Gallery wires each ring member's `onFocused → setFocus(id)`. `tsc --noEmit` clean. See `memory.md`
     § Component library for the convention.
 
+- **First-run setup wizard + `mctl init` (this session):**
+  - `src/lib/format.ts` — `formatBytes` (binary units). `src/lib/fs.ts` — `diskFree(path)` →
+    `{free,total}` via `statfs`, walking up to the nearest existing ancestor (root may not exist yet).
+  - `src/hooks/use-focus-ring.ts` — reusable `useFocusRing(ids)`: tracks the focused id, Tab/Shift-Tab
+    (and `backtab`) cycle; `isFocused`/`setFocus`/`next`/`prev`. The one focus primitive pages reuse
+    (wizard now, Dashboard later). `src/hooks/use-disk-free.ts` — debounced hook over `diskFree`.
+  - `src/app/setup/` — the wizard flow:
+    - `types.ts` — `SetupDraft` (flat view model), `StepProps`, `STEP_TITLES`, `initialDraft()`.
+    - `use-setup.ts` — `draftToConfig()` (pure map, reused by Review preview) + `commitSetup()` +
+      `useSetup()` hook (`commit`/`committing`/`error`). Commit = `writeConfig` → `writeSecrets({})` →
+      `ensureDirTree`. **The wizard's ONLY I/O goes through this hook** (pages stay UI-free).
+    - `Welcome.tsx` (branded splash, `ascii-font font="block"` hero + preview panel), `Stepper.tsx`
+      (left progress rail ○/●/✔), `WizardFooter.tsx` (Hint + Back/Continue, buttons own their Enter),
+      `StepScaffold.tsx` (title/desc/fields/footer layout).
+    - `steps/` — DataRoot (path + live free-space + permanence warning), Paths (optional
+      servers/backups overrides, ring adapts to toggles), Defaults (mc/kind/memory/runtime/eula),
+      Backup (enable + provider + compression), Network (direct only + pointer to Network page),
+      Review (summary panel + Create, shows commit error inline).
+    - `SetupWizard.tsx` — container: welcome→6 steps, owns draft + step index + stage keys (Enter
+      begins, Esc backs/quits). `index.ts` barrel.
+  - `src/app/App.tsx` — split into `App({firstRun})` router + `Dashboard` placeholder; first run
+    (config absent, decided in `renderApp`) routes to `<SetupWizard onComplete>` which flips to the
+    dashboard in-place. Dropped the MinecraftHead demo grid from the shell.
+  - `src/cli/commands/init.ts` + router dispatch — `mctl init` (flags mirror the wizard;
+    `--force`/`--json`/`--help`; unknown flag → exit 1; refuses to clobber existing config). Lazy-
+    imported so the CLI stays cheap.
+  - `src/lib/logger.ts` — pino destination flipped to **`sync: true`** (was async): a fast-failing
+    CLI command's `process.exit` was tearing down the async sonic-boom stream before its fd opened
+    ("sonic boom is not ready yet"). Sync file writes remove the race (tiny volume, never render path).
+  - Verified: `tsc --noEmit` clean; `mctl init` round-trip in a sandbox HOME (config written, secrets
+    0600, full dir tree, re-run refused, bad flag → exit 1, `--help`/`--json`); TUI under a pty renders
+    the Welcome screen and Enter→step-1 with no runtime errors.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles and runs.
@@ -95,24 +128,26 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
 
 Roughly in order:
 
-1. First-run **setup wizard** (`app/setup/`) + `mctl init` command — collect fields, call `writeConfig` /
-   `writeSecrets` / `ensureDirTree` (all already exist in `core/config`). CLI `init` currently stubs.
-2. `core/registry/` — `ServerRegistry`: read/verify/write `servers.json` (atomic via `lib/fs`), verify
+1. `core/registry/` — `ServerRegistry`: read/verify/write `servers.json` (atomic via `lib/fs`), verify
    each path + `mctl.json`, mark unavailable, fold in `servers_dir` scan. Needs a `Server` view model
    (`types/server.ts`) + `mctl.json` schema.
-3. `core/session/` — probe `runtime/<id>.json` liveness, reap stale locks (statelessness core).
-4. `core/events/` — in-process EventEmitter3 bus + `events.jsonl` tail/append + `fs.watch` watchers.
-   `lib/fs.appendLine` is ready for the append side.
-5. Front-ends: OpenTUI Dashboard + `Router`; `cli/` real `list` and `status` (+ `cli/format.ts`).
-6. `lib/http.ts` with ETag cache (Phase 1 tail; first real need is Phase 2 downloads).
+2. `core/session/` — probe `runtime/<id>.json` liveness, reap stale locks (statelessness core).
+3. `core/events/` — in-process EventEmitter3 bus + `events.jsonl` tail/append + `fs.watch` watchers.
+   `lib/fs.appendLine` is ready for the append side. Wire a `ConfigChanged` emit into the wizard/`init`
+   commit and Settings once the bus exists (currently the wizard writes config without emitting).
+4. Front-ends: OpenTUI Dashboard + `Router` (replace the `Dashboard` placeholder in `App.tsx`; reuse
+   `useFocusRing`); `cli/` real `list` and `status` (+ `cli/format.ts`).
+5. `lib/http.ts` with ETag cache (Phase 1 tail; first real need is Phase 2 downloads).
+6. Settings page renders the same config Zod schema (every field but `root` editable) — reuse the
+   wizard's form controls; `configVersion` migration path.
 
 ## Demo / scratch
 
 - **`components/MinecraftHead.tsx`** — Renders a Minecraft head into an 8×4-cell FrameBuffer via
-  half-block glyphs. A FrameBuffer showcase, not dashboard code; **no longer mounted** in `App.tsx`
-  (the gallery replaced it) but still exported from the barrel. Technique documented in `memory.md`.
-- **`components/Gallery.tsx`** — the component showcase now mounted in `App.tsx`. Delete/replace it once
-  the real Dashboard + Router land; it exists to eyeball the UI kit for consistency.
+  half-block glyphs. A FrameBuffer showcase, not dashboard code; **no longer mounted anywhere** (App now
+  routes wizard-or-`Dashboard` placeholder) but still exported from the barrel. Technique in `memory.md`.
+- **`Gallery.tsx` no longer exists** — the component showcase was removed; verify the UI kit by running
+  the wizard (it exercises Input/Select/Toggle/Checkbox/RadioGroup/Button/Hint/FormField in anger).
 
 ## Notes for the next agent
 

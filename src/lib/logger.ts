@@ -58,7 +58,12 @@ export function logger(): Logger {
       redact: { paths: REDACT_PATHS, censor: "[redacted]" },
     },
     // `append: true` (default) — one growing log; rotation is a later concern.
-    pino.destination({ dest: join(dir, "mctl.log"), sync: false }),
+    // `sync: true`: log volume is tiny and this is a plain file (never the render
+    // path), and a *synchronous* destination avoids the async sonic-boom teardown
+    // race where a short-lived CLI command (`process.exit` after a fast failure)
+    // exits before the async stream's fd has opened — pino's on-exit flush then
+    // throws "sonic boom is not ready yet". Sync writes sidestep that entirely.
+    pino.destination({ dest: join(dir, "mctl.log"), sync: true }),
   );
   return root;
 }
