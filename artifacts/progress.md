@@ -33,6 +33,22 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
   - Verified: `tsc --noEmit` clean; CLI dispatch paths exercised; a runtime smoke test round-tripped
     config write/reload, first-run detection, 0600 secrets + env override, and the full dir tree.
 
+- **Theming system (this session):**
+  - `src/types/theme.ts` — Zod `ThemeFile`/`ThemeColors` (11 semantic roles, hex-only) + `Theme`,
+    `ThemeSummary`, neutral `TerminalPalette` types.
+  - `src/core/theme/` — `builtin.ts` (GitHub Dark + Nord, `FALLBACK_THEME`), `terminal.ts`
+    (`themeFromTerminalColors`, pure, no OpenTUI import; `TERMINAL_THEME_ID`), `registry.ts`
+    (`ThemeRegistry`: built-ins + `~/.config/mctl/themes/*.json`; `load/get/has/list/isDynamic`;
+    reserved-id + invalid-file skipping).
+  - `config.theme` field (default `"terminal"`) added to `types/config.ts`; read at startup.
+  - `src/hooks/use-terminal-colors.ts` — implemented: adapts `renderer.getPalette()` + `theme_mode`/
+    `palette` events into `TerminalPalette`; 5s poll fallback that self-cancels on first live event.
+  - `src/hooks/use-theme.tsx` — `ThemeProvider` + `useTheme()`; resolves active id (terminal=live,
+    else registry, fallback chain). `App.tsx` themed; `t` cycles themes, persists to `config.theme`.
+  - `src/lib/fs.ts` — added `readDirIfExists(dir, ext?)`. Dep added: `@types/react@19` (dev).
+  - Verified: `tsc --noEmit` clean; headless smoke test (registry list/get, custom+reserved+broken
+    files, terminal mapping + null fallbacks, config default/override); TUI mounts and renders themed.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles and runs.

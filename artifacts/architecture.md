@@ -57,7 +57,7 @@ src/
                          Dashboard/ Servers/ Server/ Console/ Jobs/ Backups/ Network/ Settings/
   components/          pure UI (Table, Console, ProgressBar, Modal, StatusBar…)
   hooks/               useServers, useServer, useJobs, useConsole, useEventLog…
-  core/                config, registry, session, events, jobs, server, java, runtime, network, backup
+  core/                config, theme, registry, session, events, jobs, server, java, runtime, network, backup
   providers/           server/ runtime/ backup/ network/  (concrete impls)
   lib/                 fs, shell, download, http, paths, watch, logger
   types/               server, runtime, java, events, config…
@@ -183,6 +183,27 @@ Interfaces (`types/` + `core/*/`): `ServerProvider`, `RuntimeProvider`, `BackupP
 interface against the first real implementation; generalize at the second.
 
 ---
+
+## Theming — `core/theme/` + `hooks/use-theme`
+
+Colour is a first-class, swappable concern. Components never hardcode colours; they read **semantic
+roles** off the active theme (`theme.colors.error`, `theme.colors.primary`, …). Eleven roles, defined
+and validated in `types/theme.ts` (`ThemeColors`, hex-only for user files).
+
+- **`core/theme/`** owns the *static* catalogue, UI-free: `builtin.ts` (GitHub Dark, Nord),
+  `registry.ts` (`ThemeRegistry` — folds in `~/.config/mctl/themes/*.json`, id = filename; `load()` is
+  the one disk-reading step; one invalid file is logged-and-skipped, not fatal), and `terminal.ts`
+  (`themeFromTerminalColors` — a **pure** map from a neutral `TerminalPalette` to roles; no OpenTUI
+  import, so core stays UI-free).
+- **The dynamic `"terminal"` theme** is the host terminal's own palette. It is *reserved*: the registry
+  only lists it (no stored colours); the UI layer supplies live colours. `hooks/use-terminal-colors.ts`
+  adapts OpenTUI's `getPalette()` + `theme_mode`/`palette` events (OpenTUI already implements the OSC
+  10/11/4 + DEC-2031 querying) into `TerminalPalette`, with a 5s poll fallback that self-cancels once a
+  live event proves the terminal reports changes.
+- **`hooks/use-theme.tsx`** (`ThemeProvider` + `useTheme`) picks between sources by id and hands the UI
+  one resolved `Theme`. The registry is loaded in `renderApp()` (front-end → core) and injected; the
+  React tree never touches disk. Active id is persisted in **`config.theme`** (default `"terminal"`),
+  read at startup — an id naming a deleted theme degrades to the terminal/fallback theme.
 
 ## Dual interface — `cli/` and `app/`
 

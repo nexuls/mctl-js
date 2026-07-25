@@ -18,6 +18,7 @@ import {
   rename,
   writeFile,
   readFile,
+  readdir,
   chmod,
   appendFile,
   access,
@@ -64,6 +65,28 @@ export async function readJsonIfExists(path: string): Promise<unknown> {
   const text = await readTextIfExists(path);
   if (text === undefined) return undefined;
   return JSON.parse(text);
+}
+
+/**
+ * List the names of entries directly inside `dir`, optionally filtered to a file
+ * extension (e.g. `".json"`). Returns `[]` when the directory does not exist —
+ * an absent optional directory (like `themes/`) is a normal, expected state, not
+ * an error. Any other failure (permission) propagates.
+ *
+ * Names only, not full paths; the caller joins against `dir` as needed.
+ */
+export async function readDirIfExists(
+  dir: string,
+  ext?: string,
+): Promise<string[]> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+  return ext ? names.filter((n) => n.endsWith(ext)) : names;
 }
 
 /** Options for the atomic-write helpers. */

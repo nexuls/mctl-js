@@ -106,6 +106,11 @@ export const Config = z.object({
   root: AbsolutePath,
   servers_dir: AbsolutePath.optional(),
   backups_dir: AbsolutePath.optional(),
+  // Active theme id: a built-in ("github", "nord"), a custom theme's filename,
+  // or "terminal" (the default) for the live host-terminal palette. Just an id —
+  // the palette itself is resolved by the theme registry at startup, so a config
+  // naming a since-deleted theme degrades gracefully rather than storing colours.
+  theme: z.string().min(1).default("terminal"),
   // `.prefault({})` = input-side default: an absent section is parsed as `{}`,
   // which fills each nested field's own default. (`.default()` in Zod v4 wants a
   // fully-formed output object, which would duplicate every nested default here.)

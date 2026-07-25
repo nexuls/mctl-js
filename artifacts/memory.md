@@ -39,6 +39,64 @@ delete entries that stop being true. Newest-relevant first.
   no silent no-ops. `help`/`version` are the only real commands so far.
 - `renderApp()` in `app/App.tsx` owns renderer creation + mount; `index.tsx` stays a pure dispatcher.
 
+## Theming (2026-07-25)
+
+- **Themes are a registry of *semantic colour roles*, not raw ANSI/component names.** Roles:
+  `background, foreground, surface, border, muted, primary, secondary, success, warning, error, info`
+  (Zod-defined in `types/theme.ts`, hex-only for custom files). UI colours by role via `useTheme()`.
+- **Three theme sources:** built-ins (`github`, `nord`) in `core/theme/builtin.ts`; custom user files at
+  `~/.config/mctl/themes/<id>.json` (id = filename, like server-id-from-dir); and the dynamic
+  **`terminal`** theme built live from the host palette. `config.theme` (default `"terminal"`) stores the
+  active id and is read at startup in `renderApp()`.
+- **`terminal` is reserved + special.** The registry only *lists* it (no static colours); the UI layer
+  (`hooks/use-theme`) substitutes the live palette. A custom file named `terminal.json` is ignored with a
+  warning. `themeFromTerminalColors()` (pure, in `core/theme/terminal.ts`, no OpenTUI import) maps a
+  neutral `TerminalPalette` → roles with a fallback chain so no role is ever undefined.
+- **One bad custom theme file is skipped with a log warning, not fatal** — deliberate exception to
+  "throw typed errors": a single malformed `themes/*.json` must not make the app unlaunchable; built-ins
+  still resolve. (Contrast config.json, which *is* fatal.)
+- **OpenTUI already implements terminal-colour querying** — `renderer.getPalette()` (OSC 10/11/4) and a
+  `palette` change event. `use-terminal-colors.ts` is a React adapter: fetch on mount, subscribe to
+  `palette`, dedupe by signature, expose a neutral `TerminalPalette`.
+- **TWO load-bearing gotchas for LIVE terminal-theme changes** (both caused a "reverts to fallback /
+  doesn't update on theme change" bug; the working reference is `~/projects/local-edge`):
+  1. **We must enable DEC private mode 2031 ourselves** — `process.stdout.write("\x1b[?2031h")` on
+     mount, `"\x1b[?2031l"` on cleanup. OpenTUI *reacts* to the terminal's colour-scheme-change
+     notification but **never enables the mode**, so without this write no `palette`/`theme_mode` event
+     ever fires on change. (Write to `process.stdout`, not `renderer.stdout` — the latter is private.)
+  2. **The poll fallback MUST call `renderer.clearPaletteCache()` before `getPalette()`** — `getPalette`
+     returns a cached result, so re-querying without clearing returns the *stale* palette forever.
+  - Do NOT gate/stop the poll on `theme_mode` (an earlier version did — that was the bug). Poll
+    continuously (~1s) with a cache-clear as the fallback; the `palette` event covers 2031-capable
+    terminals instantly. Appearance is derived from background luminance in `terminal.ts` — no need to
+    depend on `themeMode` at all.
+  - **Do NOT call `renderer.setBackgroundColor()`** to theme the background. It emits OSC 11 to change
+    the *actual terminal* bg, which races the terminal's own colour-scheme transition and **flashes a
+    stale colour for a frame** on every change (this bit both `local-edge` and an earlier mctl version).
+    Instead paint the background with a full-screen `backgroundColor` box at the app root (`App.tsx` root
+    box, `flexGrow={1}`) — it draws into the render buffer and leaves the terminal's native bg alone.
+    The flicker-free `rove` project works exactly this way (never touches terminal bg).
+  - **Sandbox caveat:** a non-TTY pipe can't answer OSC queries and OpenTUI swallows `process.stdout`
+    writes there, so live palette detection is **not verifiable headlessly** — only in a real TTY.
+- **No-flash terminal theme (three parts, do not drop any):**
+  1. **Pre-fetch before first paint:** `renderApp()` calls `queryTerminalPalette(renderer)` (exported from
+     `use-terminal-colors`) and passes it to `<ThemeProvider initialPalette>` → `useTerminalColors(initial)`
+     seeds state. OpenTUI has usually already detected the palette during `createCliRenderer`, so this
+     returns from cache instantly on a real TTY (≤200ms timeout otherwise). Frame one is real colours.
+  2. **`"terminal"` id NEVER falls back to a static theme.** `use-theme` resolves it to
+     `terminalTheme ?? EMPTY_TERMINAL_THEME` (the empty-palette terminal theme), so an unresolved palette
+     shows neutral terminal-defaults, not GitHub. A missing *named* theme also degrades to the terminal
+     theme, not github. (`FALLBACK_THEME`/github is no longer referenced by the provider.)
+  3. **Ignore transient all-null palettes.** `use-terminal-colors` guards every update with `hasColour()`
+     — during a theme switch the terminal can briefly answer all-`null`; using it would flash empty for a
+     frame. Skip it, hold the last-good palette.
+- **Gotchas:**
+  - `<ascii-font>` uses `color` (`ColorInput | ColorInput[]`), **not** `fg`. `<text>`/`<span>` use `fg`.
+  - Added **`@types/react@19`** (devDep). The repo had no direct `react` imports before; hooks/context
+    (`useState/useEffect/useMemo/useContext/createContext`, `React.ReactNode`) need it. JSX still comes
+    from `@opentui/react` via `jsxImportSource`, so `@types/react` doesn't hijack JSX.
+  - `lib/fs.ts` gained `readDirIfExists(dir, ext?)` → `[]` on ENOENT (absent `themes/` is normal).
+
 ## Key decisions (2026-07-25 — second design pass)
 
 - **No in-memory authoritative state — "MCTL manages, does not hold."** The app caches nothing it
