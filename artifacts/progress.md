@@ -33,7 +33,16 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
   - Verified: `tsc --noEmit` clean; CLI dispatch paths exercised; a runtime smoke test round-tripped
     config write/reload, first-run detection, 0600 secrets + env override, and the full dir tree.
 
-- **Theming system (this session):**
+- **Theming — light/dark schemes (this session):**
+  - `Theme.colors`/`ThemeFile.colors` is now a `ThemeColorScheme` = `{ default }` **or** `{ dark, light }`.
+    Removed `appearance` from `Theme`/`ThemeSummary`/`ThemeFile`. `resolveColors(scheme, mode)` added.
+  - Built-ins `github` + `nord` ship both light and dark palettes. Terminal theme is a `{ default }`.
+  - Current mode from `terminalAppearance(palette)` (exported); `use-theme` exposes `colors` (resolved
+    flat) + `appearance` (current mode) on the context. `App.tsx` reads `useTheme().colors`.
+  - Verified: `tsc --noEmit` clean; headless smoke (both builtins differ light vs dark; terminal default
+    resolves identically both modes; appearance light/dark from bg luminance).
+
+- **Theming system (earlier this session):**
   - `src/types/theme.ts` — Zod `ThemeFile`/`ThemeColors` (11 semantic roles, hex-only) + `Theme`,
     `ThemeSummary`, neutral `TerminalPalette` types.
   - `src/core/theme/` — `builtin.ts` (GitHub Dark + Nord, `FALLBACK_THEME`), `terminal.ts`

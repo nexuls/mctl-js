@@ -24,7 +24,7 @@ const logger = log("app");
 /** Root component. Themed shell; `t` cycles themes, `q`/`Esc` quits. */
 function App() {
 	const renderer = useRenderer();
-	const { theme, setThemeId, themes } = useTheme();
+	const { theme, colors: c, appearance, setThemeId, themes } = useTheme();
 
 	useKeyboard((key) => {
 		if (key.name === "escape" || key.name === "q") renderer.destroy();
@@ -35,8 +35,6 @@ function App() {
 			if (next) setThemeId(next.id);
 		}
 	});
-
-	const c = theme.colors;
 
 	// The dynamic "terminal" theme mirrors the host terminal's own background.
 	// Painting its *derived* hex lags the terminal by one palette-query cycle
@@ -73,7 +71,7 @@ function App() {
 				<text fg={c.foreground}>Dashboard coming online.</text>
 				<text fg={c.muted}>
 					theme: <span fg={c.secondary}>{theme.name}</span> · appearance:{" "}
-					<span fg={c.secondary}>{theme.appearance}</span>
+					<span fg={c.secondary}>{appearance}</span>
 				</text>
 				<text fg={c.muted}>
 					press <span fg={c.info}>t</span> to cycle · <span fg={c.info}>q</span>{" "}

@@ -59,40 +59,75 @@ export const ThemeColors = z.object({
 export type ThemeColors = z.infer<typeof ThemeColors>;
 
 /**
- * Whether a theme reads as light or dark. Informational — it lets the UI pick
- * complementary decorations (e.g. shadow direction) and lets Settings group
- * themes. Optional in user files; inferred from background brightness when the
- * terminal-default theme is built.
+ * Whether the *host* currently reads as light or dark. This is the "current
+ * mode" — derived from the terminal's background brightness (see
+ * `core/theme/terminal.ts`) — and it selects which variant of a theme is
+ * painted. It is a property of the environment, not of any one theme: the same
+ * theme renders its light or dark colours depending on this.
  */
 export const ThemeAppearance = z.enum(["dark", "light"]);
 export type ThemeAppearance = z.infer<typeof ThemeAppearance>;
+
+/**
+ * A theme's colours, in one of two shapes:
+ *
+ *  - `{ default }` — a single palette used regardless of the host's light/dark
+ *    mode. Choose this for a theme that only makes sense one way.
+ *  - `{ dark, light }` — two full palettes; the one matching the current
+ *    {@link ThemeAppearance} is used, so the theme adapts to the host mode.
+ *
+ * Exactly one of the two shapes is present — never a mix. Resolve a scheme to a
+ * concrete {@link ThemeColors} for the active mode with {@link resolveColors}.
+ */
+export const ThemeColorScheme = z.union([
+  z.object({ default: ThemeColors }),
+  z.object({ dark: ThemeColors, light: ThemeColors }),
+]);
+export type ThemeColorScheme = z.infer<typeof ThemeColorScheme>;
+
+/**
+ * Resolve a {@link ThemeColorScheme} to the concrete {@link ThemeColors} to
+ * paint for `mode`. A `default`-only scheme ignores the mode; a `dark`/`light`
+ * scheme returns the matching variant. Never returns undefined — the UI always
+ * gets a full palette.
+ */
+export function resolveColors(
+  scheme: ThemeColorScheme,
+  mode: ThemeAppearance,
+): ThemeColors {
+  if ("default" in scheme) return scheme.default;
+  return mode === "light" ? scheme.light : scheme.dark;
+}
 
 /**
  * On-disk shape of a user theme file (`~/.config/mctl/themes/<id>.json`). The
  * theme's `id` is **not** stored in the file — it is derived from the filename
  * (mirroring how a server id derives from its directory name), so a file cannot
  * disagree with itself about its own identity.
+ *
+ * `colors` may be a single `{ default }` palette or a `{ dark, light }` pair —
+ * see {@link ThemeColorScheme}.
  */
 export const ThemeFile = z.object({
   /** Human-readable name shown in the theme picker. */
   name: z.string().min(1),
-  appearance: ThemeAppearance.optional(),
-  colors: ThemeColors,
+  colors: ThemeColorScheme,
 });
 export type ThemeFile = z.infer<typeof ThemeFile>;
 
 /**
- * A fully-resolved theme: a {@link ThemeFile} plus the identity fields the
- * registry attaches (`id`, and `source` telling where it came from). This is the
- * object handed to the UI.
+ * A fully-resolved theme entry: a {@link ThemeFile} plus the identity fields the
+ * registry attaches (`id`, and `source` telling where it came from). Its
+ * `colors` is still a {@link ThemeColorScheme} — the UI picks the variant for
+ * the current mode via {@link resolveColors} at paint time.
  */
 export interface Theme {
   /** Stable id used in `config.theme` and the picker. */
   id: string;
   /** Human-readable name. */
   name: string;
-  appearance: ThemeAppearance;
-  colors: ThemeColors;
+  /** Light/dark-aware colours (single palette or a variant pair). */
+  colors: ThemeColorScheme;
   /** Where the theme came from — drives grouping and override precedence. */
   source: ThemeSource;
 }
@@ -107,7 +142,6 @@ export type ThemeSource = "builtin" | "custom" | "terminal";
 export interface ThemeSummary {
   id: string;
   name: string;
-  appearance: ThemeAppearance;
   source: ThemeSource;
 }
 

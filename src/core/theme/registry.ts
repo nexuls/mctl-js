@@ -29,7 +29,6 @@ const logger = log("theme");
 const TERMINAL_SUMMARY: ThemeSummary = {
   id: TERMINAL_THEME_ID,
   name: "Terminal Default",
-  appearance: "dark", // nominal; the real appearance is resolved live
   source: "terminal",
 };
 
@@ -79,7 +78,6 @@ export class ThemeRegistry {
       this.themes.set(id, {
         id,
         name: parsed.data.name,
-        appearance: parsed.data.appearance ?? "dark",
         source: "custom",
         colors: parsed.data.colors,
       });
@@ -121,7 +119,6 @@ export class ThemeRegistry {
         (t): ThemeSummary => ({
           id: t.id,
           name: t.name,
-          appearance: t.appearance,
           source: t.source,
         }),
       )

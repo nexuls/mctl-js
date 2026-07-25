@@ -46,12 +46,17 @@ function pick(...candidates: Array<string | null | undefined>): string {
 }
 
 /**
- * Derive light/dark from background brightness using the perceptual-luma
- * formula (Rec. 601). Terminals with a light background want `light`. Falls back
- * to `dark` when the background is unparseable, since most terminals are dark.
+ * The host's current light/dark mode, derived from its terminal background
+ * brightness. This is the "current mode" that selects a theme's light or dark
+ * variant (see {@link ThemeColorScheme}) — even for static themes, the host mode
+ * still comes from the terminal, since that is the only signal of whether the
+ * user's environment is light or dark.
+ *
+ * Falls back to `dark` when the background is unreported/unparseable, since most
+ * terminals are dark.
  */
-function appearanceOf(background: string | null): ThemeAppearance {
-  const luma = relativeLuma(background);
+export function terminalAppearance(palette: TerminalPalette): ThemeAppearance {
+  const luma = relativeLuma(palette.background);
   if (luma === null) return "dark";
   return luma > 0.5 ? "light" : "dark";
 }
@@ -77,14 +82,15 @@ function relativeLuma(hex: string | null): number | null {
 /**
  * Map a terminal palette snapshot to MCTL's semantic colour roles.
  *
+ * The result is a `{ default }` scheme, not a light/dark pair: the snapshot
+ * already reflects whatever mode the terminal is *currently* in, so there is only
+ * ever one palette to expose. When the terminal switches light↔dark the snapshot
+ * changes and this is called again — the mode is captured in the colours
+ * themselves, and the host mode is read separately via {@link terminalAppearance}.
+ *
  * @param palette Snapshot of the terminal's fg/bg + 16 ANSI colours.
- * @param mode Optional detected light/dark hint (OpenTUI DEC-2031 / OSC). When
- *   absent, appearance is inferred from background brightness.
  */
-export function themeFromTerminalColors(
-  palette: TerminalPalette,
-  mode?: ThemeAppearance | null,
-): Theme {
+export function themeFromTerminalColors(palette: TerminalPalette): Theme {
   const a = palette.ansi;
   const colors: ThemeColors = {
     background: pick(palette.background, a[ANSI.black], "#000000"),
@@ -105,8 +111,7 @@ export function themeFromTerminalColors(
   return {
     id: TERMINAL_THEME_ID,
     name: "Terminal Default",
-    appearance: mode ?? appearanceOf(colors.background),
     source: "terminal",
-    colors,
+    colors: { default: colors },
   };
 }

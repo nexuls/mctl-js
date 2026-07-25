@@ -41,6 +41,22 @@ delete entries that stop being true. Newest-relevant first.
 
 ## Theming (2026-07-25)
 
+- **Themes carry a light/dark *scheme*, not one flat palette + an `appearance` tag.** `Theme.colors`
+  (and `ThemeFile.colors`) is a `ThemeColorScheme`: **either** `{ default: ThemeColors }` (mode-agnostic)
+  **or** `{ dark, light }` (both variants). The old top-level `Theme.appearance`/`ThemeSummary.appearance`
+  fields are **gone**. Built-ins `github` + `nord` now ship both variants (one id, renamed "GitHub"/"Nord").
+  - **Current mode is a property of the *host*, not the theme.** It's derived from the terminal
+    background luminance via `terminalAppearance(palette)` (exported from `core/theme/terminal.ts`,
+    was the private `appearanceOf`). Even a static theme picks its light/dark variant from this — the
+    terminal is the only signal of whether the user's environment is light or dark. Defaults to `dark`
+    until the palette resolves.
+  - **Resolution:** `resolveColors(scheme, mode)` in `types/theme.ts` collapses a scheme → flat
+    `ThemeColors` (`default` ignores mode; a pair picks the match). `use-theme` does this and exposes
+    **`colors` (resolved flat palette) + `appearance` (current mode)** on the context alongside `theme`.
+    Components read `useTheme().colors.*`, NOT `theme.colors.*` (which is now a scheme). `App.tsx` updated.
+  - **`terminal` theme is a `{ default }` scheme** — its live snapshot already reflects the current mode,
+    so there's only ever one palette; `themeFromTerminalColors` lost its `mode` param.
+  - `ThemeColorScheme` is a `z.union([{default}, {dark,light}])`; `"default" in scheme` narrows in TS.
 - **Themes are a registry of *semantic colour roles*, not raw ANSI/component names.** Roles:
   `background, foreground, surface, border, muted, primary, secondary, success, warning, error, info`
   (Zod-defined in `types/theme.ts`, hex-only for custom files). UI colours by role via `useTheme()`.

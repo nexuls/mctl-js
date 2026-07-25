@@ -16,9 +16,19 @@
  */
 
 import { createContext, useContext, useMemo, useState } from "react";
-import type { Theme, TerminalPalette, ThemeSummary } from "../types/theme.ts";
+import {
+  resolveColors,
+  type Theme,
+  type ThemeAppearance,
+  type ThemeColors,
+  type TerminalPalette,
+  type ThemeSummary,
+} from "../types/theme.ts";
 import type { ThemeRegistry } from "../core/theme/registry.ts";
-import { themeFromTerminalColors } from "../core/theme/terminal.ts";
+import {
+  themeFromTerminalColors,
+  terminalAppearance,
+} from "../core/theme/terminal.ts";
 import { useTerminalColors } from "./use-terminal-colors.ts";
 
 /**
@@ -35,8 +45,16 @@ const EMPTY_TERMINAL_THEME: Theme = themeFromTerminalColors({
 
 /** Value exposed by {@link useTheme}. */
 export interface ThemeContextValue {
-  /** The fully-resolved active theme. Always defined. */
+  /** The active theme entry (identity + its full colour scheme). Always defined. */
   theme: Theme;
+  /**
+   * The colours to paint with, already resolved for the current host mode. This
+   * is what components read (`colors.primary`, …) — it is the light or dark
+   * variant of {@link theme}, picked by {@link appearance}.
+   */
+  colors: ThemeColors;
+  /** The host's current light/dark mode, driving which variant is in {@link colors}. */
+  appearance: ThemeAppearance;
   /** The active theme's id (may be `"terminal"`). */
   themeId: string;
   /** Switch the active theme by id. Unknown ids fall back gracefully. */
@@ -80,10 +98,18 @@ export function ThemeProvider({
   const [themeId, setThemeIdState] = useState(initialThemeId);
   const { palette } = useTerminalColors(initialPalette);
 
+  // The host's current light/dark mode, read from the terminal background. This
+  // drives which variant of *any* active theme is painted — static themes
+  // included, since the terminal is the only signal of the host mode. Defaults to
+  // dark until the palette resolves.
+  const appearance = useMemo<ThemeAppearance>(
+    () => (palette ? terminalAppearance(palette) : "dark"),
+    [palette],
+  );
+
   // The dynamic terminal theme, rebuilt whenever the host palette changes. Falls
   // back to the empty-palette terminal theme (never a static theme) so the
-  // "terminal" id always reads as a terminal theme. Appearance is derived from
-  // the background inside themeFromTerminalColors.
+  // "terminal" id always reads as a terminal theme.
   const terminalTheme = useMemo<Theme>(
     () => (palette ? themeFromTerminalColors(palette) : EMPTY_TERMINAL_THEME),
     [palette],
@@ -96,9 +122,19 @@ export function ThemeProvider({
     return registry.get(themeId) ?? terminalTheme;
   }, [registry, themeId, terminalTheme]);
 
+  // Collapse the active theme's scheme to the concrete palette for the current
+  // mode — a `default`-only theme ignores `appearance`, a light/dark theme picks
+  // its matching variant.
+  const colors = useMemo<ThemeColors>(
+    () => resolveColors(theme.colors, appearance),
+    [theme, appearance],
+  );
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
+      colors,
+      appearance,
       themeId,
       themes: registry.list(),
       setThemeId: (id: string) => {
@@ -106,7 +142,7 @@ export function ThemeProvider({
         onThemeChange?.(id);
       },
     }),
-    [theme, themeId, registry, onThemeChange],
+    [theme, colors, appearance, themeId, registry, onThemeChange],
   );
 
   return <ThemeContext value={value}>{children}</ThemeContext>;
