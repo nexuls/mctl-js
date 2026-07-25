@@ -51,6 +51,45 @@ export function onAccent(colors: ThemeColors): string {
   return colors.background;
 }
 
+/**
+ * The concrete colours for one visual state of a control. `bgColor` is optional
+ * because unfilled states (a resting outline/ghost chip) draw no background.
+ */
+export interface StateColors {
+  /** Background fill, or `undefined` to leave the surface unfilled. */
+  bgColor?: string;
+  /** Text/ink colour. */
+  fgColor: string;
+  /** Border colour (ignored by borderless kinds). */
+  borderColor: string;
+}
+
+/**
+ * A control's colours across its interactive states. `default` is the resting
+ * look; `hover` and `active` override it when the control is hovered or active.
+ * The terminal has no pointer hover, so for a {@link "./Button".Button} "active"
+ * means focused. Omitted states fall back to `default`.
+ */
+export interface Variants {
+  default: StateColors;
+  hover?: StateColors;
+  active?: StateColors;
+}
+
+/**
+ * Pick the {@link StateColors} for a control from its {@link Variants}, given
+ * which interactive state it is in. `active` wins over `hover`, and either falls
+ * back to `default` when that state is not defined for the variant.
+ */
+export function resolveState(
+  variants: Variants,
+  state: { hover?: boolean; active?: boolean },
+): StateColors {
+  if (state.active && variants.active) return variants.active;
+  if (state.hover && variants.hover) return variants.hover;
+  return variants.default;
+}
+
 /** Clamp `n` into the inclusive `[min, max]` range. */
 export function clamp(n: number, min: number, max: number): number {
   return n < min ? min : n > max ? max : n;

@@ -10,37 +10,51 @@
  * the active control in a row is unmistakable without a mouse.
  */
 
+import { useState } from "react";
+import type { BorderStyle } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
+
 import { useTheme } from "../hooks/use-theme.tsx";
-import { onAccent, variantColor, type Variant } from "./support.ts";
+import { darken, fade, lighten } from "../lib/colors.ts";
+import {
+	onAccent,
+	resolveState,
+	variantColor,
+	type Variant,
+	type Variants,
+} from "./support.ts";
 
 /** Props for {@link Button}. */
 export interface ButtonProps {
-  /** The button label. */
-  children: string;
-  /** Invoked on click, or on Enter/Space while the button is focused. */
-  onClick?: () => void;
-  /** Intent → accent colour. Defaults to `"primary"`. */
-  variant?: Variant;
-  /**
-   * `"solid"` fills with the accent at rest; `"outline"` (default) shows a
-   * bordered chip that fills on focus; `"ghost"` is borderless text that tints
-   * on focus (for low-emphasis actions like Cancel).
-   */
-  kind?: "solid" | "outline" | "ghost";
-  /**
-   * Whether this button currently holds focus. Only the focused button reacts to
-   * Enter/Space; a page with several buttons drives this from its own focus
-   * state so exactly one is active at a time.
-   */
-  focused?: boolean;
-  /**
-   * Fired when the button is clicked, before `onClick`, so the page can move its
-   * focus ring here — a mouse click both focuses and activates the button.
-   */
-  onFocused?: () => void;
-  /** Dim and ignore all interaction. */
-  disabled?: boolean;
+	/** The button label. */
+	children: string;
+	/** Invoked on click, or on Enter/Space while the button is focused. */
+	onClick?: () => void;
+	/** Visual size. `"small"` drops the border for a compact, single-line chip. */
+	size?: "small" | "medium" | "large";
+	/** Border glyph style for the chip frame. Ignored by `small` and `ghost`, which draw no border. */
+	borderStyle?: BorderStyle;
+	/** Intent → accent colour. Defaults to `"primary"`. */
+	variant?: Variant;
+	/**
+	 * `"solid"` fills with the accent at rest; `"outline"` (default) shows a
+	 * bordered chip that fills on focus; `"ghost"` is borderless text that tints
+	 * on focus (for low-emphasis actions like Cancel).
+	 */
+	kind?: "solid" | "outline" | "ghost";
+	/**
+	 * Whether this button currently holds focus. Only the focused button reacts to
+	 * Enter/Space; a page with several buttons drives this from its own focus
+	 * state so exactly one is active at a time.
+	 */
+	focused?: boolean;
+	/**
+	 * Fired when the button is clicked, before `onClick`, so the page can move its
+	 * focus ring here — a mouse click both focuses and activates the button.
+	 */
+	onFocused?: () => void;
+	/** Dim and ignore all interaction. */
+	disabled?: boolean;
 }
 
 /**
@@ -49,71 +63,135 @@ export interface ButtonProps {
  * padding.
  */
 export function Button({
-  children,
-  onClick,
-  variant = "primary",
-  kind = "outline",
-  focused = false,
-  onFocused,
-  disabled = false,
+	children,
+	onClick,
+	size = "medium",
+	borderStyle = "rounded",
+	variant = "primary",
+	kind = "outline",
+	focused = false,
+	onFocused,
+	disabled = false,
 }: ButtonProps) {
-  const { colors } = useTheme();
-  const accent = variantColor(colors, variant);
+	const { colors } = useTheme();
+	const accent = variantColor(colors, variant);
+	const accentHover = darken(accent, 0.2);
+	const accentActive = lighten(accent, 0.2);
+	const accentDisabled = fade(accent, 0.5);
 
-  // Only the focused, enabled button consumes Enter/Space. Guarding on `focused`
-  // is what keeps multiple mounted buttons from all firing on one keypress.
-  useKeyboard((key) => {
-    if (!focused || disabled) return;
-    if (key.name === "return" || key.name === "space") onClick?.();
-  });
+	const [hovered, setHovered] = useState(false);
+	const [pressed, setPressed] = useState(false);
 
-  // A mouse click focuses the button (moving the page's focus ring here) and
-  // activates it, so pointer users don't have to Tab to it first.
-  const press = () => {
-    if (disabled) return;
-    onFocused?.();
-    onClick?.();
-  };
+	useKeyboard(
+		(key) => {
+			if (!focused || disabled) return;
+			if (key.name !== "return" && key.name !== "space") return;
+			if (key.eventType === "release") {
+				setPressed(false);
+				return;
+			}
+			if (key.repeated) return;
+			setPressed(true);
+			onClick?.();
+		},
+		{ release: true },
+	);
 
-  // Resolve the three visual states (rest / focused / disabled) for each kind
-  // into concrete border/background/text colours.
-  let backgroundColor: string | undefined;
-  let borderColor: string;
-  let textColor: string;
+	const press = () => {
+		if (disabled) return;
+		setPressed(true);
+		onFocused?.();
+		onClick?.();
+	};
 
-  if (disabled) {
-    backgroundColor = undefined;
-    borderColor = colors.border;
-    textColor = colors.muted;
-  } else if (kind === "solid") {
-    backgroundColor = accent;
-    borderColor = accent;
-    textColor = onAccent(colors);
-  } else if (kind === "ghost") {
-    backgroundColor = focused ? colors.surface : undefined;
-    borderColor = focused ? colors.surface : colors.background;
-    textColor = accent;
-  } else {
-    // outline: fills solid when focused so the active control is obvious.
-    backgroundColor = focused ? accent : undefined;
-    borderColor = accent;
-    textColor = focused ? onAccent(colors) : accent;
-  }
+	// Colour recipes per kind, keyed by visual state. `hover` covers both pointer
+	// hover and keyboard focus (the resting-but-targeted look); `active` is the
+	// held-down press — an outline chip fills solid and a ghost tints so a press is
+	// unmistakable.
+	const variants: Record<NonNullable<ButtonProps["kind"]>, Variants> = {
+		solid: {
+			default: {
+				bgColor: accent,
+				fgColor: onAccent(colors),
+				borderColor: accent,
+			},
+			hover: {
+				bgColor: accentHover,
+				fgColor: onAccent(colors),
+				borderColor: accentHover,
+			},
+			active: {
+				bgColor: accentActive,
+				fgColor: onAccent(colors),
+				borderColor: accentActive,
+			},
+		},
+		ghost: {
+			default: { fgColor: accent, borderColor: "transparent" },
+			hover: {
+				bgColor: size !== "small" ? undefined : accentHover,
+				fgColor: size !== "small" ? accentHover : onAccent(colors),
+				borderColor: accentHover,
+			},
+			active: {
+				bgColor: size !== "small" ? undefined : accentActive,
+				fgColor: size !== "small" ? accentActive : onAccent(colors),
+				borderColor: accentActive,
+			},
+		},
+		outline: {
+			default: { fgColor: accent, borderColor: accent },
+			hover: {
+				fgColor: size !== "small" ? accentHover : onAccent(colors),
+				borderColor: accentHover,
+			},
+			active: {
+				fgColor: size !== "small" ? accentActive : onAccent(colors),
+				borderColor: accentActive,
+			},
+		},
+	};
 
-  return (
-    <box
-      border={kind !== "ghost"}
-      borderStyle="rounded"
-      borderColor={borderColor}
-      backgroundColor={backgroundColor}
-      paddingLeft={2}
-      paddingRight={2}
-      flexShrink={0}
-      alignItems="center"
-      justifyContent="center"
-      onMouseDown={press}
-    >
-      <text fg={textColor}>{children}</text>
-    </box>
-  );
+	// Disabled is a fixed dimmed look; otherwise pick the state colours. A button
+	// is hovered when the pointer is over it *or* it holds focus, and active only
+	// while it is physically pressed.
+	const { bgColor, fgColor, borderColor } = disabled
+		? {
+				bgColor: undefined,
+				fgColor: accentDisabled,
+				borderColor: accentDisabled,
+			}
+		: resolveState(variants[kind], {
+				hover: hovered || focused,
+				active: pressed,
+			});
+
+	// The chip is just the label with two cells of side padding. `small` renders
+	// as a bare, borderless line of tinted text; every other size draws a bordered
+	// chip (which the border grows to three rows tall).
+	const PADDING_X = 2;
+	const showBorder = size !== "small";
+
+	return (
+		<box
+			border={showBorder && kind !== "ghost"}
+			borderStyle={showBorder ? borderStyle : undefined}
+			borderColor={showBorder ? borderColor : undefined}
+			backgroundColor={bgColor}
+			paddingLeft={PADDING_X}
+			paddingRight={PADDING_X}
+			flexShrink={0}
+			alignItems="center"
+			justifyContent="center"
+			onMouseDown={press}
+			onMouseUp={() => setPressed(false)}
+			onMouseOver={() => !disabled && setHovered(true)}
+			onMouseOut={() => {
+				setHovered(false);
+				setPressed(false);
+			}}
+		>
+			<text fg={fgColor}>{children}</text>
+		</box>
+	);
 }
