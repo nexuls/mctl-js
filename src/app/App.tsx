@@ -45,7 +45,16 @@ export async function renderApp(): Promise<void> {
 		exitOnCtrlC: true,
 		screenMode: "alternate-screen",
 		clearOnShutdown: false,
+		openConsoleOnError: true,
 	});
+
+	// Make everything non-selectable by default. OpenTUI text renderables are
+	// individually `selectable` and begin a drag-selection on left mouse-down,
+	// which highlights text and clashes with our click-to-navigate UI. Neutering
+	// the renderer's selection entry point disables that globally while leaving
+	// mouse clicks (onMouseDown handlers) fully intact.
+	renderer.startSelection = () => {};
+
 	createRoot(renderer).render(<App />);
 
 	renderer.keyInput.on("keypress", (key) => {
