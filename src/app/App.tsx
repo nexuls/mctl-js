@@ -13,6 +13,11 @@
 
 import { createCliRenderer, TextAttributes } from "@opentui/core";
 import { createRoot, useKeyboard, useRenderer } from "@opentui/react";
+import {
+	MinecraftHead,
+	SKINS,
+	type MinecraftSkin,
+} from "../components/MinecraftHead.tsx";
 import { loadConfig, writeConfig } from "../core/config/index.ts";
 import { ThemeRegistry } from "../core/theme/registry.ts";
 import { log } from "../lib/logger.ts";
@@ -45,7 +50,8 @@ function App() {
 	// terminal theme sidesteps the race entirely — the terminal's real background
 	// shows through instantly and never flashes. Static themes keep their own
 	// opaque background hex.
-	const pageBackground = theme.source === "terminal" ? "transparent" : c.background;
+	const pageBackground =
+		theme.source === "terminal" ? "transparent" : c.background;
 
 	return (
 		<box
@@ -77,6 +83,13 @@ function App() {
 					press <span fg={c.info}>t</span> to cycle · <span fg={c.info}>q</span>{" "}
 					to quit
 				</text>
+			</box>
+			<box flexDirection="row" flexWrap="wrap" gap={3} alignItems="center">
+				{Object.keys(SKINS).map((skin) => (
+					<box key={skin} flexDirection="column" alignItems="center">
+						<MinecraftHead skin={skin as MinecraftSkin} />
+					</box>
+				))}
 			</box>
 		</box>
 	);

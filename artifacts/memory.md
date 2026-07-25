@@ -155,6 +155,18 @@ delete entries that stop being true. Newest-relevant first.
 - User wants `plan.md` **rich and detailed** (the Rust plan was the depth benchmark), not blunt bullet
   lists — concrete interfaces, tables, diagrams.
 
+## OpenTUI gotchas
+
+- **FrameBuffer has no `<frame-buffer>` JSX intrinsic** in `@opentui/react`. Create a
+  `FrameBufferRenderable(renderer, {id, width, height})` imperatively in `useEffect` and attach it to a
+  host `<box>` via its `ref` (`box.add(canvas)` / cleanup `box.remove(canvas)` + `canvas.destroy()`).
+  React never renders children into that box, so there's no reconciler conflict. `useId()` for a unique
+  buffer id when several exist. See `components/MinecraftHead.tsx`.
+- **Square "pixels" in a cell grid:** a terminal cell is ~1 wide × 2 tall, so use the upper-half-block
+  glyph `▀` — fg = top pixel colour, bg = bottom pixel colour → 2 stacked pixels/cell, each its own
+  colour (lossless). An 8×8 image → 8-wide × 4-tall cells and renders square. (Quadrant blocks give 2×2
+  sub-pixels/cell but only 2 colours per cell, so they lose colour — avoid unless width-constrained.)
+
 ## Gotchas / open questions
 
 - Anything referencing `.toml`, Rust crates, `cargo`, `thiserror`, or a top-level `pages/` in an

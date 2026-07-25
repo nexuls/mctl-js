@@ -77,6 +77,13 @@ Roughly in order:
 5. Front-ends: OpenTUI Dashboard + `Router`; `cli/` real `list` and `status` (+ `cli/format.ts`).
 6. `lib/http.ts` with ETag cache (Phase 1 tail; first real need is Phase 2 downloads).
 
+## Demo / scratch
+
+- **`components/MinecraftHead.tsx`** — first file under `src/components/`. Renders a Minecraft head
+  (`skin` prop: `steve` | `alex` | `creeper`) into an 8×4-cell FrameBuffer via half-block glyphs. A
+  FrameBuffer showcase, not dashboard code; `App.tsx` mounts all three as a placeholder. Safe to delete
+  or repurpose once the real Dashboard lands. Technique is documented in `memory.md` § OpenTUI gotchas.
+
 ## Notes for the next agent
 
 - **Do not scaffold empty phase-2+ folders** (providers, backups, network). Build per roadmap phase.
