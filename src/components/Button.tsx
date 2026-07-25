@@ -34,6 +34,11 @@ export interface ButtonProps {
    * state so exactly one is active at a time.
    */
   focused?: boolean;
+  /**
+   * Fired when the button is clicked, before `onClick`, so the page can move its
+   * focus ring here — a mouse click both focuses and activates the button.
+   */
+  onFocused?: () => void;
   /** Dim and ignore all interaction. */
   disabled?: boolean;
 }
@@ -49,6 +54,7 @@ export function Button({
   variant = "primary",
   kind = "outline",
   focused = false,
+  onFocused,
   disabled = false,
 }: ButtonProps) {
   const { colors } = useTheme();
@@ -61,8 +67,12 @@ export function Button({
     if (key.name === "return" || key.name === "space") onClick?.();
   });
 
+  // A mouse click focuses the button (moving the page's focus ring here) and
+  // activates it, so pointer users don't have to Tab to it first.
   const press = () => {
-    if (!disabled) onClick?.();
+    if (disabled) return;
+    onFocused?.();
+    onClick?.();
   };
 
   // Resolve the three visual states (rest / focused / disabled) for each kind

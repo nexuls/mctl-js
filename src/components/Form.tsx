@@ -84,6 +84,13 @@ export interface FormFieldProps {
 	required?: boolean;
 	/** Whether the contained control is focused; drives the accent border. */
 	focused?: boolean;
+	/**
+	 * Fired when the field is clicked, so the page can move its focus ring here.
+	 * Mouse events bubble, so a click anywhere in the frame (border, label, or the
+	 * control inside) reaches this — clicking a field focuses it, mirroring the Tab
+	 * ring. The page still owns focus; this only reports the intent.
+	 */
+	onFocused?: () => void;
 	/** Fixed outer width in cells. Omit to size to the parent (flex). */
 	width?: number;
 	/**
@@ -106,6 +113,7 @@ export function FormField({
 	hint,
 	required = false,
 	focused = false,
+	onFocused,
 	width,
 	invalid = false,
 	children,
@@ -136,6 +144,7 @@ export function FormField({
 			paddingRight={1}
 			width={width}
 			flexShrink={0}
+			onMouseDown={onFocused ? () => onFocused() : undefined}
 		>
 			{children}
 		</box>
@@ -165,6 +174,8 @@ export interface InputProps {
 	onSubmit?: (value: string) => void;
 	/** Whether this input holds focus. */
 	focused?: boolean;
+	/** Fired when the field is clicked, so the page can focus it. */
+	onFocused?: () => void;
 	/** Mark the field required. */
 	required?: boolean;
 	/** Mark the field invalid (error border). */
@@ -186,6 +197,7 @@ export function Input({
 	onChange,
 	onSubmit,
 	focused = false,
+	onFocused,
 	required = false,
 	invalid = false,
 	width,
@@ -198,6 +210,7 @@ export function Input({
 			hint={hint}
 			required={required}
 			focused={focused}
+			onFocused={onFocused}
 			invalid={invalid}
 			width={width}
 		>
@@ -247,6 +260,8 @@ export interface TextAreaProps {
 	onChange?: (value: string) => void;
 	/** Whether this textarea holds focus. */
 	focused?: boolean;
+	/** Fired when the field is clicked, so the page can focus it. */
+	onFocused?: () => void;
 	/** Visible rows of text (the field is this + 2 for the borders). Defaults to 4. */
 	rows?: number;
 	/** Mark the field required. */
@@ -267,6 +282,7 @@ export function TextArea({
 	placeholder,
 	onChange,
 	focused = false,
+	onFocused,
 	rows = 4,
 	required = false,
 	width,
@@ -279,6 +295,7 @@ export function TextArea({
 			hint={hint}
 			required={required}
 			focused={focused}
+			onFocused={onFocused}
 			width={width}
 		>
 			<textarea
@@ -333,6 +350,8 @@ export interface SelectProps<T = string> {
 	onChange?: (value: T) => void;
 	/** Whether this control holds focus. */
 	focused?: boolean;
+	/** Fired when the field is clicked, so the page can focus it. */
+	onFocused?: () => void;
 	/** Mark the field required. */
 	required?: boolean;
 	/**
@@ -363,6 +382,7 @@ export function Select<T = string>({
 	value,
 	onChange,
 	focused = false,
+	onFocused,
 	required = false,
 	width = 40,
 	maxVisible = 5,
@@ -398,6 +418,7 @@ export function Select<T = string>({
 				hint={hint}
 				required={required}
 				focused={focused}
+				onFocused={onFocused}
 				width={width}
 			>
 				<tab-select
@@ -434,6 +455,7 @@ export function Select<T = string>({
 			hint={hint}
 			required={required}
 			focused={focused}
+			onFocused={onFocused}
 			width={width}
 		>
 			<select
@@ -474,6 +496,8 @@ export interface ToggleProps {
 	onChange?: (value: boolean) => void;
 	/** Whether this control holds focus (enables Space/Enter/←/→). */
 	focused?: boolean;
+	/** Fired when the control is clicked, so the page can focus it. */
+	onFocused?: () => void;
 	/** Labels for the two states. Defaults to `["OFF", "ON"]`. */
 	labels?: [string, string];
 }
@@ -490,6 +514,7 @@ export function Toggle({
 	value,
 	onChange,
 	focused = false,
+	onFocused,
 	labels = ["OFF", "ON"],
 }: ToggleProps) {
 	const { colors } = useTheme();
@@ -503,7 +528,7 @@ export function Toggle({
 
 	const [offLabel, onLabel] = labels;
 	return (
-		<FormField label={label} hint={hint} focused={focused}>
+		<FormField label={label} hint={hint} focused={focused} onFocused={onFocused}>
 			<box
 				flexDirection="row"
 				flexShrink={0}
@@ -546,6 +571,8 @@ export interface CheckboxProps {
 	onChange?: (checked: boolean) => void;
 	/** Whether this control holds focus (enables Space/Enter). */
 	focused?: boolean;
+	/** Fired when the control is clicked, so the page can focus it. */
+	onFocused?: () => void;
 }
 
 /**
@@ -560,6 +587,7 @@ export function Checkbox({
 	checked,
 	onChange,
 	focused = false,
+	onFocused,
 }: CheckboxProps) {
 	const { colors } = useTheme();
 
@@ -569,7 +597,7 @@ export function Checkbox({
 	});
 
 	return (
-		<FormField label={label} hint={hint} focused={focused}>
+		<FormField label={label} hint={hint} focused={focused} onFocused={onFocused}>
 			<box
 				flexDirection="row"
 				gap={1}
@@ -614,6 +642,8 @@ export interface RadioGroupProps<T = string> {
 	onChange?: (value: T) => void;
 	/** Whether the group holds focus (enables ↑/↓/j/k to move). */
 	focused?: boolean;
+	/** Fired when the group is clicked, so the page can focus it. */
+	onFocused?: () => void;
 	/** Lay options in a row instead of a column. Defaults to column. */
 	row?: boolean;
 	/** Mark the field required. */
@@ -634,6 +664,7 @@ export function RadioGroup<T = string>({
 	value,
 	onChange,
 	focused = false,
+	onFocused,
 	row = false,
 	required = false,
 }: RadioGroupProps<T>) {
@@ -658,7 +689,13 @@ export function RadioGroup<T = string>({
 	});
 
 	return (
-		<FormField label={label} hint={hint} required={required} focused={focused}>
+		<FormField
+			label={label}
+			hint={hint}
+			required={required}
+			focused={focused}
+			onFocused={onFocused}
+		>
 			<box flexDirection={row ? "row" : "column"} gap={row ? 2 : 0}>
 				{options.map((opt) => {
 					const selected = opt.value === value;

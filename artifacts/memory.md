@@ -160,7 +160,18 @@ delete entries that stop being true. Newest-relevant first.
 - **`src/components/` is the shared UI kit.** All components are **pure-UI, controlled, and
   theme-driven**: they read colour from `useTheme().colors` (never hardcode hex), take
   `value`/`checked` + `onChange` + `focused`, hold no domain state, and do no I/O. Import from the
-  barrel `src/components/index.ts`. Interactive keyboard handling lives inside each control via
+  barrel `src/components/index.ts`.
+- **Mouse focus convention — every focusable control takes `onFocused?: () => void`.** Fired on
+  mouse-down so a click moves the *page's* focus ring to that control (the component still owns no
+  focus state; the page maps `onFocused` → its `setFocus`). Present on `Button`, `Tabs`, `Input`,
+  `TextArea`, `Select`, `Toggle`, `Checkbox`, `RadioGroup`. **How it's wired:** form controls forward
+  `onFocused` to `FormField`, which puts `onMouseDown={onFocused}` on its frame box — OpenTUI mouse
+  events **bubble** (they carry `stopPropagation`), so a click anywhere in the frame (border, label, or
+  the inner control) reaches it, and the inner `onMouseDown` handlers (Toggle/Checkbox/RadioGroup) that
+  fire `onChange` don't stop propagation, so both fire. `Button` fires `onFocused` *then* `onClick`
+  (a click focuses **and** activates). Non-focusable clickables (`Breadcrumb` crumbs, lone `Radio`,
+  `Dialog` backdrop) keep plain `onMouseDown` and get **no** `onFocused`. Gallery wires every ring
+  member's `onFocused` to `setFocus(id)` — click-to-focus is the demo/verification. Interactive keyboard handling lives inside each control via
   `useKeyboard` **guarded by `focused`** — that guard is what stops every mounted control from
   reacting to one keypress (many `useKeyboard` handlers all fire globally).
 - **Variant language:** `support.ts` defines `Variant` (primary/secondary/success/warning/error/

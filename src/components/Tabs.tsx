@@ -36,6 +36,11 @@ export interface TabsProps {
    * between tabs. Mouse clicks always work regardless of focus.
    */
   focused?: boolean;
+  /**
+   * Fired when a tab is clicked, so the page can move its focus ring to the bar —
+   * a click both focuses the bar and selects the clicked tab.
+   */
+  onFocused?: () => void;
 }
 
 /**
@@ -43,7 +48,13 @@ export interface TabsProps {
  * underline bar beneath it; inactive tabs are muted. Keyboard navigation wraps
  * around at both ends.
  */
-export function Tabs({ items, activeId, onChange, focused = false }: TabsProps) {
+export function Tabs({
+  items,
+  activeId,
+  onChange,
+  focused = false,
+  onFocused,
+}: TabsProps) {
   const { colors } = useTheme();
   const activeIndex = Math.max(0, items.findIndex((t) => t.id === activeId));
 
@@ -68,7 +79,10 @@ export function Tabs({ items, activeId, onChange, focused = false }: TabsProps) 
             flexDirection="column"
             alignItems="center"
             flexShrink={0}
-            onMouseDown={() => onChange(tab.id)}
+            onMouseDown={() => {
+              onFocused?.();
+              onChange(tab.id);
+            }}
           >
             <text
               fg={active ? colors.primary : colors.muted}

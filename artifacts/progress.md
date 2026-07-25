@@ -80,6 +80,12 @@ _Last updated: 2026-07-25 (Phase 1 — foundation groundwork landed)_
       `App.tsx` (replaced the MinecraftHead placeholder demo).
   - Verified: `tsc --noEmit` clean; `bun run src/index.tsx` mounts and renders the gallery
     (breadcrumb/tabs/buttons/form frames all draw; terminal theme active).
+  - **Mouse focus (this session):** every focusable control gained an `onFocused?: () => void` prop,
+    fired on mouse-down so a click moves the page's focus ring to it (`Button`, `Tabs`, `Input`,
+    `TextArea`, `Select`, `Toggle`, `Checkbox`, `RadioGroup`). Form controls forward it to `FormField`,
+    which owns the `onMouseDown` on its frame (clicks bubble). `Button` fires `onFocused` then `onClick`.
+    Gallery wires each ring member's `onFocused → setFocus(id)`. `tsc --noEmit` clean. See `memory.md`
+    § Component library for the convention.
 
 ## In progress
 
