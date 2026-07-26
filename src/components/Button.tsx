@@ -12,10 +12,10 @@
 
 import { useState } from "react";
 import type { BorderStyle } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
+import { useKeyboard, type BoxProps } from "@opentui/react";
 
 import { useTheme } from "../hooks/use-theme.tsx";
-import { darken, fade, lighten } from "../lib/colors.ts";
+import { alpha, darken, fade, lighten } from "../lib/colors.ts";
 import {
 	onAccent,
 	resolveState,
@@ -27,7 +27,7 @@ import {
 /** Props for {@link Button}. */
 export interface ButtonProps {
 	/** The button label. */
-	children: string;
+	children: React.ReactNode;
 	/** Invoked on click, or on Enter/Space while the button is focused. */
 	onClick?: () => void;
 	/** Visual size. `"small"` drops the border for a compact, single-line chip. */
@@ -43,6 +43,12 @@ export interface ButtonProps {
 	 */
 	kind?: "solid" | "outline" | "ghost";
 	/**
+	 * Whether the button is currently pressed. Only the pressed button reacts to
+	 * mouse release; a page with several buttons drives this from its own press
+	 * state so exactly one is active at a time.
+	 */
+	active?: boolean;
+	/**
 	 * Whether this button currently holds focus. Only the focused button reacts to
 	 * Enter/Space; a page with several buttons drives this from its own focus
 	 * state so exactly one is active at a time.
@@ -55,6 +61,11 @@ export interface ButtonProps {
 	onFocused?: () => void;
 	/** Dim and ignore all interaction. */
 	disabled?: boolean;
+	/** Styles */
+	hoverDarken?: number;
+	hoverAlpha?: number;
+	activeLighten?: number;
+	activeAlpha?: number;
 }
 
 /**
@@ -69,14 +80,20 @@ export function Button({
 	borderStyle = "rounded",
 	variant = "primary",
 	kind = "outline",
+	active = false,
 	focused = false,
 	onFocused,
 	disabled = false,
-}: ButtonProps) {
+	hoverDarken = 0.2,
+	hoverAlpha = 1.0,
+	activeLighten = 0.2,
+	activeAlpha = 1.0,
+	...props
+}: BoxProps & ButtonProps) {
 	const { colors } = useTheme();
 	const accent = variantColor(colors, variant);
-	const accentHover = darken(accent, 0.2);
-	const accentActive = lighten(accent, 0.2);
+	const accentHover = alpha(darken(accent, hoverDarken), hoverAlpha);
+	const accentActive = alpha(lighten(accent, activeLighten), activeAlpha);
 	const accentDisabled = fade(accent, 0.5);
 
 	const [hovered, setHovered] = useState(false);
@@ -163,7 +180,7 @@ export function Button({
 			}
 		: resolveState(variants[kind], {
 				hover: hovered || focused,
-				active: pressed,
+				active: pressed || active,
 			});
 
 	// The chip is just the label with two cells of side padding. `small` renders
@@ -190,8 +207,13 @@ export function Button({
 				setHovered(false);
 				setPressed(false);
 			}}
+			{...props}
 		>
-			<text fg={fgColor}>{children}</text>
+			{typeof children === "string" ? (
+				<text fg={fgColor}>{children}</text>
+			) : (
+				children
+			)}
 		</box>
 	);
 }

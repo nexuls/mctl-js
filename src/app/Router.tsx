@@ -15,7 +15,6 @@
  * focused. See TODO below.
  */
 
-import { TextAttributes } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
@@ -30,6 +29,7 @@ import { Jobs } from "./Jobs/index.tsx";
 import { Backups } from "./Backups/index.tsx";
 import { Network } from "./Network/index.tsx";
 import { Settings } from "./Settings/index.tsx";
+import { alpha } from "../lib/colors.ts";
 
 /** The active page component for a route. */
 function Page({ route }: { route: RouteId }) {
@@ -92,42 +92,37 @@ function AppShell() {
 
 	return (
 		<box flexGrow={1} flexDirection="column" backgroundColor={pageBackground}>
-			{/* Top bar: brand + active screen name. */}
+			{/* Body: the framed shell — nav bar + active page. The screen name rides
+			    the top border and the brand the bottom one, so neither costs a row. */}
 			<box
-				flexDirection="row"
-				alignItems="flex-end"
-				justifyContent="space-between"
-        flexShrink={0}
-				paddingLeft={1}
-				paddingRight={1}
-				border={["bottom"]}
+				flexDirection="column"
+				flexGrow={1}
+				border
+				borderStyle="rounded"
 				borderColor={c.border}
+				focusedBorderColor={c.border}
+				title={` ${titleFor(route)} `}
+				titleAlignment="right"
+				titleColor={c.primary}
 			>
-				<box flexDirection="row" alignItems="flex-end">
-					<ascii-font font="tiny" text="mctl" color={c.primary} />
-					<text fg={c.muted} attributes={TextAttributes.DIM}>
-						{"  minecraft server control"}
-					</text>
-				</box>
-				<text fg={c.secondary}>{titleFor(route)}</text>
-			</box>
-
-			{/* Body: nav rail + active page. */}
-			<box flexDirection="row" flexGrow={1}>
 				<NavRail active={route} onNavigate={navigate} />
-				<scrollbox flexGrow={1} flexDirection="row" padding={1}>
+				<scrollbox
+					flexGrow={1}
+					flexDirection="row"
+					padding={1}
+					scrollbarOptions={{
+						trackOptions: {
+							backgroundColor: c.surface,
+							foregroundColor: alpha(c.muted, 0.4),
+						},
+					}}
+				>
 					<Page route={route} />
 				</scrollbox>
 			</box>
 
 			{/* Bottom hint strip. */}
-			<box
-				paddingLeft={1}
-				paddingRight={1}
-				border={["top"]}
-				borderColor={c.border}
-				flexShrink={0}
-			>
+			<box paddingX={1} flexShrink={0}>
 				<Hint
 					items={[
 						{ keys: ["1", "…", "6"], label: "navigate" },

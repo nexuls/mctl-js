@@ -130,6 +130,27 @@ delete entries that stop being true. Newest-relevant first.
   - Real pages: `Dashboard` (server-count tiles + recent-activity feed from `useRecentEvents`),
     `Servers` (live list, ↑/↓/j/k + Enter/click → detail), `Server` (read-only detail via `useServer`),
     `Settings` (read-only config). `Jobs`/`Backups`/`Network` = honest `Placeholder` (phase-noted).
+  - **NavRail is a horizontal tab bar, not a left rail** (redesigned 2026-07-26 to a user-supplied
+    reference): a 2-row scrollbox — tabs on row 1, the rule on row 2 — whose active tab is a **solid
+    pill** (`backgroundColor: colors.primary`, ink `onAccent(colors)`, BOLD) and whose inactive tabs
+    are `colors.muted`, lifting to `colors.foreground` on an `alpha(foreground, 0.12)` wash. The digit
+    prefix is DIM off the pill and `mix(onAccent, primary, 0.55)` on it.
+  - **The rule is per-tab `<text>` segments, NOT a `border={["bottom"]}`** — only the segment under the
+    active tab is accented, and a border paints one colour for its whole side. Two rules keep the rows
+    aligned: (1) `tabWidth(item)` is the single width source, set as an explicit `width` on **both** the
+    tab box and its underline text; (2) every segment is `flexShrink={0}`. Without (2) yoga shrank the
+    segments (their total + the tail exceeds the viewport) and the accent came out 9 cells under a
+    13-cell tab. The rule reaches the right edge via a tail `<text>` **sized from
+    `useTerminalDimensions().width`** minus the cells the tabs consume (a `<text>` can't stretch, so it
+    must be counted out), inside a `flexGrow` + `overflow="hidden"` box. Deliberately an *over*estimate
+    — the terminal width ignores the shell frame's inset, and surplus is clipped, whereas undershooting
+    leaves a visible gap before the right border. Re-renders on SIGWINCH (verified by resizing a pty).
+    - **Tabs are deliberately NOT `Button`s.** `Button` colours its label from its own variant matrix
+      and only when `children` is a plain string, so a chip needing *two* inks (dim digit + label) with
+      a *muted* resting look has no matching kind — the local `NavTab` owns its hover state instead.
+    - The **screen name rides the shell's top border** (`title` + `titleAlignment="right"`, the
+      reference's "Request" placement) and the brand rides `bottomTitle` — neither costs a row. The
+      old commented-out top-bar block in `Router.tsx` is gone; `titleFor(route)` now feeds the title.
   - Data hooks (`hooks/`): `use-servers` (`useServers`/`useServer`), `use-config`, `use-recent-events`,
     `use-event-bus` — all re-run the core read path on invalidating bus events, holding no authoritative
     state. `use-event-bus`/`use-router` are `.tsx` (they hold JSX providers).

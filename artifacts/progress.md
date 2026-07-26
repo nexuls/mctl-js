@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed; box border clipping fix)_
+_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed; box border clipping fix; NavRail redesigned as a horizontal tab bar)_
 
 ---
 
@@ -167,6 +167,24 @@ _Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/statu
     patch (not vacuous).
   - Verified: `tsc --noEmit` clean; `bun test` 2/2; real app under a pty at 14×80 — Settings scrolled
     with the mouse wheel leaks a stray `│` into the hint strip without the patch, clean with it.
+
+- **NavRail redesign — horizontal tab bar (this session):**
+  - `src/app/NavRail.tsx` rewritten to match a user-supplied reference: a row of tabs where the active
+    route is a filled primary pill (on-accent bold ink) and the rest are muted text with a faint hover
+    wash; digit shortcuts stay as a DIM prefix. Local `NavTab` component owns hover state (a `Button`
+    can't do a two-ink chip with a muted resting look). Dividers (`|`) and the inline `MCTL` label are
+    gone; the row still scrolls horizontally on narrow terminals.
+  - The underline is a **second row of per-tab `<text>` segments** (accent only under the active tab,
+    plain elsewhere) rather than a bottom border, which can only be one colour. `tabWidth(item)` sizes
+    both the tab and its segment, and segments are `flexShrink={0}`; see `memory.md` for the alignment
+    traps. A `flexGrow` + `overflow="hidden"` tail carries the plain rule to the right edge, its run
+    length computed from `useTerminalDimensions().width` minus the cells the tabs consume.
+  - `src/app/Router.tsx` — the shell frame now carries the screen name on its **top border**
+    (`title`, right-aligned, via the existing `titleFor(route)`) and `bottomTitle=" mctl "`, replacing
+    the commented-out top-bar block (deleted, along with the then-unused `TextAttributes` import).
+  - Verified: `bunx tsc --noEmit` clean; app rendered under a pty at 100×24 and 60×14 and the frames
+    replayed — active pill emits a real background SGR, rule and border titles draw, tabs scroll rather
+    than wrap when narrow.
 
 ## In progress
 
