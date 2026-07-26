@@ -166,6 +166,14 @@ index only** — server config still lives solely in each server's `mctl.json`.
 the step-3 scan, others are not). Create ⇒ write `mctl.json` then `registry.add`. Delete ⇒
 `registry.remove`; deleting the directory is a separate, explicitly-confirmed destructive action.
 
+**Read path — `core/server/discover.ts`.** `loadRegistry` returns *locations*; discovery turns them
+into `Server` **view models** by parsing each `mctl.json` and probing liveness (`core/session`).
+`listServers(serversDir)` / `getServer(id, serversDir)` are the **single read path** both front-ends
+use (CLI `list`/`status`, TUI `useServers`/`useServer`), re-derived from disk on every call — no cache.
+This module is **read-only**; the mutating `ServerManager` (create/delete/edit, install strategies) is
+Phase 2. A server that fails to load (missing path, invalid `mctl.json`) becomes an `unavailable` view
+model rather than throwing, so one bad server never breaks a listing.
+
 ---
 
 ## Provider system — `core/registry/` (ProviderRegistry)
@@ -217,6 +225,18 @@ exit. Both call identical core services.
   never disagree.
 - First run in CLI mode does not silently create config; it errors toward `mctl init` (or offers the
   wizard if attached to a TTY).
+
+**TUI router — `app/routes.ts` + `hooks/use-router.tsx` + `app/Router.tsx`.** No URL: an in-memory
+`RouterProvider` holds the active route, its params, and a back-stack; pages navigate via `useRouter`.
+`Router.tsx` is the shell (top bar + `NavRail` + page host + hint strip) and owns the global keyboard
+(digits 1–6 → routes, `Esc` = back-else-quit, `q` quit, `t` theme). Adding a screen = one `NAV` row +
+one entry in the `Page` switch. The event bus (started in `renderApp`, injected via `EventBusProvider`)
+drives the data hooks (`use-servers`/`use-config`/`use-recent-events`), which re-run the core read path
+on invalidating events and hold no authoritative state — statelessness reaches into the UI.
+
+> **Digit-nav constraint:** global digit shortcuts are safe only while no router-reachable page mounts a
+> live text input. Phase-1 pages are read-only; the editable Settings form must gate digit-nav while an
+> input is focused (`TODO(phase-1)` in `Router.tsx`).
 
 ---
 

@@ -79,6 +79,77 @@ delete entries that stop being true. Newest-relevant first.
   usually doesn't exist yet) → `{free,total}` bytes; `undefined` on failure (never throws). `useDiskFree`
   hook debounces it 150ms. `lib/format.formatBytes` humanizes (binary units, "—" for non-finite).
 
+## Phase 1 completion — registry, session, events, router (2026-07-26)
+
+- **`core/server/discover.ts` is THE shared server read path** — `listServers(serversDir)` /
+  `getServer(id, serversDir)` combine registry + each `mctl.json` + a live session probe into
+  `Server` view models. Both the CLI (`list`/`status`) and the TUI (`useServers`/`useServer`) call
+  it, so neither front-end holds logic the other lacks. **Read-only**; the mutating `ServerManager`
+  (create/delete/edit + install strategies) is Phase 2. Re-derived from disk every call — no cache.
+  - One bad server never breaks the list: unreadable/invalid `mctl.json` or missing path → a minimal
+    `unavailable` view model (kind/mc/etc = "—"), not a throw.
+- **`types/server.ts`:** `MctlJson` is a **`z.looseObject`** (unknown/future keys preserved so a
+  server made by a newer MCTL survives a read round-trip). `RuntimeSession` (`runtime/<id>.json`) and
+  the `servers.json` file schemas are strict `z.object`. `ServerState` = `running|stopped|unavailable|
+  unknown`. The `Server` **view model is a plain TS interface** (derived), not Zod — `state`/`available`
+  are computed, never stored.
+- **Session probe (`core/session/session-manager.ts`):** liveness via `process.kill(pid, 0)` —
+  no-throw or `EPERM` = alive, `ESRCH` = dead. `probe(id)` reaps dead/invalid/corrupt descriptors so a
+  crashed server never lingers "running". `reapStaleLocks()` sweeps `runtime/*.lock` whose owner pid is
+  dead (lock body is JSON `{pid}` or a bare int); called once in `renderApp()` before any read. tmux/
+  docker session-existence check is a `TODO(phase-3)` — pid is the only signal today.
+- **Event system (`core/events/`), 4 files + barrel:**
+  - `EventBus` (EventEmitter3, single `"event"` channel, `emit`/`subscribe→unsub`/`clear`).
+  - `INSTANCE_ID` = one `randomUUID()` per process (not persisted; identity is per-run).
+  - `publish(bus, type, payload)` = **append to `events.jsonl` + emit locally**; the tail then skips
+    lines whose `instance === INSTANCE_ID`, so an instance never double-processes its own events.
+  - `startTail(bus)` records the current EOF and re-emits only *new remote* lines (no history replay);
+    `fs.watch` for immediacy + a 1 s poll fallback; detects truncation by size shrink.
+  - **Watchers watch DIRECTORIES, not files** (`configDir`/`stateDir`/`runtimeDir`) — atomic writes
+    (`temp+rename`) change the inode, so a file-bound watch goes stale after the first write. They emit
+    **local-only** `ConfigChanged`/`RegistryChanged`/`ServerStateChanged{id}` (not `publish` — the
+    change was already made by whoever caused it). Debounced 60 ms per filename.
+  - `startEventSystem()` → `{ bus, stop }`, wired in `renderApp()`; `EventBusProvider` injects the bus.
+    Stopped on the renderer's `"destroy"` event.
+  - **Wizard/`init` config writes need no explicit emit** — the config-dir watcher fires `ConfigChanged`
+    automatically, so `useConfig`/`useServers` refresh. (Supersedes progress.md's earlier "wire a
+    ConfigChanged emit into the wizard" note — the watcher covers it.)
+  - `MctlEvent` envelope (`types/events.ts`): `{v,id,ts,instance,type,payload}`. `type` is an **open
+    string** (forward-compat: an unknown event type from a newer instance must not break the tail);
+    `EventType` is a reference object, not a closed union.
+- **TUI Router (`src/app/`):** in-memory router (no URL). `hooks/use-router.tsx` = `RouterProvider` +
+  `useRouter()` (route + params + `navigate`/`back`/`canBack`, with a back-stack). `app/routes.ts` =
+  `RouteId` + `NAV` (dashboard/servers/jobs/backups/network/settings, digits 1–6; `server` detail is
+  NOT in NAV — reached from Servers with a `serverId` param). `app/Router.tsx` = the shell (top bar +
+  `NavRail` + page host + `Hint` strip) and owns the **global keyboard**: digit→route, `Esc`=back-else-
+  quit, `q`=quit, `t`=cycle theme. `App.tsx` renders `<AppRouter/>` post-setup.
+  - **Digit-nav is global and safe ONLY while no router-reachable page mounts a live text input**
+    (typing a digit would navigate away). Phase-1 pages are read-only in that respect (Settings is a
+    read-only config view for now). `TODO(phase-1)`: gate digit-nav while an input is focused when the
+    editable Settings form lands.
+  - Real pages: `Dashboard` (server-count tiles + recent-activity feed from `useRecentEvents`),
+    `Servers` (live list, ↑/↓/j/k + Enter/click → detail), `Server` (read-only detail via `useServer`),
+    `Settings` (read-only config). `Jobs`/`Backups`/`Network` = honest `Placeholder` (phase-noted).
+  - Data hooks (`hooks/`): `use-servers` (`useServers`/`useServer`), `use-config`, `use-recent-events`,
+    `use-event-bus` — all re-run the core read path on invalidating bus events, holding no authoritative
+    state. `use-event-bus`/`use-router` are `.tsx` (they hold JSX providers).
+- **`lib/http.ts` — ETag cache** (Phase-1 tail; first real use is Phase-2 downloads). One JSON file per
+  URL under `~/.cache/mctl/api/<sha256(url)[:32]>.json` = `{url,etag,lastModified,fetchedAt,body}`.
+  Within `ttlMs` (default 5 min) serves cache with **no** network call; else conditional GET
+  (`If-None-Match`/`If-Modified-Since`), `304` refreshes the timestamp, `200` restores body+validators.
+  Serves **stale on network failure**; throws `HttpError` only when nothing is cached. `fetchJson`
+  returns `unknown` — caller Zod-validates.
+
+## OpenTUI gotchas (added 2026-07-26)
+
+- **Box border *sides* are `border={["top"|"right"|"bottom"|"left"]}`** — `border?: boolean |
+  BorderSides[]`. There is **no** `borderTop`/`borderRight`/`borderBottom`/`borderLeft` prop (they
+  fail typecheck). `borderColor` colours whichever sides are on.
+- **`CliRenderer` extends EventEmitter and emits `"destroy"`** (`RendererEvents.DESTROY`). Use
+  `renderer.on("destroy", …)` to tear down process-wide resources (we stop the event system there).
+  Note `useQuit` does `renderer.destroy()` then `process.exit(0)`, so on an explicit quit the OS also
+  reaps watchers regardless.
+
 ## Theming (2026-07-25)
 
 - **Themes carry a light/dark *scheme*, not one flat palette + an `appearance` tag.** `Theme.colors`

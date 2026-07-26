@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-25 (Phase 1 — first-run setup wizard + `mctl init` landed)_
+_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed)_
 
 ---
 
@@ -120,26 +120,53 @@ _Last updated: 2026-07-25 (Phase 1 — first-run setup wizard + `mctl init` land
     0600, full dir tree, re-run refused, bad flag → exit 1, `--help`/`--json`); TUI under a pty renders
     the Welcome screen and Enter→step-1 with no runtime errors.
 
+- **Phase 1 completion — registry, session, events, CLI, router (this session):**
+  - `src/types/server.ts` — `MctlJson` (`z.looseObject`, future-key safe), `ServerRegistryFile`/
+    `ServerRegistryEntry`, `RuntimeSession`, `ServerState` enum, `JavaPin`, and the `Server` view model
+    (plain TS interface — `state`/`available` are derived, not stored).
+  - `src/types/events.ts` — `MctlEvent` envelope (`{v,id,ts,instance,type,payload}`; `type` open string
+    for forward-compat) + `EventType` reference object.
+  - `src/core/session/session-manager.ts` — `probe(id)` (pid liveness via `kill(pid,0)`, reaps dead/
+    invalid/corrupt descriptors) + `reapStaleLocks()` (sweeps `runtime/*.lock` with dead owner pid).
+  - `src/core/registry/server-registry.ts` — `loadRegistry(serversDir)` (read/verify `servers.json`,
+    fold in `servers_dir` drop-ins, persist additions atomically, mark unavailable never delete) +
+    `addServer`/`removeServer` + `mctlJsonPath`.
+  - `src/core/server/discover.ts` — **the shared read path**: `listServers`/`getServer` → `Server[]`
+    view models (registry + `mctl.json` + probe). Read-only; `ServerManager` mutations are Phase 2.
+  - `src/core/events/` — `bus.ts` (`EventBus`), `instance.ts` (`INSTANCE_ID`), `log.ts`
+    (`publish` = append+emit-local; `startTail` re-emits remote lines, skips self), `watch.ts`
+    (directory watchers → local `ConfigChanged`/`RegistryChanged`/`ServerStateChanged`), `index.ts`
+    (`startEventSystem() → {bus, stop}`).
+  - `src/lib/http.ts` — ETag/conditional-GET cache under `~/.cache/mctl/api/`; `fetchText`/`fetchJson`
+    (returns `unknown`), TTL fast-path, stale-on-failure, `HttpError`.
+  - `src/cli/` — real `list` and `status` (+ `format.ts` table/`--json`), wired in `router.ts`
+    (removed from the PLANNED stubs). First-run steers to `mctl init`.
+  - **TUI router** — `app/routes.ts` (`NAV`, digits 1–6), `hooks/use-router.tsx` (`RouterProvider`/
+    `useRouter`, back-stack), `app/Router.tsx` (shell: top bar + `NavRail` + page host + `Hint`;
+    owns global keyboard), `app/NavRail.tsx`, and pages `Dashboard`/`Servers`/`Server`/`Settings` (real)
+    + `Jobs`/`Backups`/`Network` (`Placeholder`). Data hooks `use-servers`/`use-config`/
+    `use-recent-events`/`use-event-bus`. `App.tsx` now: `renderApp` reaps stale locks + starts the event
+    system + injects the bus (`EventBusProvider`), and routes to `<AppRouter/>` post-setup.
+  - Verified: `tsc --noEmit` clean; CLI e2e in a sandbox HOME (first-run steer→init, empty list,
+    drop-in auto-discovery folded into `servers.json`, `list`/`status`/`--json`); headless smoke (8/8:
+    probe alive/dead + reap, unavailable server, stale-vs-live lock reaping, local-publish-once +
+    foreign-event-tailed); TUI mounts under a pty (router + Servers nav + quit, no stderr) and the
+    first-run wizard still mounts with no config.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles and runs.
 
-## Next up (Phase 1 — Foundation, remaining)
+## Next up (Phase 1 tail, then Phase 2)
 
-Roughly in order:
-
-1. `core/registry/` — `ServerRegistry`: read/verify/write `servers.json` (atomic via `lib/fs`), verify
-   each path + `mctl.json`, mark unavailable, fold in `servers_dir` scan. Needs a `Server` view model
-   (`types/server.ts`) + `mctl.json` schema.
-2. `core/session/` — probe `runtime/<id>.json` liveness, reap stale locks (statelessness core).
-3. `core/events/` — in-process EventEmitter3 bus + `events.jsonl` tail/append + `fs.watch` watchers.
-   `lib/fs.appendLine` is ready for the append side. Wire a `ConfigChanged` emit into the wizard/`init`
-   commit and Settings once the bus exists (currently the wizard writes config without emitting).
-4. Front-ends: OpenTUI Dashboard + `Router` (replace the `Dashboard` placeholder in `App.tsx`; reuse
-   `useFocusRing`); `cli/` real `list` and `status` (+ `cli/format.ts`).
-5. `lib/http.ts` with ETag cache (Phase 1 tail; first real need is Phase 2 downloads).
-6. Settings page renders the same config Zod schema (every field but `root` editable) — reuse the
-   wizard's form controls; `configVersion` migration path.
+1. **Settings editable form** — the one remaining Phase-1 UI task. Render the config Zod schema with the
+   wizard's form controls (every field but `root` editable); write via `writeConfig`; the config-dir
+   watcher already emits `ConfigChanged` so the UI refreshes. **When this lands, gate the router's global
+   digit-nav while a text input is focused** (see the `TODO(phase-1)` in `Router.tsx`) — typing a digit
+   in a field must not navigate away.
+2. Phase 2 proper: `ServerProvider` + `InstallStrategy`, Vanilla/Paper (directJar), Java resolution
+   (`lib/http.ts` gets its first real use here), foreground runtime + console streaming, and
+   create/delete/edit (the mutating `ServerManager` alongside the read-only `discover.ts`).
 
 ## Demo / scratch
 

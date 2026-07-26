@@ -6,109 +6,48 @@
  * (AGENTS.md § 3). It reads colours from {@link useTheme}; the theme catalogue is
  * loaded from disk by `renderApp()` (core call) and injected via `ThemeProvider`.
  *
- * `renderApp()` owns renderer creation, core wiring, and mounting so
- * `src/index.tsx` stays a thin argv dispatcher and the CLI path never imports
- * OpenTUI.
+ * `renderApp()` owns renderer creation, core wiring (theme registry, event
+ * system, stale-lock reaping), and mounting so `src/index.tsx` stays a thin argv
+ * dispatcher and the CLI path never imports OpenTUI.
  */
 
-import { createCliRenderer, TextAttributes } from "@opentui/core";
+import { createCliRenderer } from "@opentui/core";
 import { useState } from "react";
-import { createRoot, useKeyboard, useRenderer } from "@opentui/react";
+import { createRoot } from "@opentui/react";
 import { configExists, loadConfig, writeConfig } from "../core/config/index.ts";
 import { ThemeRegistry } from "../core/theme/registry.ts";
+import { startEventSystem } from "../core/events/index.ts";
+import { reapStaleLocks } from "../core/session/session-manager.ts";
 import { log } from "../lib/logger.ts";
-import { ThemeProvider, useTheme } from "../hooks/use-theme.tsx";
+import { ThemeProvider } from "../hooks/use-theme.tsx";
+import { EventBusProvider } from "../hooks/use-event-bus.tsx";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
 import { SetupWizard } from "./setup/index.ts";
+import { AppRouter } from "./Router.tsx";
 
 const logger = log("app");
 
 /** Props for {@link App}. */
 interface AppProps {
-	/** True when `config.json` is absent — route to the first-run wizard. */
-	firstRun: boolean;
+  /** True when `config.json` is absent — route to the first-run wizard. */
+  firstRun: boolean;
 }
 
 /**
  * Root component. On first run it shows the setup wizard; once setup has written
- * config (or on any later run) it shows the dashboard. The wizard owns its own
- * keyboard; the dashboard offers `t` to cycle themes and `q`/`Esc` to quit.
+ * config (or on any later run) it shows the router-driven app. The wizard owns
+ * its own keyboard; the router owns navigation, theme cycling, and quit.
  */
 function App({ firstRun }: AppProps) {
-	// Whether the first-run wizard still needs to run. Flipped false when the
-	// wizard completes, so the app transitions into the dashboard in-place without
-	// a restart.
-	const [needsSetup, setNeedsSetup] = useState(firstRun);
+  // Whether the first-run wizard still needs to run. Flipped false when the
+  // wizard completes, so the app transitions into the dashboard in-place without
+  // a restart.
+  const [needsSetup, setNeedsSetup] = useState(firstRun);
 
-	if (needsSetup) {
-		return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
-	}
-	return <Dashboard />;
-}
-
-/**
- * The dashboard shell — a themed placeholder until the real Dashboard page lands
- * (Phase 1, task 5). `t` cycles themes; `q`/`Esc` quits.
- */
-function Dashboard() {
-	const renderer = useRenderer();
-	const { theme, colors: c, appearance, setThemeId, themes } = useTheme();
-
-	useKeyboard((key) => {
-		if (key.name === "escape" || key.name === "q") renderer.destroy();
-		// Cycle themes as a live demonstration of the registry + provider.
-		if (key.name === "t") {
-			const idx = themes.findIndex((t) => t.id === theme.id);
-			const next = themes[(idx + 1) % themes.length];
-			if (next) setThemeId(next.id);
-		}
-	});
-
-	// The dynamic "terminal" theme mirrors the host terminal's own background.
-	// Painting its *derived* hex lags the terminal by one palette-query cycle
-	// (mode-2031 event or the 1s poll): during a live terminal theme switch the
-	// app keeps drawing the old hex, which no longer matches the terminal's new
-	// default background, so the terminal renders it opaque for a beat before the
-	// palette lands and transparency returns. Painting "transparent" for the
-	// terminal theme sidesteps the race entirely — the terminal's real background
-	// shows through instantly and never flashes. Static themes keep their own
-	// opaque background hex.
-	const pageBackground =
-		theme.source === "terminal" ? "transparent" : c.background;
-
-	return (
-		<box
-			flexGrow={1}
-			flexDirection="column"
-			padding={1}
-			backgroundColor={pageBackground}
-		>
-			<box justifyContent="flex-start" alignItems="flex-end">
-				<ascii-font font="tiny" text="mctl" color={c.primary} />
-				<text fg={c.muted} attributes={TextAttributes.DIM}>
-					{" "}
-					minecraft server control
-				</text>
-			</box>
-			<box
-				flexGrow={1}
-				flexDirection="column"
-				justifyContent="center"
-				alignItems="center"
-				gap={1}
-			>
-				<text fg={c.foreground}>Dashboard coming online.</text>
-				<text fg={c.muted}>
-					theme: <span fg={c.secondary}>{theme.name}</span> · appearance:{" "}
-					<span fg={c.secondary}>{appearance}</span>
-				</text>
-				<text fg={c.muted}>
-					press <span fg={c.info}>t</span> to cycle · <span fg={c.info}>q</span>{" "}
-					to quit
-				</text>
-			</box>
-		</box>
-	);
+  if (needsSetup) {
+    return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
+  }
+  return <AppRouter />;
 }
 
 /**
@@ -117,54 +56,63 @@ function Dashboard() {
  * until the user quits.
  */
 export async function renderApp(): Promise<void> {
-	// Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
-	// the persisted theme id before the first paint. Front-end → core service:
-	// the React tree never touches disk itself.
-	const registry = await new ThemeRegistry().load();
-	const initialThemeId = await loadThemeId();
+  // Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
+  // the persisted theme id before the first paint. Front-end → core service:
+  // the React tree never touches disk itself.
+  const registry = await new ThemeRegistry().load();
+  const initialThemeId = await loadThemeId();
 
-	// First run = no config.json yet. Decided once here (front-end → core) and
-	// handed to the tree, which routes to the setup wizard rather than the
-	// dashboard until setup completes.
-	const firstRun = !(await configExists());
+  // Reap stale locks (crashed instances' start/install/supervisor locks) once at
+  // startup, before anything reads runtime state (architecture.md § Statelessness).
+  await reapStaleLocks();
 
-	const renderer = await createCliRenderer({
-		exitOnCtrlC: true,
-		screenMode: "alternate-screen",
-		clearOnShutdown: false,
-		openConsoleOnError: true,
-		enableMouseMovement: true,
-	});
+  // Start the event system: the in-process bus, the `events.jsonl` tail, and the
+  // hard-state file watchers. The bus is injected into the tree so hooks react to
+  // local and cross-instance state changes uniformly.
+  const events = await startEventSystem();
 
-	// Make everything non-selectable by default. OpenTUI text renderables are
-	// individually `selectable` and begin a drag-selection on left mouse-down,
-	// which highlights text and clashes with our click-to-navigate UI. Neutering
-	// the renderer's selection entry point disables that globally while leaving
-	// mouse clicks (onMouseDown handlers) fully intact.
-	renderer.startSelection = () => {};
+  // First run = no config.json yet. Decided once here (front-end → core) and
+  // handed to the tree, which routes to the setup wizard rather than the
+  // dashboard until setup completes.
+  const firstRun = !(await configExists());
 
-	// Query the host palette BEFORE the first paint so the terminal-default theme
-	// renders in real colours from frame one — no flash from a placeholder theme.
-	// Null (non-TTY / slow terminal) just means the live query in the hook fills
-	// it in shortly; the empty-terminal theme covers the gap.
-	const initialPalette = await queryTerminalPalette(renderer);
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: true,
+    screenMode: "alternate-screen",
+    clearOnShutdown: false,
+    openConsoleOnError: true,
+    enableMouseMovement: true,
+  });
 
-	createRoot(renderer).render(
-		<ThemeProvider
-			registry={registry}
-			initialThemeId={initialThemeId}
-			initialPalette={initialPalette}
-			onThemeChange={persistThemeId}
-		>
-			<App firstRun={firstRun} />
-		</ThemeProvider>,
-	);
+  // Make everything non-selectable by default. OpenTUI text renderables are
+  // individually `selectable` and begin a drag-selection on left mouse-down,
+  // which highlights text and clashes with our click-to-navigate UI. Neutering
+  // the renderer's selection entry point disables that globally while leaving
+  // mouse clicks (onMouseDown handlers) fully intact.
+  renderer.startSelection = () => {};
 
-	renderer.keyInput.on("keypress", (key) => {
-		if (key.ctrl && key.name === "`") {
-			renderer.console.toggle();
-		}
-	});
+  // Stop the event system when the renderer shuts down (Ctrl+C / quit), so
+  // watchers and the tail don't outlive the UI.
+  renderer.on("destroy", () => void events.stop());
+
+  // Query the host palette BEFORE the first paint so the terminal-default theme
+  // renders in real colours from frame one — no flash from a placeholder theme.
+  // Null (non-TTY / slow terminal) just means the live query in the hook fills
+  // it in shortly; the empty-terminal theme covers the gap.
+  const initialPalette = await queryTerminalPalette(renderer);
+
+  createRoot(renderer).render(
+    <ThemeProvider
+      registry={registry}
+      initialThemeId={initialThemeId}
+      initialPalette={initialPalette}
+      onThemeChange={persistThemeId}
+    >
+      <EventBusProvider bus={events.bus}>
+        <App firstRun={firstRun} />
+      </EventBusProvider>
+    </ThemeProvider>,
+  );
 }
 
 /**
@@ -173,13 +121,13 @@ export async function renderApp(): Promise<void> {
  * be themeable before the wizard exists.
  */
 async function loadThemeId(): Promise<string> {
-	try {
-		return (await loadConfig()).theme;
-	} catch {
-		// ConfigNotFoundError (first run) or a malformed file: fall back rather than
-		// block the UI on a theme preference.
-		return "terminal";
-	}
+  try {
+    return (await loadConfig()).theme;
+  } catch {
+    // ConfigNotFoundError (first run) or a malformed file: fall back rather than
+    // block the UI on a theme preference.
+    return "terminal";
+  }
 }
 
 /**
@@ -188,9 +136,9 @@ async function loadThemeId(): Promise<string> {
  * wizard writes config, and Settings persists thereafter. Never blocks the UI.
  */
 function persistThemeId(id: string): void {
-	loadConfig()
-		.then((config) => writeConfig({ ...config, theme: id }))
-		.catch((err) => {
-			logger.debug({ err: String(err) }, "theme not persisted (no config yet)");
-		});
+  loadConfig()
+    .then((config) => writeConfig({ ...config, theme: id }))
+    .catch((err) => {
+      logger.debug({ err: String(err) }, "theme not persisted (no config yet)");
+    });
 }
