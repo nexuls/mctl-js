@@ -22,6 +22,7 @@ import { log } from "../lib/logger.ts";
 import { ThemeProvider } from "../hooks/use-theme.tsx";
 import { EventBusProvider } from "../hooks/use-event-bus.tsx";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
+import { installBoxClipPatch } from "../components/box-clip-patch.ts";
 import { SetupWizard } from "./setup/index.ts";
 import { AppRouter } from "./Router.tsx";
 
@@ -56,6 +57,11 @@ function App({ firstRun }: AppProps) {
  * until the user quits.
  */
 export async function renderApp(): Promise<void> {
+  // Upstream OpenTUI does not clip box borders against ancestor scissor rects, so
+  // a bordered `<box>` inside a `<scrollbox>` paints its border over the chrome
+  // around the scrollbox once scrolled. Install the fix before the first render.
+  installBoxClipPatch();
+
   // Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
   // the persisted theme id before the first paint. Front-end → core service:
   // the React tree never touches disk itself.

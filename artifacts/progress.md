@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed)_
+_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed; box border clipping fix)_
 
 ---
 
@@ -152,6 +152,21 @@ _Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/statu
     probe alive/dead + reap, unavailable server, stale-vs-live lock reaping, local-publish-once +
     foreign-event-tailed); TUI mounts under a pty (router + Servers nav + quit, no stderr) and the
     first-run wizard still mounts with no config.
+
+- **Box border clipping fix (this session):**
+  - `src/components/box-clip-patch.ts` — `installBoxClipPatch()` works around an upstream
+    `@opentui/core` 0.4.5 bug where the native `bufferDrawBox` ignores the scissor stack, so bordered
+    boxes inside a `<scrollbox>` painted their borders over the top bar / nav rail / hint strip when
+    scrolled. Partially-clipped boxes now render through a scratch buffer blitted with
+    `drawFrameBuffer` (which respects the scissor); fully-visible boxes keep the native fast path.
+    Installed first thing in `renderApp()` (`src/app/App.tsx`).
+  - `src/components/box-clip-patch.test.ts` — **first tests in the repo** (`bun test`, script added to
+    `package.json`): unclipped boxes render byte-identically (glyphs *and* colours, via `captureSpans`)
+    before vs after patching across 10 border/title/background configs; bordered boxes in a scrollbox
+    paint nothing outside the viewport at 5 scroll offsets. Verified the second test fails without the
+    patch (not vacuous).
+  - Verified: `tsc --noEmit` clean; `bun test` 2/2; real app under a pty at 14×80 — Settings scrolled
+    with the mouse wheel leaks a stray `│` into the hint strip without the patch, clean with it.
 
 ## In progress
 

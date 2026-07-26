@@ -142,6 +142,28 @@ delete entries that stop being true. Newest-relevant first.
 
 ## OpenTUI gotchas (added 2026-07-26)
 
+- **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**
+  `BoxRenderable.renderSelf` draws via the native `bufferDrawBox`, and that is the *only* native draw
+  path that ignores the buffer's scissor stack (`drawText`, `drawTextBuffer`, `fillRect`,
+  `drawFrameBuffer` all honour it). Symptom: a bordered `<box>` inside a `<scrollbox>` clips its text
+  correctly but keeps painting border glyphs over the surrounding chrome (top bar, nav rail, hint
+  strip) once scrolled. Not scrollbox-specific — a plain `<box overflow="hidden">` does it too.
+  Reproduced on `@opentui/core` 0.4.5 (latest published).
+  - **Fix:** `src/components/box-clip-patch.ts` → `installBoxClipPatch()`, called first thing in
+    `renderApp()`. It monkey-patches `BoxRenderable.prototype.renderSelf`: when a box is *partially*
+    outside its ancestors' clip, it lets the **original** `renderSelf` draw into a shared scratch
+    `OptimizedBuffer` at the origin, then blits with `drawFrameBuffer` — which *does* respect the
+    scissor. Fully-visible boxes keep the untouched native fast path, so there is no cost until a box
+    straddles a clip edge, and **no glyph/title/border-style logic is reimplemented** (that was the
+    point: partial sides, title alignments and focus colours stay byte-identical to upstream).
+  - **How to apply:** delete the module and its one call site when upstream clips `bufferDrawBox`.
+    Don't reach for `buffered: true` as a workaround — a buffered renderable renders at the wrong
+    offset inside a clip (tested, produces garbage).
+  - **Tests must live inside `src/`** (`src/components/box-clip-patch.test.ts`). A test file outside the
+    project resolves `@opentui/core` to a *different copy* (the `~/.bun/install/cache` source tree), so
+    patching one copy's prototype does nothing to the other — this silently made a scratch-dir
+    verification look like the patch was a no-op. First `bun test` in the repo; `test` script added.
+
 - **Box border *sides* are `border={["top"|"right"|"bottom"|"left"]}`** — `border?: boolean |
   BorderSides[]`. There is **no** `borderTop`/`borderRight`/`borderBottom`/`borderLeft` prop (they
   fail typecheck). `borderColor` colours whichever sides are on.
