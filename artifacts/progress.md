@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/status, TUI router landed; box border clipping fix; NavRail redesigned as a horizontal tab bar)_
+_Last updated: 2026-07-27 (**Phase 1 complete** — editable Settings form, input-capture key gating, `events.jsonl` rotation, and a fix for silently-dead hard-state watchers)_
 
 ---
 
@@ -186,20 +186,48 @@ _Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/statu
     replayed — active pill emits a real background SGR, rule and border titles draw, tabs scroll rather
     than wrap when narrow.
 
+- **Phase 1 tail — Settings, key gating, log rotation, watcher fix (this session):**
+  - `src/hooks/use-input-capture.tsx` — `InputCaptureProvider` + `useCaptureKeys(active)` +
+    `useKeysCaptured()` / `useIsCapturing()`. A counted capture; `isCaptured` is a getter because a
+    `useKeyboard` handler closes over its render. Mounted inside `RouterProvider` in `Router.tsx`.
+  - `src/app/Router.tsx` — `Esc` handled first (always live), then all character shortcuts
+    (digits/`q`/`t`) return early while captured. The hint strip swaps to typing hints. The
+    `TODO(phase-1)` is resolved and removed.
+  - `src/app/Settings/use-settings.ts` — `SettingsDraft` + `configToDraft`/`draftToConfig` (merge, not
+    replace) / `validateDraft` (pure) + the `useSettings` hook (buffered edits, dirty tracking that a
+    background `ConfigChanged` can't clobber, `writeConfig` → `ensureDirTree`).
+  - `src/app/Settings/index.tsx` — rewritten as the editable form: read-only `root`/`configVersion`,
+    servers/backups override toggles + path fields, server defaults, backup policy, network profile,
+    theme picker (applies instantly), Revert/Save + **Ctrl+S**, inline validation and save errors.
+  - `src/core/events/log.ts` — `trimEventLog()` (>512 KB ⇒ keep the last ~128 KB of whole lines,
+    atomic rewrite), called from `startEventSystem()` and opportunistically in the tail's drain; the
+    tail's shrink branch now resumes at the new end instead of replaying history.
+  - **Watcher fix (real defect):** Bun's `fs.watch` reports a rename under the *source* name only, so
+    our atomic writes never matched `config.json` / `servers.json` and **the hard-state watchers never
+    fired at all**. `lib/fs.writeFileAtomic` now names its temp file `.<target>.<pid>-<rand>.tmp`
+    (`tempNameFor`) and `core/events/watch.ts` resolves it back (`targetOfTempName`).
+  - `src/components/Form.tsx` — `FormField` no longer paints the literal `undefined` on its bottom
+    border when a field has no hint.
+  - Tests added (now 22, 4 files): `core/events/watch.test.ts` (the watcher regression + a negative
+    case), `core/events/log.test.ts` (rotation keeps whole lines / tail doesn't replay / self-events
+    emit once), `app/Settings/use-settings.test.ts` (draft mapping, merge-not-replace, validation).
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 22/22; CLI e2e in a sandbox HOME (first-run steer →
+    `init --json` → drop-in discovery → `list` / `status --json` / `help`); TUI under a pty at 120×40
+    and 60×20 — Settings renders, Tab reaches the fields, typing `6`/`q` edits instead of navigating or
+    quitting, Ctrl+S writes `config.json` (schedule/retention and the extra network profile preserved)
+    and the header flips to "saved" via the watcher's `ConfigChanged`.
+
 ## In progress
 
-- Nothing mid-implementation. All the above compiles and runs.
+- Nothing mid-implementation. All the above compiles, tests, and runs.
 
-## Next up (Phase 1 tail, then Phase 2)
+## Next up (Phase 2)
 
-1. **Settings editable form** — the one remaining Phase-1 UI task. Render the config Zod schema with the
-   wizard's form controls (every field but `root` editable); write via `writeConfig`; the config-dir
-   watcher already emits `ConfigChanged` so the UI refreshes. **When this lands, gate the router's global
-   digit-nav while a text input is focused** (see the `TODO(phase-1)` in `Router.tsx`) — typing a digit
-   in a field must not navigate away.
-2. Phase 2 proper: `ServerProvider` + `InstallStrategy`, Vanilla/Paper (directJar), Java resolution
-   (`lib/http.ts` gets its first real use here), foreground runtime + console streaming, and
-   create/delete/edit (the mutating `ServerManager` alongside the read-only `discover.ts`).
+1. `ServerProvider` + `InstallStrategy`; Vanilla and Paper (directJar) against recorded fixtures.
+2. Java resolution + Adoptium download (`lib/http.ts` gets its first real use), manual-pin prompt.
+3. Foreground runtime; console and log streaming.
+4. Create / delete / edit servers — the mutating `ServerManager` alongside the read-only
+   `core/server/discover.ts`, in both front-ends.
 
 ## Demo / scratch
 
@@ -217,8 +245,9 @@ _Last updated: 2026-07-26 (Phase 1 — registry, session, events, CLI list/statu
 - **JSON/JSONL only** — no TOML anywhere. `mctl.json`, `config.json`, `secrets.json`, `events.jsonl`.
 - Pages live in `src/app/`, not `src/pages/`. CLI in `src/cli/`.
 - Registry + statelessness invariants live in `architecture.md` — read before touching discovery/session.
-- Verify with `bunx tsc --noEmit` (or `bun run typecheck`) + `bun run dev`. No test/lint runner wired
-  yet — add `bun test` when the first module worth unit-testing lands (registry/session are prime).
+- Verify with `bunx tsc --noEmit` (or `bun run typecheck`), `bun test`, and `bun run dev`. Tests must
+  live **inside `src/`** (a file outside it resolves a different copy of `@opentui/core`). Registry and
+  session still have no unit tests — prime candidates when Phase 2 touches them.
 - **Path discipline:** never build an MCTL path by hand — call a `lib/paths.ts` helper. Never read/write
   a shared JSON file directly — go through `lib/fs.ts` (atomic) and validate with Zod.
 - Config service already exposes everything the wizard/`init` need: `writeConfig`, `writeSecrets`,

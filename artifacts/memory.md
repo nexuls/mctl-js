@@ -111,9 +111,9 @@ delete entries that stop being true. Newest-relevant first.
     change was already made by whoever caused it). Debounced 60 ms per filename.
   - `startEventSystem()` → `{ bus, stop }`, wired in `renderApp()`; `EventBusProvider` injects the bus.
     Stopped on the renderer's `"destroy"` event.
-  - **Wizard/`init` config writes need no explicit emit** — the config-dir watcher fires `ConfigChanged`
-    automatically, so `useConfig`/`useServers` refresh. (Supersedes progress.md's earlier "wire a
-    ConfigChanged emit into the wizard" note — the watcher covers it.)
+  - **Wizard/`init`/Settings config writes need no explicit emit** — the config-dir watcher fires
+    `ConfigChanged` automatically, so `useConfig`/`useServers` refresh. (True only since the
+    2026-07-27 temp-name fix below; before it the watcher never fired at all.)
   - `MctlEvent` envelope (`types/events.ts`): `{v,id,ts,instance,type,payload}`. `type` is an **open
     string** (forward-compat: an unknown event type from a newer instance must not break the tail);
     `EventType` is a reference object, not a closed union.
@@ -123,13 +123,11 @@ delete entries that stop being true. Newest-relevant first.
   NOT in NAV — reached from Servers with a `serverId` param). `app/Router.tsx` = the shell (top bar +
   `NavRail` + page host + `Hint` strip) and owns the **global keyboard**: digit→route, `Esc`=back-else-
   quit, `q`=quit, `t`=cycle theme. `App.tsx` renders `<AppRouter/>` post-setup.
-  - **Digit-nav is global and safe ONLY while no router-reachable page mounts a live text input**
-    (typing a digit would navigate away). Phase-1 pages are read-only in that respect (Settings is a
-    read-only config view for now). `TODO(phase-1)`: gate digit-nav while an input is focused when the
-    editable Settings form lands.
+  - **Digit-nav (plus `q`/`t`) is gated by the input capture** — see the 2026-07-27 entry above. The
+    `TODO(phase-1)` in `Router.tsx` is resolved and gone.
   - Real pages: `Dashboard` (server-count tiles + recent-activity feed from `useRecentEvents`),
     `Servers` (live list, ↑/↓/j/k + Enter/click → detail), `Server` (read-only detail via `useServer`),
-    `Settings` (read-only config). `Jobs`/`Backups`/`Network` = honest `Placeholder` (phase-noted).
+    `Settings` (**editable config form**). `Jobs`/`Backups`/`Network` = honest `Placeholder`.
   - **NavRail is a horizontal tab bar, not a left rail** (redesigned 2026-07-26 to a user-supplied
     reference): a 2-row scrollbox — tabs on row 1, the rule on row 2 — whose active tab is a **solid
     pill** (`backgroundColor: colors.primary`, ink `onAccent(colors)`, BOLD) and whose inactive tabs
@@ -160,6 +158,50 @@ delete entries that stop being true. Newest-relevant first.
   (`If-None-Match`/`If-Modified-Since`), `304` refreshes the timestamp, `200` restores body+validators.
   Serves **stale on network failure**; throws `HttpError` only when nothing is cached. `fetchJson`
   returns `unknown` — caller Zod-validates.
+
+## Phase 1 tail — editable Settings, key capture, log rotation (2026-07-27)
+
+- **Bun's `fs.watch` reports a rename under the SOURCE name only** — the destination
+  never appears. Our atomic writes are temp+`rename`, so `config.json` / `servers.json`
+  writes produced **no** matching watch event and the hard-state watchers were silently
+  dead (the earlier note claiming "the config-dir watcher covers wizard/init writes" was
+  wrong — it never fired). Verified on Bun 1.3.14.
+  - **Fix:** `lib/fs.writeFileAtomic` now names its temp file after the target —
+    `.<basename>.<pid>-<rand>.tmp` (`tempNameFor`) — and `core/events/watch.ts` maps it
+    back with `targetOfTempName()` before filtering. Debouncing keys on the resolved
+    target, so the temp-write and the rename coalesce into one event.
+  - **How to apply:** never filter watch events by a bare filename again; go through
+    `targetOfTempName(name) ?? name`. `src/core/events/watch.test.ts` is the regression
+    guard (ConfigChanged / RegistryChanged / ServerStateChanged + a negative case).
+- **Global character shortcuts are gated by an input capture**, not by page identity.
+  `hooks/use-input-capture.tsx` = `InputCaptureProvider` (mounted inside `RouterProvider`,
+  above `AppShell`) + `useCaptureKeys(active)` for pages + `useKeysCaptured()` for the
+  shell. Capture is a **count**, and `isCaptured` is a **getter** — a `useKeyboard`
+  handler closes over its render, so a boolean would go stale. `Esc` is deliberately
+  exempt (it can't be part of what's being typed); digits/`q`/`t` stand down while a text
+  field owns the ring. The hint strip swaps to typing hints via `useIsCapturing()`.
+  - **How to apply:** any future page with a text input calls
+    `useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus))`.
+- **Settings is the wizard's peer, not its clone.** `app/Settings/use-settings.ts` owns a
+  flat `SettingsDraft` (no `root` — permanent) + `configToDraft`/`draftToConfig`/
+  `validateDraft` (pure, unit-tested) and commits with `writeConfig` → `ensureDirTree`
+  (a relocated `servers_dir` must exist immediately). `draftToConfig` is **merge, not
+  replace**: it spreads the loaded config so `backup.schedule`/`retention`, named
+  `network.profiles`, and future keys survive an edit. Edits are buffered; **Ctrl+S** or
+  Save writes; the watcher's `ConfigChanged` then refreshes every instance.
+  - The buffer follows the file while clean and is never clobbered while dirty — tracked
+    by an `adopted` ref holding the last serialization taken off disk.
+  - **Theme is NOT in the draft.** The theme provider owns it and persists on change, so
+    the Settings theme picker applies instantly (like `t`); a save just carries the
+    currently-active id.
+- **`events.jsonl` rotation exists now** (`trimEventLog`, log.ts): >512 KB ⇒ rewrite the
+  last ~128 KB of *whole* lines atomically. Called once in `startEventSystem()` before the
+  tail records its offset, and opportunistically from the tail's drain. The tail's
+  shrink branch now **resumes at the new end** (`offset = size`) instead of restarting at
+  0 — restarting replayed the surviving history into the activity feed.
+- **`FormField` painted the literal string `undefined` on its bottom border** when no
+  `hint` was passed (`bottomTitle={` ${hint} `}`). Only showed up once a page used
+  hint-less fields (Settings' checkboxes). Now conditional.
 
 ## OpenTUI gotchas (added 2026-07-26)
 

@@ -10,12 +10,12 @@
  */
 
 export { EventBus, type EventListener } from "./bus.ts";
-export { publish, startTail } from "./log.ts";
+export { publish, startTail, trimEventLog } from "./log.ts";
 export { startWatchers } from "./watch.ts";
 export { INSTANCE_ID } from "./instance.ts";
 
 import { EventBus } from "./bus.ts";
-import { startTail } from "./log.ts";
+import { startTail, trimEventLog } from "./log.ts";
 import { startWatchers } from "./watch.ts";
 import { log } from "../../lib/logger.ts";
 
@@ -39,6 +39,10 @@ export interface EventSystem {
  */
 export async function startEventSystem(): Promise<EventSystem> {
   const bus = new EventBus();
+  // Rotate an oversized log before the tail records its start offset, so a long
+  // run of a previous instance can't leave the file growing unboundedly. The
+  // tail also rotates opportunistically while running.
+  await trimEventLog();
   const stopTail = await startTail(bus);
   const stopWatchers = await startWatchers(bus);
   logger.debug("event system started (tail + watchers)");

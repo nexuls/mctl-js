@@ -125,6 +125,13 @@ allowed only as a derived projection, invalidated on any watched-file change.
    the emitting instance id. Every instance **tails** it from the end and re-emits onto its local bus.
    Plus `fs.watch` on `config.json`, `servers.json`, `runtime/`, and active server dirs → re-read the
    changed hard state → emit locally. Together these keep every instance consistent.
+   - The log is **rotated by size** (`trimEventLog`: >512 KB ⇒ keep the last ~128 KB of whole lines,
+     rewritten atomically) at startup and opportunistically from the tail. On a shrink the tail
+     resumes at the file's new end — replaying the surviving lines would double the activity feed.
+   - Watchers watch **directories**, and a watch event naming one of our temp files
+     (`.<target>.<pid>-<rand>.tmp`) is attributed to `<target>`. Bun's `fs.watch` reports a rename
+     under its *source* name only, so an atomic write is otherwise invisible under the target's name.
+     `lib/fs.ts` (`tempNameFor`) and `core/events/watch.ts` (`targetOfTempName`) are a matched pair.
 
 **Supervision** (auto-restart, tunnel keepalive) needs a live process, so it is **opportunistic**:
 whichever instance holds a server's supervisor lock performs it; it pauses when no instance runs. A
@@ -234,9 +241,11 @@ one entry in the `Page` switch. The event bus (started in `renderApp`, injected 
 drives the data hooks (`use-servers`/`use-config`/`use-recent-events`), which re-run the core read path
 on invalidating events and hold no authoritative state — statelessness reaches into the UI.
 
-> **Digit-nav constraint:** global digit shortcuts are safe only while no router-reachable page mounts a
-> live text input. Phase-1 pages are read-only; the editable Settings form must gate digit-nav while an
-> input is focused (`TODO(phase-1)` in `Router.tsx`).
+> **Character-shortcut constraint:** digits, `q`, and `t` are plain characters, so the shell stands them
+> down while a page holds an **input capture** (`hooks/use-input-capture.tsx`): a provider inside the
+> router counts active text fields, pages call `useCaptureKeys(...)`, and the shell consults
+> `useKeysCaptured()` — a *getter*, since a `useKeyboard` closure would otherwise read a stale flag.
+> `Esc` is exempt. Any new page with a text input must take the capture.
 
 ---
 
@@ -247,6 +256,16 @@ path overrides → defaults → backup policy → network → review & write. Wr
 `config.json`, and an empty `0600` `secrets.json`, then enters the dashboard. Settings renders the same
 Zod schema so everything but `root` is editable later; `configVersion` drives forward migration.
 `mctl init` is the headless equivalent, same fields as flags, identical `config.json` output.
+
+## Settings — `app/Settings/`
+
+The wizard's peer for every later edit. `use-settings.ts` is the page's only bridge to core: it maps
+the validated config to a flat `SettingsDraft` (everything but `root`, which is permanent), validates
+it, and commits with `writeConfig` → `ensureDirTree`. `draftToConfig` **merges over the loaded
+config**, so keys the form does not render (backup schedule/retention, named network profiles, keys
+written by a newer MCTL) survive an edit. Edits are buffered and written on Save / Ctrl+S; the
+config-dir watcher's `ConfigChanged` refreshes this and every other instance. The theme picker is the
+one exception — the theme provider owns and persists that id, so it applies immediately.
 
 ---
 

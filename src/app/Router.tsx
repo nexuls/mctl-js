@@ -8,17 +8,24 @@
  * comes from hooks. It is the single place that maps a {@link RouteId} to a page
  * component, so adding a screen is one map entry plus a {@link NAV} row.
  *
- * **Digit-nav safety:** digit keys navigate globally, which is safe only while no
- * router-reachable page mounts a live text input (typing a digit would otherwise
- * navigate away). Phase 1's pages are read-only in that respect; when the
- * editable Settings form lands it must gate global digit-nav while an input is
- * focused. See TODO below.
+ * **Character-shortcut safety:** digits, `q`, and `t` are plain characters, so
+ * they are only safe as global shortcuts while nothing on screen is being typed
+ * into. A page with a live text field holds an *input capture* (see
+ * `hooks/use-input-capture.tsx`) and the shell stands its character shortcuts
+ * down for as long as it is held — typing `2` in the Settings form edits the
+ * field instead of navigating to Servers. `Esc` is exempt: it is the universal
+ * "get me out of here" key and never inserts a character.
  */
 
 import { useKeyboard, useRenderer } from "@opentui/react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
 import { RouterProvider, useRouter } from "../hooks/use-router.tsx";
+import {
+	InputCaptureProvider,
+	useIsCapturing,
+	useKeysCaptured,
+} from "../hooks/use-input-capture.tsx";
 import { Hint } from "../components/index.ts";
 import { NAV, type RouteId } from "./routes.ts";
 import { NavRail } from "./NavRail.tsx";
@@ -57,10 +64,25 @@ function AppShell() {
 	const quit = useQuit();
 	const { theme, colors: c, setThemeId, themes } = useTheme();
 	const { route, navigate, back, canBack } = useRouter();
+	// `captured()` is a getter, not a boolean: the handler below closes over this
+	// render, and the capture can change without one. `typing` is the reactive
+	// mirror, used only to relabel the hint strip.
+	const captured = useKeysCaptured();
+	const typing = useIsCapturing();
 
 	useKeyboard((key) => {
-		// Digit shortcuts → routes. TODO(phase-1): suppress while a text input is
-		// focused once the editable Settings form exists.
+		// Esc first: it works even while a text field is capturing, because it can
+		// never be part of what the user is typing.
+		if (key.name === "escape") {
+			// Esc steps back through the history, and quits from the root.
+			if (canBack) back();
+			else quit();
+			return;
+		}
+		// Every shortcut below is a plain character, so it belongs to the focused
+		// text field (if any) rather than to the shell.
+		if (captured()) return;
+
 		const navItem = NAV.find((n) => n.digit === key.name);
 		if (navItem) {
 			navigate(navItem.id);
@@ -68,10 +90,6 @@ function AppShell() {
 		}
 		if (key.name === "q") {
 			quit();
-		} else if (key.name === "escape") {
-			// Esc steps back through the history, and quits from the root.
-			if (canBack) back();
-			else quit();
 		} else if (key.name === "t") {
 			const idx = themes.findIndex((t) => t.id === theme.id);
 			const next = themes[(idx + 1) % themes.length];
@@ -121,16 +139,26 @@ function AppShell() {
 				</scrollbox>
 			</box>
 
-			{/* Bottom hint strip. */}
+			{/* Bottom hint strip. While a field is capturing keys the shell's
+			    character shortcuts are inactive, so it advertises the keys that
+			    still work instead of ones that would silently do nothing. */}
 			<box paddingX={1} flexShrink={0}>
 				<Hint
-					items={[
-						{ keys: ["1", "…", "6"], label: "navigate" },
-						{ keys: "Enter", label: "open" },
-						{ keys: "Esc", label: canBack ? "back" : "quit" },
-						{ keys: "t", label: "theme" },
-						{ keys: "q", label: "quit" },
-					]}
+					items={
+						typing
+							? [
+									{ keys: "Tab", label: "next field" },
+									{ keys: "Enter", label: "confirm" },
+									{ keys: "Esc", label: canBack ? "back" : "quit" },
+								]
+							: [
+									{ keys: ["1", "…", "6"], label: "navigate" },
+									{ keys: "Enter", label: "open" },
+									{ keys: "Esc", label: canBack ? "back" : "quit" },
+									{ keys: "t", label: "theme" },
+									{ keys: "q", label: "quit" },
+								]
+					}
 				/>
 			</box>
 		</box>
@@ -150,7 +178,10 @@ function titleFor(route: RouteId): string {
 export function AppRouter() {
 	return (
 		<RouterProvider initialRoute="dashboard">
-			<AppShell />
+			{/* Above the shell so the shell can read the capture its pages set. */}
+			<InputCaptureProvider>
+				<AppShell />
+			</InputCaptureProvider>
 		</RouterProvider>
 	);
 }

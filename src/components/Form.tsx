@@ -138,7 +138,9 @@ export function FormField({
 			title={label ? (required ? ` ${label} * ` : ` ${label} `) : undefined}
 			titleColor={titleColor}
 			titleAlignment="left"
-			bottomTitle={` ${hint} `}
+			// Only pass a bottom title when there is one: an interpolated empty hint
+			// would paint the literal string "undefined" onto the bottom border.
+			bottomTitle={hint ? ` ${hint} ` : undefined}
 			bottomTitleAlignment="left"
 			paddingLeft={1}
 			paddingRight={1}

@@ -13,6 +13,13 @@
  * (temp + `rename`), which replaces the file's inode. A watch bound to the file
  * itself would go stale after the first atomic write; watching the *parent
  * directory* and filtering by name survives renames. See `lib/fs.ts`.
+ *
+ * **Why temp names are resolved to their target.** Bun's `fs.watch` reports a
+ * rename under the **source** name only — writing `config.json` atomically
+ * surfaces as `.config.json.<pid>-<rand>.tmp` and the target name never appears,
+ * so a naive `name === "config.json"` filter silently never fires (measured on
+ * Bun 1.3). `lib/fs.ts` therefore embeds the target basename in the temp name and
+ * {@link targetOfTempName} maps it back before filtering.
  */
 
 import { watch, type FSWatcher } from "node:fs";
@@ -22,7 +29,7 @@ import {
   stateDir,
   runtimeDir,
 } from "../../lib/paths.ts";
-import { ensureDir } from "../../lib/fs.ts";
+import { ensureDir, targetOfTempName } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { EventType } from "../../types/events.ts";
 import { INSTANCE_ID } from "./instance.ts";
@@ -61,7 +68,11 @@ function watchDir(
   try {
     return watch(dir, (_event, filename) => {
       if (!filename) return;
-      const name = basename(filename.toString());
+      const raw = basename(filename.toString());
+      // An in-progress atomic write is reported under its temp name; attribute it
+      // to the file it is about to replace. Debouncing then keys on the target,
+      // so the temp-write and the rename coalesce into one event.
+      const name = targetOfTempName(raw) ?? raw;
       const existing = timers.get(name);
       if (existing) clearTimeout(existing);
       timers.set(

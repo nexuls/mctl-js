@@ -24,7 +24,7 @@ import {
   access,
   statfs,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 /** True if `path` exists and is accessible, false otherwise. Never throws. */
 export async function pathExists(path: string): Promise<boolean> {
@@ -123,6 +123,26 @@ export async function diskFree(path: string): Promise<DiskUsage | undefined> {
   }
 }
 
+/**
+ * The temp filename an atomic write to `target` uses, e.g.
+ * `.config.json.4711-k3f9a.tmp`. Leading dot (hidden), target basename, then a
+ * pid+random suffix so concurrent instances never collide.
+ */
+export function tempNameFor(target: string): string {
+  return `.${target}.${process.pid}-${Math.random().toString(36).slice(2)}.tmp`;
+}
+
+/**
+ * Recover the target basename from a temp name produced by {@link tempNameFor},
+ * or `undefined` when `name` is not one of our temp files. This is what lets a
+ * directory watcher attribute an in-progress atomic write to the file it will
+ * replace.
+ */
+export function targetOfTempName(name: string): string | undefined {
+  const match = /^\.(.+)\.\d+-[0-9a-z]+\.tmp$/.exec(name);
+  return match?.[1];
+}
+
 /** Options for the atomic-write helpers. */
 export interface AtomicWriteOptions {
   /** File mode to apply to the final file, e.g. `0o600` for `secrets.json`. */
@@ -143,7 +163,13 @@ export async function writeFileAtomic(
   const dir = dirname(path);
   await ensureDir(dir);
   // Unique-enough temp name; collisions between instances are avoided by pid+random.
-  const tmp = join(dir, `.${process.pid}-${Math.random().toString(36).slice(2)}.tmp`);
+  //
+  // The temp name **embeds the target's basename** because a directory watcher
+  // cannot otherwise tell what an atomic write touched: Bun's `fs.watch` reports
+  // a rename under the *source* name only, so `config.json` never appears in a
+  // watch event even though it is what changed. `core/events/watch.ts` maps this
+  // name back to the target — keep the two in sync (see {@link tempNameFor}).
+  const tmp = join(dir, tempNameFor(basename(path)));
   await writeFile(tmp, contents);
   if (options?.mode !== undefined) await chmod(tmp, options.mode);
   await rename(tmp, path);
