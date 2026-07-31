@@ -22,13 +22,14 @@
  */
 
 import type {
+	BoxRenderable,
 	InputRenderable,
 	SelectOption,
 	TabSelectOption,
 	TextareaRenderable,
 } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { onAccent, optionsFitAsTabs, variantColor } from "./support.ts";
 
@@ -93,6 +94,8 @@ export interface FormFieldProps {
 	onFocused?: () => void;
 	/** Fixed outer width in cells. Omit to size to the parent (flex). */
 	width?: number | `${number}%` | "auto";
+	/** Maximum width in cells. Omit to size to the parent (flex). */
+	maxWidth?: number | `${number}%`;
 	/**
 	 * Signals a validation problem: the border turns the error colour and the hint
 	 * (if any) is shown in error colour context by the caller. Overrides `focused`
@@ -100,6 +103,7 @@ export interface FormFieldProps {
 	 */
 	invalid?: boolean;
 	children: React.ReactNode;
+	ref?: React.Ref<BoxRenderable>;
 }
 
 /**
@@ -115,8 +119,10 @@ export function FormField({
 	focused = false,
 	onFocused,
 	width,
+	maxWidth,
 	invalid = false,
 	children,
+	ref,
 }: FormFieldProps) {
 	const { colors } = useTheme();
 	const borderColor = invalid
@@ -132,6 +138,7 @@ export function FormField({
 
 	return (
 		<box
+			ref={ref}
 			border
 			borderStyle="rounded"
 			borderColor={borderColor}
@@ -145,6 +152,7 @@ export function FormField({
 			paddingLeft={1}
 			paddingRight={1}
 			width={width}
+			maxWidth={maxWidth}
 			flexShrink={0}
 			onMouseDown={onFocused ? () => onFocused() : undefined}
 		>
@@ -155,6 +163,41 @@ export function FormField({
 
 /** {@link FormField} is also exported as `Field` for terse call sites. */
 export const Field = FormField;
+
+/**
+ * Tracks the laid-out width in cells of the box `ref` points at.
+ *
+ * A renderable's `width` is only meaningful *after* yoga has laid it out, which
+ * happens on the render loop's next frame — after React's effects. So an effect
+ * can only seed the value and then wait: OpenTUI emits `"resize"` on a
+ * renderable whenever its computed size changes (`Renderable.onResize`, which
+ * `updateFromLayout` calls on a size change). Note the event is `"resize"` on a
+ * *renderable* — `"resized"` belongs to the root and `"resize"` on the renderer
+ * is the terminal itself; neither reaches a box.
+ *
+ * Returns 0 until the first layout, so callers must have a sensible answer for
+ * "not measured yet" (see {@link Select}, which falls back to its `width` prop).
+ *
+ * The ref must be attached on **every** render path, or the listener is never
+ * installed: a branch that only attaches it in one of its arms can never leave
+ * the other arm, because the width that would flip it is never observed.
+ */
+function useBoxWidth(ref: React.RefObject<BoxRenderable | null>): number {
+	const [width, setWidth] = useState(0);
+
+	useEffect(() => {
+		const box = ref.current;
+		if (!box) return;
+		const onResize = () => setWidth(box.width);
+		onResize();
+		box.on("resize", onResize);
+		return () => {
+			box.off("resize", onResize);
+		};
+	}, [ref]);
+
+	return width;
+}
 
 // ---------------------------------------------------------------------------
 // Input — single-line text.
@@ -184,6 +227,8 @@ export interface InputProps {
 	invalid?: boolean;
 	/** Fixed outer width in cells. */
 	width?: number | `${number}%` | "auto";
+	/** Maximum width in cells. */
+	maxWidth?: number | `${number}%`;
 }
 
 /**
@@ -203,6 +248,7 @@ export function Input({
 	required = false,
 	invalid = false,
 	width,
+	maxWidth,
 }: InputProps) {
 	const { colors } = useTheme();
 	const ref = useRef<InputRenderable | null>(null);
@@ -215,6 +261,7 @@ export function Input({
 			onFocused={onFocused}
 			invalid={invalid}
 			width={width}
+			maxWidth={maxWidth}
 		>
 			<input
 				ref={ref}
@@ -361,7 +408,7 @@ export interface SelectProps<T = string> {
 	 * options that fit within it render as side-by-side tabs, otherwise as a
 	 * scrollable dropdown. Defaults to 40.
 	 */
-	width?: number;
+	width?: number | `${number}%` | "auto";
 	/** Max visible rows in the dropdown layout before it scrolls. Defaults to 5. */
 	maxVisible?: number;
 }
@@ -390,14 +437,23 @@ export function Select<T = string>({
 	maxVisible = 5,
 }: SelectProps<T>) {
 	const { colors } = useTheme();
+	const ref = useRef<BoxRenderable | null>(null);
+	const measured = useBoxWidth(ref);
 
 	const selectedIndex = Math.max(
 		0,
 		options.findIndex((o) => o.value === value),
 	);
+
+	// Before the first layout `measured` is 0, so fall back to the requested
+	// width — for the common fixed-width call that is already the right answer
+	// and the field never flips layout after its first frame. A flex-sized field
+	// ("100%"/"auto") has no such guess and starts as a dropdown, then switches
+	// once the real width arrives.
+	const outer = measured || (typeof width === "number" ? width : 0);
 	// Interior width available to the control: outer minus the two borders and the
 	// one cell of padding on each side that FormField applies.
-	const inner = width - 4;
+	const inner = outer - 4;
 	const asTabs = optionsFitAsTabs(
 		options.map((o) => o.label),
 		inner,
@@ -408,21 +464,35 @@ export function Select<T = string>({
 		if (opt) onChange?.(opt.value);
 	};
 
-	if (asTabs) {
-		const tabOptions: TabSelectOption[] = options.map((o) => ({
-			name: ` ${o.label} `,
-			description: o.description ?? "",
-			value: o.value,
-		}));
-		return (
-			<FormField
-				label={label}
-				hint={hint}
-				required={required}
-				focused={focused}
-				onFocused={onFocused}
-				width={width}
-			>
+	const tabOptions: TabSelectOption[] = options.map((o) => ({
+		name: ` ${o.label} `,
+		description: o.description ?? "",
+		value: o.value,
+	}));
+	const dropdownOptions: SelectOption[] = options.map((o) => ({
+		name: o.label,
+		description: o.description ?? "",
+		value: o.value,
+	}));
+	const hasDescriptions = options.some((o) => o.description);
+	// One row per option, capped so the list scrolls instead of growing unbounded.
+	const visible = Math.min(options.length, maxVisible);
+	const height = visible * (hasDescriptions ? 2 : 1);
+
+	// One FormField for both layouts — it is what `ref` measures, so it must be
+	// mounted on every path (see useBoxWidth); branching on it would strand a
+	// flex-sized field in whichever layout rendered first.
+	return (
+		<FormField
+			ref={ref}
+			label={label}
+			hint={hint}
+			required={required}
+			focused={focused}
+			onFocused={onFocused}
+			width={width}
+		>
+			{asTabs ? (
 				<tab-select
 					width="100%"
 					options={tabOptions}
@@ -437,47 +507,26 @@ export function Select<T = string>({
 					selectedTextColor={variantColor(colors, "primary")}
 					onChange={(index) => pick(index)}
 				/>
-			</FormField>
-		);
-	}
-
-	const dropdownOptions: SelectOption[] = options.map((o) => ({
-		name: o.label,
-		description: o.description ?? "",
-		value: o.value,
-	}));
-	const hasDescriptions = options.some((o) => o.description);
-	// One row per option, capped so the list scrolls instead of growing unbounded.
-	const visible = Math.min(options.length, maxVisible);
-	const height = visible * (hasDescriptions ? 2 : 1);
-
-	return (
-		<FormField
-			label={label}
-			hint={hint}
-			required={required}
-			focused={focused}
-			onFocused={onFocused}
-			width={width}
-		>
-			<select
-				width="100%"
-				height={height}
-				options={dropdownOptions}
-				selectedIndex={selectedIndex}
-				focused={focused}
-				showDescription={hasDescriptions}
-				showScrollIndicator={options.length > visible}
-				wrapSelection
-				backgroundColor="transparent"
-				focusedBackgroundColor="transparent"
-				textColor={colors.foreground}
-				descriptionColor={colors.muted}
-				selectedBackgroundColor="transparent"
-				selectedTextColor={variantColor(colors, "primary")}
-				selectedDescriptionColor={variantColor(colors, "primary")}
-				onChange={(index) => pick(index)}
-			/>
+			) : (
+				<select
+					width="100%"
+					height={height}
+					options={dropdownOptions}
+					selectedIndex={selectedIndex}
+					focused={focused}
+					showDescription={hasDescriptions}
+					showScrollIndicator={options.length > visible}
+					wrapSelection
+					backgroundColor="transparent"
+					focusedBackgroundColor="transparent"
+					textColor={colors.foreground}
+					descriptionColor={colors.muted}
+					selectedBackgroundColor="transparent"
+					selectedTextColor={variantColor(colors, "primary")}
+					selectedDescriptionColor={variantColor(colors, "primary")}
+					onChange={(index) => pick(index)}
+				/>
+			)}
 		</FormField>
 	);
 }

@@ -332,6 +332,28 @@ delete entries that stop being true. Newest-relevant first.
   again**: one render returns a blank frame (React's commit hasn't reached the renderer yet). Also
   `console.log` is swallowed under OpenTUI — write the frame to a file with `Bun.write`.
 
+## Measuring a renderable's width (2026-07-31)
+
+- **A renderable's `width` is 0 until yoga lays it out**, which happens on the render loop's next
+  frame — *after* React's effects. So an effect can only seed the value and then listen. The event a
+  **child** renderable emits is **`"resize"`** (`Renderable.onResize`, fired from `updateFromLayout`
+  only when the computed size actually changes). Do not confuse it with `"resized"` (emitted by the
+  **root** renderable with `{width,height}`) or the `CliRenderer`'s `"resize"` (the terminal itself).
+- **The ref must be attached on EVERY render path.** `Select` measured its `FormField` to decide
+  tabs-vs-dropdown but passed `ref` only in the *tabs* branch — and the branch starts at `w = 0`
+  (⇒ dropdown), so the ref was never attached, the listener never installed, and a flex-sized
+  (`width="100%"`/`"auto"`) Select was **stuck as a dropdown forever**. Self-reinforcing: the width
+  that would flip the branch is exactly the width that is never observed.
+  - **Fix:** `useBoxWidth(ref)` in `components/Form.tsx` (module-local), and `Select` now renders
+    **one** `FormField` with the ref always attached, branching only on its *child*.
+  - **How to apply:** never gate the measured element behind the condition the measurement decides.
+    Measure the stable wrapper, branch inside it.
+- **Falling back to the `width` prop while unmeasured** (`measured || (typeof width === "number" ?
+  width : 0)`) means a fixed-width Select picks its layout correctly on frame one and never flips.
+  Only a flex-sized one starts as a dropdown and switches when the real width arrives.
+- **`console.log` is swallowed under OpenTUI** — it is not a debugging channel here (and CLAUDE.md
+  bans stdout writes outright). Use `lib/logger.ts` or write a captured frame to a file.
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**

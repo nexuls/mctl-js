@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-31 (ProgressBar style/variation set)_
+_Last updated: 2026-07-31 (Select width measurement fix)_
 
 ---
 
@@ -300,6 +300,19 @@ _Last updated: 2026-07-31 (ProgressBar style/variation set)_
   - Verified: `bunx tsc --noEmit` clean; `bun test` 46/46; every style rendered through
     `createTestRenderer` and read back from `captureCharFrame()` (the preview script was temporary and
     is deleted). No existing caller changed — Toast's TTL meter still passes `value`/`width`/`variant`.
+
+- **`Select` width measurement fixed (this session):**
+  - `src/components/Form.tsx` — the adaptive `Select` never measured itself: the `ref` it watched was
+    attached only in the *tabs* branch, which the initial `w = 0` never selects, so a flex-sized
+    (`width="100%"`/`"auto"`) Select was permanently a dropdown. It also listened for the wrong thing
+    via a stray `console.log` (swallowed under OpenTUI).
+  - Added module-local `useBoxWidth(ref)` (documented: `"resize"` is the *renderable's* event;
+    `"resized"` is the root's) and rewrote `Select` to render **one** `FormField` — ref always
+    attached — branching only on the child control. While unmeasured it falls back to a numeric
+    `width` prop, so fixed-width fields pick the right layout on frame one.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 47/47; rendered through `createTestRenderer` at
+    outer widths 60 and 30 — 60 ⇒ tabs, 30 ⇒ dropdown, for both a fixed-width and a flex-sized field.
+    Non-vacuous: with the fix stashed, the flex-sized field at width 60 still rendered as a dropdown.
 
 ## In progress
 
