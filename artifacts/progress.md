@@ -242,8 +242,12 @@ _Last updated: 2026-07-31 (Settings regrouped into tabs with a pinned action bar
     silently disable Save. Section headings dropped (the tab names the group); the config-file path
     moved into Locations as a read-only row. Revert/Save are 1-row `size="small" kind="ghost"`
     buttons in the bottom bar.
-  - `src/components/Tabs.tsx` — the active tab's underline thickens (`━`) while the bar holds
-    keyboard focus; it had no focus affordance at all before.
+  - `src/components/Tabs.tsx` — **restyled to `NavRail`'s design** (2026-07-31): 2-row scrollbox,
+    `|` separators, filled-pill active tab with hover wash, per-tab rule segments with `╸`/`╺` caps
+    and a counted-out tail to the right edge. Focus still shows as underline weight (`━`/`─`), now
+    with the accent blending toward the rule when unfocused. Details in `memory.md`.
+    Type-checks clean; **not yet driven in a pty since the restyle** — worth a visual pass on
+    Settings at a narrow width (the bar scrolls horizontally rather than wrapping).
   - Verified: `bunx tsc --noEmit` clean; `bun test` 22/22; driven under a pty in a sandbox HOME at
     100×30 and 100×24 — tabs render and ←/→ switch groups, the panel scrolls while the tab bar and
     action bar stay pinned, the focus underline thickens/thins with the ring, emptying *Memory*

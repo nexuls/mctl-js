@@ -230,8 +230,26 @@ delete entries that stop being true. Newest-relevant first.
   - Action-bar buttons are `size="small" kind="ghost"` (1 row, no border). **`size="small"` +
     `kind="outline"` is unusable**: its focused/hover recipe sets `fg: onAccent` with **no**
     background, so the label vanishes into the page. Small chips must be `ghost` (which does fill).
-- **`Tabs` now shows keyboard focus by thickening the active underline** (`━` focused, `─` not).
-  A border or background would cost a row or fight the theme; the underline row already exists.
+- **`Tabs` was restyled to `NavRail`'s language (2026-07-31, user request)** — one tab vocabulary in
+  the app, not two. Same 2-row scrollbox: `|` separators, active tab a **solid pill**
+  (`backgroundColor: primary`, ink `onAccent`, BOLD), inactive `muted` lifting to
+  `alpha(foreground, 0.12)` on hover, and a per-tab rule row with `╸`/`╺` caps around the active
+  segment plus a counted-out tail run to the right edge. `tabWidth(item) = 1 + 2*pad + label.length`
+  is the single width source, set as an explicit `width` on **both** rows, every segment
+  `flexShrink={0}` (see the NavRail entry above for why both are load-bearing).
+  - **Keyboard focus is still the underline weight** (`━` focused, `─` not) *plus* the accent
+    blending toward the rule when unfocused (`mix(primary, rule, 0.75)`). The pill is unchanged by
+    focus, so "which tab is active" stays legible when the ring is elsewhere. A border or background
+    would cost a row or fight the pill.
+  - Tabs carry **no digit hint** (unlike NavRail) — page tabs have no digit shortcut.
+  - Optional **`initials` prop** = NavRail's brand slot: a short accent caption before the first tab
+    (rendered as `` `${initials} ` ``). Settings passes `"Settings"`.
+  - Optional **`paddingX` prop** insets the *tabs row only* — the rule row is deliberately not inset,
+    so it spans the page like a divider. **Pad with this prop, never with a wrapper box**: a wrapper's
+    padding pushes the rule in too (Settings' wrapper lost its `paddingX={1}` for this).
+  - `leadCells = paddingX + caption.length` is the one number tying it together: it is drawn as a
+    plain rule run at the start of row 2 *and* subtracted from the tail. Miss either and the rows
+    stop lining up.
 
 ## OpenTUI gotchas (added 2026-07-26)
 
