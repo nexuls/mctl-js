@@ -294,6 +294,44 @@ delete entries that stop being true. Newest-relevant first.
   (`@opentui/core/testing` + `@opentui/react`'s `createRoot`) works and is the pattern to reuse for
   any future component test that needs a live React tree.
 
+## ProgressBar styles & variations (2026-07-31)
+
+- **The glyph table is the whole visual vocabulary.** `PROGRESS_STYLES: Record<ProgressBarStyle,
+  ProgressGlyphs>` in `components/ProgressBar.tsx` holds `{fill, empty, partials?}` for
+  `blocks | smooth | shaded | line | smooth-line | dots | segments | ascii`. Adding a style = one row
+  there; nothing else in the component branches on the style name.
+- **Sub-cell precision is `partials`, and `n` partials mean `n + 1` steps per cell.** `smooth` carries
+  the seven eighth-blocks `▏▎▍▌▋▊▉` (U+258F..U+2589) → eighths; `smooth-line` carries the single
+  `╸` (U+2578 HEAVY LEFT) → halves, because that is the *only* sub-cell step the heavy rule `━` has
+  in Unicode. Styles without `partials` round to whole cells.
+  - Consequence for tests: the "an unfinished bar always leaves an empty cell" rule holds for
+    whole-cell styles only; a sub-cell style can occupy every cell and still read as unfinished
+    because its last glyph is a partial. Assert `!filled.endsWith(fill)` there instead.
+- **Layout maths is exported and pure** — `fillGlyphs(fraction, width, glyphs)`,
+  `indeterminateGlyphs(frame, width, glyphs)`, `thresholdVariant(fraction, base, thresholds)`. That is
+  what makes the component testable without a renderer (`components/ProgressBar.test.ts`). The
+  invariant every test leans on: **the runs always total the track width**, at every fraction and
+  every frame — a short run would shift the layout around it.
+- **Rounding is deliberately biased at both ends:** a non-zero fraction always inks ≥1 cell (a started
+  download must not look idle) and a fraction < 1 never fills the last cell (only "done" looks done).
+  This slightly changes what the toast TTL meter draws near its ends; that is intended.
+- **`value` + `max` replaced the bare fraction**, with `max = 1` so every existing caller (Toast) is
+  unaffected. `readout` = `none | percent | fraction`; `format` overrides it. `showPercent` is kept as
+  a `@deprecated` alias for `readout="percent"` because Toast and the first callers were written
+  against it — the destructure raises a TS *hint* (6385), not an error.
+- **An indeterminate bar drives its own frame counter** (`setInterval` at 12 fps in the component)
+  unless the caller passes `frame`. This is the one place a component in this kit owns a timer; it is
+  UI-only animation, and the state lives on the bar so an animating bar never re-renders the page.
+  Callers that already have a ticker (the toast provider) should pass `frame` instead, exactly like
+  `ToastCard`'s `spinner` prop.
+- **`thick` cannot mean a taller cell** — a terminal has no cell height — so it renders a second row
+  of `▄` beneath the track in the same runs. With `brackets` on, that row starts with a leading space
+  to stay aligned under the `[`.
+- Verified by rendering all styles through `createTestRenderer` + `createRoot` and reading
+  `captureCharFrame()`. **A preview script must `renderOnce()` → `await Bun.sleep(…)` → `renderOnce()`
+  again**: one render returns a blank frame (React's commit hasn't reached the renderer yet). Also
+  `console.log` is swallowed under OpenTUI — write the frame to a file with `Bun.write`.
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**

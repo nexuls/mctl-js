@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-31 (toast notifications: component, provider hook, and Settings wiring)_
+_Last updated: 2026-07-31 (ProgressBar style/variation set)_
 
 ---
 
@@ -281,6 +281,25 @@ _Last updated: 2026-07-31 (toast notifications: component, provider hook, and Se
     toasts (spinner, wrapped description + action, progress meter) at two positions; and the real
     app under a pty in a sandbox HOME — toggling a Settings field and pressing Ctrl+S wrote
     `config.json` and painted the "Settings saved / Written to …" toast, no errors.
+
+- **ProgressBar styles & variations (this session):**
+  - `src/components/ProgressBar.tsx` rewritten around a glyph table: eight track styles
+    (`blocks | smooth | shaded | line | smooth-line | dots | segments | ascii`, `PROGRESS_STYLES`;
+    `smooth-line` steps the thin rule in halves via `╸`), `value` + `max`
+    (default `1`, so old fraction callers are unchanged), `readout` (`none|percent|fraction`) with a
+    `format` override and `readoutFirst`, a `label` caption, `brackets`, `tintTrack`, `bold`, `thick`
+    (a second `▄` row), colour `thresholds` (a bar that goes success→warning→error as it fills), and
+    an `indeterminate` sweep that self-animates at 12 fps unless the caller supplies `frame`.
+    `showPercent` stays as a deprecated alias. Layout maths is exported and pure: `fillGlyphs`,
+    `indeterminateGlyphs`, `thresholdVariant`.
+  - `src/components/index.ts` — the new types and helpers are re-exported from the barrel.
+  - `src/components/ProgressBar.test.ts` — 13 new tests (47 total, 7 files): runs always total the
+    track width for every style/fraction/frame, sub-cell steps for `smooth` and `smooth-line` (with
+    the whole-cell `line` rounding the same fractions up as the contrast), the started/unfinished
+    rounding rules, clamping, the sweep bouncing rather than wrapping, and threshold selection.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 46/46; every style rendered through
+    `createTestRenderer` and read back from `captureCharFrame()` (the preview script was temporary and
+    is deleted). No existing caller changed — Toast's TTL meter still passes `value`/`width`/`variant`.
 
 ## In progress
 

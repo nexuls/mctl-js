@@ -13,7 +13,18 @@ export { Label, type LabelProps } from "./Label.tsx";
 export { Kbd, type KbdProps } from "./Kbd.tsx";
 export { Hint, type HintItem, type HintProps } from "./Hint.tsx";
 export { Button, type ButtonProps } from "./Button.tsx";
-export { ProgressBar, type ProgressBarProps } from "./ProgressBar.tsx";
+export {
+  ProgressBar,
+  type ProgressBarProps,
+  type ProgressBarStyle,
+  type ProgressGlyphs,
+  type ProgressReadout,
+  type ProgressThreshold,
+  PROGRESS_STYLES,
+  fillGlyphs,
+  indeterminateGlyphs,
+  thresholdVariant,
+} from "./ProgressBar.tsx";
 export { Breadcrumb, type Crumb, type BreadcrumbProps } from "./Breadcrumb.tsx";
 export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
