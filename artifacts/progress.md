@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-27 (**Phase 1 complete** — editable Settings form, input-capture key gating, `events.jsonl` rotation, and a fix for silently-dead hard-state watchers)_
+_Last updated: 2026-07-31 (theme now follows `config.theme` changes made by another instance or a hand-edit; Phase 1 otherwise complete)_
 
 ---
 
@@ -216,6 +216,19 @@ _Last updated: 2026-07-27 (**Phase 1 complete** — editable Settings form, inpu
     and 60×20 — Settings renders, Tab reaches the fields, typing `6`/`q` edits instead of navigating or
     quitting, Ctrl+S writes `config.json` (schedule/retention and the extra network profile preserved)
     and the header flips to "saved" via the watcher's `ConfigChanged`.
+
+- **Theme reactivity fix (this session):**
+  - `src/hooks/use-theme.tsx` — new `subscribeThemeId` prop (mirror of `onThemeChange`): a bridge for
+    theme ids changed outside the provider. Its effect updates local state only, never re-persists.
+  - `src/app/App.tsx` — `themeIdSubscriber(bus)` built once in `renderApp()` and passed in: on
+    `ConfigChanged` it re-reads `config.theme` and applies it. `persistThemeId` rewritten to serialize
+    and coalesce writes (one in-flight write, latest id wins, skip when unchanged) — otherwise a rapid
+    `t` cycle's out-of-order write feeds back through the bridge and snaps the theme backwards.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 22/22; pty run in a sandbox HOME — an external
+    atomic `terminal`→`nord` edit repaints in Nord, and the same run with the fix stashed produces zero
+    new output (non-vacuous). Rapid `t` cycling lands correctly with no snap-back.
+  - **Known gap:** the theme *catalogue* (`ThemeRegistry`) is still loaded once at startup — adding or
+    editing `~/.config/mctl/themes/*.json` needs a restart.
 
 ## In progress
 

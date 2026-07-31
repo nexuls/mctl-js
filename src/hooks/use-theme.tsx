@@ -12,10 +12,12 @@
  * UI-layer: it consumes the renderer (via the terminal-colours hook) but does no
  * filesystem I/O — the registry is passed in already populated. Persisting a
  * theme change back to `config.json` is a core concern and is surfaced through
- * the optional `onThemeChange` callback rather than done here.
+ * the optional `onThemeChange` callback rather than done here — as is the
+ * reverse direction, `subscribeThemeId`, which lets the caller push in a theme
+ * id changed by another instance or a hand-edit of the config.
  */
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   resolveColors,
   type Theme,
@@ -78,6 +80,18 @@ export interface ThemeProviderProps {
   initialPalette?: TerminalPalette | null;
   /** Notified when the active theme changes, e.g. to persist to `config.json`. */
   onThemeChange?: (id: string) => void;
+  /**
+   * Bridge for theme changes made **outside** this provider — another `mctl`
+   * instance switching theme, or a hand-edit of `config.json`. Called once on
+   * mount with an `apply` callback; return an unsubscribe.
+   *
+   * It is a prop rather than a bus subscription inside the provider for two
+   * reasons: this hook does no filesystem I/O (re-reading `config.theme` is a
+   * core concern, the mirror image of {@link ThemeProviderProps.onThemeChange}),
+   * and the provider is mounted above `EventBusProvider` so it has no bus in
+   * context. **Must be referentially stable** — it is an effect dependency.
+   */
+  subscribeThemeId?: (apply: (id: string) => void) => () => void;
   children: React.ReactNode;
 }
 
@@ -93,10 +107,20 @@ export function ThemeProvider({
   initialThemeId = "terminal",
   initialPalette = null,
   onThemeChange,
+  subscribeThemeId,
   children,
 }: ThemeProviderProps) {
   const [themeId, setThemeIdState] = useState(initialThemeId);
   const { palette } = useTerminalColors(initialPalette);
+
+  // Follow the persisted theme id when it changes underneath us. Only the local
+  // state is updated — `onThemeChange` is deliberately NOT fired, since the value
+  // came *from* the persisted config and re-persisting it would be a write loop
+  // between instances.
+  useEffect(() => {
+    if (!subscribeThemeId) return;
+    return subscribeThemeId((id) => setThemeIdState(id));
+  }, [subscribeThemeId]);
 
   // The host's current light/dark mode, read from the terminal background. This
   // drives which variant of *any* active theme is painted — static themes

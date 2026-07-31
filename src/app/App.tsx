@@ -16,7 +16,8 @@ import { useState } from "react";
 import { createRoot } from "@opentui/react";
 import { configExists, loadConfig, writeConfig } from "../core/config/index.ts";
 import { ThemeRegistry } from "../core/theme/registry.ts";
-import { startEventSystem } from "../core/events/index.ts";
+import { startEventSystem, type EventBus } from "../core/events/index.ts";
+import { EventType } from "../types/events.ts";
 import { reapStaleLocks } from "../core/session/session-manager.ts";
 import { log } from "../lib/logger.ts";
 import { ThemeProvider } from "../hooks/use-theme.tsx";
@@ -107,12 +108,19 @@ export async function renderApp(): Promise<void> {
   // it in shortly; the empty-terminal theme covers the gap.
   const initialPalette = await queryTerminalPalette(renderer);
 
+  // Bridge `ConfigChanged` (another instance switching theme, or a hand-edit of
+  // config.json) back into the theme provider, which sits above the bus provider
+  // and does no I/O of its own. Built once so its identity is stable across
+  // renders — the provider uses it as an effect dependency.
+  const subscribeThemeId = themeIdSubscriber(events.bus);
+
   createRoot(renderer).render(
     <ThemeProvider
       registry={registry}
       initialThemeId={initialThemeId}
       initialPalette={initialPalette}
       onThemeChange={persistThemeId}
+      subscribeThemeId={subscribeThemeId}
     >
       <EventBusProvider bus={events.bus}>
         <App firstRun={firstRun} />
@@ -137,14 +145,61 @@ async function loadThemeId(): Promise<string> {
 }
 
 /**
+ * Build the `ConfigChanged` → theme-id bridge for {@link ThemeProvider}. The
+ * watcher event carries no payload, so the new id is re-read from disk through
+ * the config service (the UI layer never reads it itself).
+ *
+ * @returns a subscribe function to hand to `ThemeProvider`; call it once and
+ * keep the result, as the provider treats it as a stable effect dependency.
+ */
+function themeIdSubscriber(
+  bus: EventBus,
+): (apply: (id: string) => void) => () => void {
+  return (apply) =>
+    bus.subscribe((event) => {
+      if (event.type !== EventType.ConfigChanged) return;
+      loadConfig()
+        .then((config) => apply(config.theme))
+        .catch((err) => {
+          // A transient unreadable/half-written config: keep the current theme
+          // rather than flashing a fallback. The next change re-reads it.
+          logger.debug({ err: String(err) }, "theme id not re-read on change");
+        });
+    });
+}
+
+/**
  * Persist a theme selection into `config.json`. Best-effort: when there is no
  * config yet (first run) the choice simply isn't saved, which is correct — the
  * wizard writes config, and Settings persists thereafter. Never blocks the UI.
+ *
+ * Writes are **serialized and coalesced to the latest id**. Cycling themes with
+ * `t` fires this faster than a read-modify-write round-trip completes, and
+ * overlapping writes could land out of order — with the `ConfigChanged` bridge
+ * above now feeding the file back into the UI, a stale winner would visibly snap
+ * the theme back. One in-flight write at a time, and only the newest id matters.
  */
 function persistThemeId(id: string): void {
-  loadConfig()
-    .then((config) => writeConfig({ ...config, theme: id }))
-    .catch((err) => {
+  pendingThemeId = id;
+  if (themeWrite) return;
+  themeWrite = (async () => {
+    try {
+      while (pendingThemeId !== undefined) {
+        const next = pendingThemeId;
+        pendingThemeId = undefined;
+        const config = await loadConfig();
+        if (config.theme !== next) await writeConfig({ ...config, theme: next });
+      }
+    } catch (err) {
+      pendingThemeId = undefined;
       logger.debug({ err: String(err) }, "theme not persisted (no config yet)");
-    });
+    } finally {
+      themeWrite = undefined;
+    }
+  })();
 }
+
+/** The theme id waiting to be written, if any (see {@link persistThemeId}). */
+let pendingThemeId: string | undefined;
+/** The in-flight theme write, if any — guarantees one writer at a time. */
+let themeWrite: Promise<void> | undefined;

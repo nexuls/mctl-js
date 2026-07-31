@@ -235,6 +235,32 @@ delete entries that stop being true. Newest-relevant first.
   Note `useQuit` does `renderer.destroy()` then `process.exit(0)`, so on an explicit quit the OS also
   reaps watchers regardless.
 
+## Theme follows config changes (2026-07-31)
+
+- **`ThemeProvider` owns `themeId` as state seeded once from `initialThemeId`** — so a `config.theme`
+  changed by *another instance* or a hand-edit did nothing, even though `ConfigChanged` fired and
+  `useConfig` refreshed. It also can't subscribe itself: it is mounted **above** `EventBusProvider`
+  (it must wrap everything) and is UI-layer, so it does no config I/O.
+  - **Fix:** a `subscribeThemeId?: (apply: (id) => void) => () => void` prop — the mirror image of
+    `onThemeChange`. `renderApp()` builds it once (`themeIdSubscriber(bus)` in `App.tsx`): on
+    `ConfigChanged` it `loadConfig()`s and pushes `config.theme` in. The provider's effect only calls
+    `setThemeIdState` and deliberately **does not** fire `onThemeChange` — the id came *from* the
+    persisted config, re-persisting it would be a write loop between instances.
+  - **How to apply:** any future provider mounted above the bus that must react to hard-state changes
+    takes a subscribe *prop* wired in `renderApp()`; don't move it under `EventBusProvider` and don't
+    give it disk access.
+- **`persistThemeId` now serializes and coalesces its writes.** It is a read-modify-write, and cycling
+  with `t` fires it faster than a round-trip completes; overlapping writes could land out of order. That
+  was invisible before, but with the bridge above the losing write feeds back and **visibly snaps the
+  theme back**. One in-flight write at a time, only the newest id, skip when unchanged.
+- Verified in a pty against a sandbox HOME: an external atomic edit of `config.json` (`terminal`→`nord`)
+  repaints in Nord within ~1 s (nord bg `46;52;64` + primary `136;192;208` in the new frames); with the
+  fix stashed the same edit produces **0 new bytes** of output. Three rapid `t` presses land on the right
+  theme with no snap-back.
+- **Still not reactive: the theme *catalogue*.** `ThemeRegistry` is loaded once in `renderApp()`, so
+  editing/adding `~/.config/mctl/themes/*.json` needs a restart. No watcher on that dir. Fix by watching
+  it and reloading the registry into provider state if it ever matters.
+
 ## Theming (2026-07-25)
 
 - **Themes carry a light/dark *scheme*, not one flat palette + an `appearance` tag.** `Theme.colors`
