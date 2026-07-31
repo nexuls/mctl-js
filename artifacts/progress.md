@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-31 (Settings regrouped into tabs with a pinned action bar; Phase 1 complete)_
+_Last updated: 2026-07-31 (toast notifications: component, provider hook, and Settings wiring)_
 
 ---
 
@@ -254,9 +254,42 @@ _Last updated: 2026-07-31 (Settings regrouped into tabs with a pinned action bar
     flags `Defaults !` from another tab, toggling EULA + Ctrl+S writes `eula: true` and the header
     flips to "saved", and Dashboard (the scrollbox path) still renders.
 
+- **Toast notifications (this session):**
+  - `src/components/Toast.tsx` — pure UI: `ToastCard` (variant-tinted bordered card: icon or
+    spinner, bold title, wrapped description, optional action chip with a keycap, optional
+    time-to-live meter) and `ToastViewport` (an absolutely-positioned, **content-sized** stack for
+    one of six screen anchors). `wrapText` wraps by hand and marks truncation with `…` — terminal
+    text does not reflow. Exported from the components barrel.
+  - `src/hooks/use-toast.tsx` — `ToastProvider` + `useToast()`. API: `show` (message or options
+    object), `info`/`success`/`warning`/`error`/`loading`, `update`, `dismiss`, `dismissAll`, and
+    `promise(work, {loading, success, error})`. Per-toast options: `description`, `variant`, `icon`,
+    `duration` (0/∞ = sticky; errors and warnings default longer), `delay`, `position`,
+    `dismissible`, `progress`, `loading`, `action {label, key, onAction}`, `width`, `onDismiss(reason)`,
+    and `id` (re-raising a live id updates it in place). Provider defaults: `position`, `duration`,
+    `maxVisible`, `width`, `margin`, `dismissible`, `progress`. Hovering a card pauses its countdown;
+    overflow queues rather than evicting; an action key stands down while an input capture is held.
+  - `src/app/App.tsx` — `InputCaptureProvider` moved up here from `Router.tsx` (so the wizard is
+    covered too) and `ToastProvider` mounted below it, wrapping `<App/>` at the root.
+  - `src/app/Settings/` — `save` now resolves the failure message (`string | null`) instead of a
+    boolean, and the page's `commit()` toasts "Settings saved" (with the config path) or "Settings
+    not saved" with the error and an `r` Retry action.
+  - Tests (34 total, 6 files): `components/Toast.test.ts` (wrapping/truncation edge cases) and
+    `hooks/use-toast.test.tsx` — the provider mounted in `createTestRenderer` + `createRoot`,
+    asserting on real frames: TTL expiry, delay, sticky, queueing past `maxVisible`, description,
+    dismissal reasons, and `mockInput.pressKey` driving an action key.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 34/34; a rendered-frame preview of three stacked
+    toasts (spinner, wrapped description + action, progress meter) at two positions; and the real
+    app under a pty in a sandbox HOME — toggling a Settings field and pressing Ctrl+S wrote
+    `config.json` and painted the "Settings saved / Written to …" toast, no errors.
+
 ## In progress
 
-- Nothing mid-implementation. All the above compiles, tests, and runs.
+- **⚠ `src/app/test.tsx` is a TEMPORARY toast harness and `App.tsx` currently mounts it instead of
+  `<AppRouter />`.** It is a grid of chips raising every toast shape (variants, sticky, delayed,
+  promise, wrapping, six anchors, burst/queue, update-in-place, dismiss all) for eyeballing.
+  **Before committing: delete `app/test.tsx`, restore `return <AppRouter />;` in `App.tsx`, and drop
+  its import.**
+- Nothing else mid-implementation. All the above compiles, tests, and runs.
 
 ## Next up (Phase 2)
 

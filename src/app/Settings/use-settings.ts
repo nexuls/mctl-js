@@ -177,8 +177,11 @@ export interface UseSettings {
   issues: Partial<Record<keyof SettingsDraft, string>>;
   /** Discard edits and reload the buffer from the on-disk config. */
   revert: () => void;
-  /** Write the draft. Resolves true on success. */
-  save: (themeId: string) => Promise<boolean>;
+  /**
+   * Write the draft. Resolves `null` on success, or the failure message — the
+   * caller needs the message itself to report it (a toast), not just a flag.
+   */
+  save: (themeId: string) => Promise<string | null>;
   /** True while a write is in flight. */
   saving: boolean;
   /** The last save failure message, or `null`. */
@@ -258,7 +261,7 @@ export function useSettings(): UseSettings {
 
   const save = useCallback(
     async (themeId: string) => {
-      if (!config || !draft) return false;
+      if (!config || !draft) return "settings are still loading";
       setSaving(true);
       setSaveError(null);
       try {
@@ -267,10 +270,11 @@ export function useSettings(): UseSettings {
         // scan or write into it; ensureDirTree is idempotent for the rest.
         await ensureDirTree(written);
         setSaved(true);
-        return true;
+        return null;
       } catch (err) {
-        setSaveError(err instanceof Error ? err.message : String(err));
-        return false;
+        const message = err instanceof Error ? err.message : String(err);
+        setSaveError(message);
+        return message;
       } finally {
         setSaving(false);
       }

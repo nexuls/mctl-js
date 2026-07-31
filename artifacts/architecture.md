@@ -242,8 +242,9 @@ drives the data hooks (`use-servers`/`use-config`/`use-recent-events`), which re
 on invalidating events and hold no authoritative state — statelessness reaches into the UI.
 
 > **Character-shortcut constraint:** digits, `q`, and `t` are plain characters, so the shell stands them
-> down while a page holds an **input capture** (`hooks/use-input-capture.tsx`): a provider inside the
-> router counts active text fields, pages call `useCaptureKeys(...)`, and the shell consults
+> down while a page holds an **input capture** (`hooks/use-input-capture.tsx`): the provider (mounted at
+> the app root in `App.tsx`, above both the wizard and the router) counts active text fields, pages call
+> `useCaptureKeys(...)`, and the shell consults
 > `useKeysCaptured()` — a *getter*, since a `useKeyboard` closure would otherwise read a stale flag.
 > `Esc` is exempt. Any new page with a text input must take the capture.
 
@@ -253,6 +254,23 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > and is hosted in a plain `flexGrow` box; that host is what gives it a **definite height**, which an
 > inner `<scrollbox flexGrow={1}>` needs to resolve against. Such a page scrolls only its own panel —
 > never nest a page-level scrollbox inside the shell's.
+
+## Notifications — `components/Toast.tsx` + `hooks/use-toast.tsx`
+
+The app's one channel for transient reports ("Settings saved", "Start failed"), split on the same
+pure-UI line as everything else: the **card and its anchored viewport** are rendering only, and the
+**provider** owns the queue, the delays, the time-to-live countdowns, and the stacking. A toast never
+performs an action — the page or hook that did the work raises it afterwards.
+
+`ToastProvider` is mounted **at the root** (`App.tsx`, below `InputCaptureProvider`) for two reasons: a
+viewport is `position="absolute"` against its parent, so the parent must be the screen; and the setup
+wizard needs toasts too. Being below the capture is what lets a toast action's single-key binding stand
+down while a text field is being typed into — the same rule the shell's shortcuts follow.
+
+Viewports are content-sized rather than full-screen, so they never intercept the page's mouse events
+(the opposite of `Dialog`, whose backdrop intercepts on purpose). Overflow beyond `maxVisible`
+**queues** — a queued toast has no countdown until it is actually on screen — so a burst of reports
+loses none of them.
 
 ---
 

@@ -22,7 +22,6 @@ import { useTheme } from "../hooks/use-theme.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
 import { RouterProvider, useRouter } from "../hooks/use-router.tsx";
 import {
-	InputCaptureProvider,
 	useIsCapturing,
 	useKeysCaptured,
 } from "../hooks/use-input-capture.tsx";
@@ -131,9 +130,8 @@ function AppShell() {
 				borderStyle="rounded"
 				borderColor={c.border}
 				focusedBorderColor={c.border}
-				title={` ${titleFor(route)} `}
+				title={`┐${titleFor(route)}┌`}
 				titleAlignment="right"
-				titleColor={c.primary}
 			>
 				<NavRail active={route} onNavigate={navigate} />
 				{OWN_SCROLL.has(route) ? (
@@ -141,18 +139,18 @@ function AppShell() {
 						<Page route={route} />
 					</box>
 				) : (
-				<scrollbox
-					flexGrow={1}
-					flexDirection="row"
-					scrollbarOptions={{
-						trackOptions: {
-							backgroundColor: c.surface,
-							foregroundColor: alpha(c.muted, 0.4),
-						},
-					}}
-				>
-					<Page route={route} />
-				</scrollbox>
+					<scrollbox
+						flexGrow={1}
+						flexDirection="row"
+						scrollbarOptions={{
+							trackOptions: {
+								backgroundColor: c.surface,
+								foregroundColor: alpha(c.muted, 0.4),
+							},
+						}}
+					>
+						<Page route={route} />
+					</scrollbox>
 				)}
 			</box>
 
@@ -195,10 +193,9 @@ function titleFor(route: RouteId): string {
 export function AppRouter() {
 	return (
 		<RouterProvider initialRoute="dashboard">
-			{/* Above the shell so the shell can read the capture its pages set. */}
-			<InputCaptureProvider>
-				<AppShell />
-			</InputCaptureProvider>
+			{/* The input capture the shell reads is provided in `App.tsx`, above both
+			    this router and the setup wizard. */}
+			<AppShell />
 		</RouterProvider>
 	);
 }

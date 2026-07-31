@@ -22,6 +22,8 @@ import { reapStaleLocks } from "../core/session/session-manager.ts";
 import { log } from "../lib/logger.ts";
 import { ThemeProvider } from "../hooks/use-theme.tsx";
 import { EventBusProvider } from "../hooks/use-event-bus.tsx";
+import { InputCaptureProvider } from "../hooks/use-input-capture.tsx";
+import { ToastProvider } from "../hooks/use-toast.tsx";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
 import { installBoxClipPatch } from "../components/box-clip-patch.ts";
 import { SetupWizard } from "./setup/index.ts";
@@ -123,7 +125,14 @@ export async function renderApp(): Promise<void> {
       subscribeThemeId={subscribeThemeId}
     >
       <EventBusProvider bus={events.bus}>
+        {/* Above the app so both the wizard and the router's pages can hold the
+            capture, and so toasts (below it) can stand their action keys down
+            while a text field is being typed into. */}
+        <InputCaptureProvider>
+          <ToastProvider>
         <App firstRun={firstRun} />
+          </ToastProvider>
+        </InputCaptureProvider>
       </EventBusProvider>
     </ThemeProvider>,
   );

@@ -251,6 +251,49 @@ delete entries that stop being true. Newest-relevant first.
     plain rule run at the start of row 2 *and* subtracted from the tail. Miss either and the rows
     stop lining up.
 
+## Toasts — component + provider (2026-07-31)
+
+- **Two files, split on the pure-UI line.** `components/Toast.tsx` is rendering only (`ToastCard`,
+  `ToastViewport`, `wrapText`, `TOAST_ICONS`, `SPINNER_FRAMES`); `hooks/use-toast.tsx` is the
+  scheduler (`ToastProvider` + `useToast`). The card can be rendered with no timers running, which
+  is what makes it testable.
+- **`ToastProvider` is mounted at the ROOT in `App.tsx`, not in `Router.tsx`** — it renders its
+  viewports as *siblings of `children`*, and a viewport is `position="absolute"` against its parent,
+  so "parent" must be the screen. Mounting it at the root also gives the setup wizard toasts.
+  - **`InputCaptureProvider` moved up to `App.tsx` too** (it was inside `RouterProvider`), so the
+    toast layer sits *below* it and a toast's `action.key` can stand down while a text field is
+    being typed into. `Router.tsx` still reads the capture through context — nothing else changed.
+  - The ticker (`tick` state, 100 ms, only while a spinner/meter is on screen) re-renders the
+    provider but **not** `{children}`: the children element reference is stable across the
+    provider's own state updates, so React bails out of that subtree. Animation is not an app-wide
+    re-render.
+- **Viewports are content-sized, never full-screen.** A full-screen overlay would sit over the page
+  and eat its mouse events (`Dialog` does exactly that *on purpose*). Centred positions set `left`
+  **and** `right` and centre their children, since a content-sized box can't centre itself.
+- **Overflow queues, it does not evict.** `visible` keeps `slice(0, maxVisible)` per position
+  (oldest first) and a queued toast has **no countdown until it reaches the screen** — a burst of
+  five toasts loses none. Slicing `-maxVisible` (newest-wins) was the first cut and is wrong here:
+  an evicted toast would later reappear when the newer ones expired.
+- **Countdowns live in a ref, not state** (`Map<id, {timer, expiresAt, remaining, paused}>`), and a
+  `useEffect` reconciles them against the visible list. Keeping `expiresAt` in state would make the
+  effect that starts the timer feed its own dependency and loop.
+- `remove()` **dedupes by id** (`removed` ref): a countdown can fire in the same frame the user
+  clicks the card, and `latest.current` only refreshes on the next render — without the guard
+  `onDismiss` fires twice.
+- **Terminal text does not reflow** — `wrapText(text, width, maxLines)` does it by hand and marks
+  truncation with `…` rather than dropping words. Unit-tested in `components/Toast.test.ts`.
+- **`useEffect(() => raise(toast), [])` silently breaks**: the arrow returns the toast *id*, which
+  React takes as a cleanup function ("destroy is not a function"). Always brace the body.
+- **`Settings.save` now resolves `string | null`** (the failure message) instead of a boolean — the
+  toast needs the message itself, and `saveError` state is stale in the closure right after the
+  await. Settings' `commit()` toasts success (with the config path) or failure (with a `r` Retry
+  action).
+- Rendering is verified for real, not just in state: `hooks/use-toast.test.tsx` mounts the provider
+  in `createTestRenderer` + `createRoot` and asserts on `captureCharFrame()` — TTL expiry, delay,
+  sticky, queueing, description, and `mockInput.pressKey` driving an action key. That combination
+  (`@opentui/core/testing` + `@opentui/react`'s `createRoot`) works and is the pattern to reuse for
+  any future component test that needs a live React tree.
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**
