@@ -44,6 +44,7 @@ import {
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
+import { useToast } from "../../hooks/use-toast.tsx";
 import { resolveRootPaths } from "../../core/config/index.ts";
 import { alpha } from "../../lib/colors.ts";
 import { configFile } from "../../lib/paths.ts";
@@ -222,7 +223,8 @@ export function Settings() {
 		saved,
 	} = useSettings();
 
-	const [group, setGroup] = useState<GroupId>("locations");
+	const toast = useToast();
+	const [group, setGroup] = useState<GroupId>("defaults");
 
 	// The ring depends on both the visible group and the override toggles, so it is
 	// rebuilt every render from the draft rather than tracked separately.
@@ -234,10 +236,30 @@ export function Settings() {
 	const invalid = Object.keys(issues).length > 0;
 	const canSave = dirty && !invalid && !saving;
 
+	/**
+	 * Save and report the outcome as a toast. The page header still carries the
+	 * state (dirty / saved / the failure), but a save triggered by Ctrl+S from a
+	 * scrolled-down group happens off screen — the toast is what makes it visible
+	 * from anywhere on the page. A failed save offers `r` to try again.
+	 */
+	const commit = async (): Promise<void> => {
+		const error = await save(themeId);
+		if (error === null) {
+			toast.success("Settings saved", {
+				description: `Written to ${configFile()}`,
+			});
+			return;
+		}
+		toast.error("Settings not saved", {
+			description: error,
+			action: { label: "Retry", key: "r", onAction: () => void commit() },
+		});
+	};
+
 	// Ctrl+S saves from anywhere on the page, including mid-edit — a modifier
 	// chord is unambiguous even while a text field is capturing plain characters.
 	useKeyboard((key) => {
-		if (key.ctrl && key.name === "s" && canSave) void save(themeId);
+		if (key.ctrl && key.name === "s" && canSave) void commit();
 	});
 
 	if (loading || !draft || !config) {
@@ -269,33 +291,16 @@ export function Settings() {
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
-			<box paddingX={1}>
-				<PageHeader
-					title="Settings"
-					subtitle={
-						saveError
-							? `save failed: ${saveError}`
-							: invalid
-								? "fix the flagged field to save"
-								: dirty
-									? "unsaved changes · Ctrl+S or Save"
-									: saved
-										? "saved"
-										: "everything on this screen is written to config.json"
-					}
-				/>
-			</box>
-
 			{/* Group tabs — pinned above the panel. */}
-			<box flexShrink={0} paddingX={1}>
-				<Tabs
-					items={tabs}
-					activeId={group}
-					focused={ring.isFocused(TABS_ID)}
-					onFocused={() => ring.setFocus(TABS_ID)}
-					onChange={(id) => setGroup(id as GroupId)}
-				/>
-			</box>
+			<Tabs
+				items={tabs}
+				paddingX={1}
+				activeId={group}
+				focused={ring.isFocused(TABS_ID)}
+				onFocused={() => ring.setFocus(TABS_ID)}
+				onChange={(id) => setGroup(id as GroupId)}
+				initials="Settings"
+			/>
 
 			{/* The only scrolling region: one group's fields. Keyed by group so
           switching tabs remounts the panel and its scroll starts at the top. */}
@@ -380,7 +385,8 @@ export function Settings() {
 								hint="blank = latest at create time"
 								placeholder="latest"
 								value={draft.minecraftVersion}
-								width={30}
+								width="50%"
+								maxWidth={40}
 								focused={ring.isFocused("mc")}
 								onFocused={() => ring.setFocus("mc")}
 								onChange={(v) => edit({ minecraftVersion: v })}
@@ -390,7 +396,8 @@ export function Settings() {
 								label="Memory"
 								hint={issues.memory ?? "JVM heap, e.g. 2G"}
 								value={draft.memory}
-								width={22}
+								width="50%"
+								maxWidth={22}
 								invalid={issues.memory !== undefined}
 								focused={ring.isFocused("memory")}
 								onFocused={() => ring.setFocus("memory")}
@@ -404,7 +411,7 @@ export function Settings() {
 							hint="the server implementation"
 							options={KINDS}
 							value={draft.kind}
-							width={40}
+							width="50%"
 							focused={ring.isFocused("kind")}
 							onFocused={() => ring.setFocus("kind")}
 							onChange={(v) => edit({ kind: v })}
@@ -493,6 +500,7 @@ export function Settings() {
 							}))}
 							value={themeId}
 							width={44}
+							forceDropdown
 							focused={ring.isFocused("theme")}
 							onFocused={() => ring.setFocus("theme")}
 							onChange={(id) => setThemeId(id)}
@@ -512,7 +520,7 @@ export function Settings() {
 				borderStyle="single"
 				borderColor={colors.border}
 				paddingTop={0}
-        paddingX={1}
+				paddingX={1}
 			>
 				{saveError ? (
 					<text fg={colors.error} truncate wrapMode="none">
@@ -545,7 +553,7 @@ export function Settings() {
 						variant="primary"
 						disabled={!canSave}
 						focused={ring.isFocused("__save")}
-						onClick={() => void save(themeId)}
+						onClick={() => void commit()}
 						onFocused={() => ring.setFocus("__save")}
 					>
 						{saving ? "Saving…" : "Save"}

@@ -401,6 +401,8 @@ export interface SelectProps<T = string> {
 	focused?: boolean;
 	/** Fired when the field is clicked, so the page can focus it. */
 	onFocused?: () => void;
+	/** Force the dropdown layout even if the options fit as tabs. */
+	forceDropdown?: boolean;
 	/** Mark the field required. */
 	required?: boolean;
 	/**
@@ -432,6 +434,7 @@ export function Select<T = string>({
 	onChange,
 	focused = false,
 	onFocused,
+	forceDropdown = false,
 	required = false,
 	width = 40,
 	maxVisible = 5,
@@ -492,7 +495,7 @@ export function Select<T = string>({
 			onFocused={onFocused}
 			width={width}
 		>
-			{asTabs ? (
+			{asTabs && !forceDropdown ? (
 				<tab-select
 					width="100%"
 					options={tabOptions}
