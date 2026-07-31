@@ -203,6 +203,36 @@ delete entries that stop being true. Newest-relevant first.
   `hint` was passed (`bottomTitle={` ${hint} `}`). Only showed up once a page used
   hint-less fields (Settings' checkboxes). Now conditional.
 
+## Settings grouped into tabs + a pinned action bar (2026-07-31)
+
+- **A page whose chrome must stay put cannot live inside the shell's scrollbox.** `Router.tsx` now
+  keeps a set `OWN_SCROLL: ReadonlySet<RouteId>` (currently just `"settings"`): those routes are
+  hosted in a plain `<box flexGrow={1} flexDirection="column" padding={1}>`, everything else keeps
+  the scrollbox. The host is what gives such a page a **definite height**, which is what lets an
+  inner `<scrollbox flexGrow={1}>` know when to scroll.
+  - **How to apply:** any future page with pinned chrome (a toolbar, a console input row, a wizard
+    footer) adds its route to `OWN_SCROLL` and puts a scrollbox around its *scrolling region only*.
+    Don't nest a page-level scrollbox inside the shell's — the outer one has no definite height for
+    the inner one to resolve against.
+- **Settings is `PageHeader → Tabs → scrollbox(panel) → action bar`.** Groups are Locations /
+  Defaults / Backups / Network / Appearance (`GroupId`, `GROUPS`). The panel is `key={group}` so
+  switching tabs remounts it and scroll starts at the top.
+  - The **focus ring is per-group**: `ringIds(group, draft)` = `[__tabs, …visible fields…, __revert,
+    __save]`. `TABS_ID` is first, so the ring starts on the tab bar and ←/→ switch groups
+    immediately. Conditional fields (path inputs, backup provider/compression) are still added by
+    their toggle — `useFocusRing` clamps its index, so this stays safe.
+  - **A validation issue on a hidden group would be invisible** (Save disabled for no visible
+    reason), so `GROUP_OF_ISSUE` maps each validatable draft field to its group and the offending
+    tab's label gets a trailing `" !"`. Add an entry whenever `validateDraft` learns a new field.
+  - Section headings were **dropped** — the active tab already names the group; only the muted
+    description line remains. The `Written to <config path>` footnote became a `ReadOnlyRow` in
+    Locations rather than a page-bottom line (the action bar owns that row now).
+  - Action-bar buttons are `size="small" kind="ghost"` (1 row, no border). **`size="small"` +
+    `kind="outline"` is unusable**: its focused/hover recipe sets `fg: onAccent` with **no**
+    background, so the label vanishes into the page. Small chips must be `ghost` (which does fill).
+- **`Tabs` now shows keyboard focus by thickening the active underline** (`━` focused, `─` not).
+  A border or background would cost a row or fight the theme; the underline row already exists.
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**

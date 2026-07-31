@@ -247,6 +247,13 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > `useKeysCaptured()` — a *getter*, since a `useKeyboard` closure would otherwise read a stale flag.
 > `Esc` is exempt. Any new page with a text input must take the capture.
 
+> **Page host — who scrolls.** By default the shell wraps the page in a `<scrollbox>`, which is right
+> for a page that is one long document. A page with chrome that must stay put (Settings pins a tab bar
+> above its panel and an action bar below it) instead names its route in `OWN_SCROLL` in `Router.tsx`
+> and is hosted in a plain `flexGrow` box; that host is what gives it a **definite height**, which an
+> inner `<scrollbox flexGrow={1}>` needs to resolve against. Such a page scrolls only its own panel —
+> never nest a page-level scrollbox inside the shell's.
+
 ---
 
 ## First-run wizard — `app/setup/`

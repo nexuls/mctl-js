@@ -91,9 +91,14 @@ export function Tabs({
               {tab.label}
             </text>
             {/* Underline bar under the active tab; blank (not a hidden glyph)
-                for inactive ones so it reads correctly in any theme. */}
+                for inactive ones so it reads correctly in any theme. The bar
+                thickens while the row holds keyboard focus — that is the only
+                cue that ←/→ will move between tabs, and it costs no extra row
+                (a border or background would). */}
             <text fg={colors.primary}>
-              {active ? "─".repeat(tab.label.length) : " ".repeat(tab.label.length)}
+              {active
+                ? (focused ? "━" : "─").repeat(tab.label.length)
+                : " ".repeat(tab.label.length)}
             </text>
           </box>
         );

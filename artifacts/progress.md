@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-31 (theme now follows `config.theme` changes made by another instance or a hand-edit; Phase 1 otherwise complete)_
+_Last updated: 2026-07-31 (Settings regrouped into tabs with a pinned action bar; Phase 1 complete)_
 
 ---
 
@@ -229,6 +229,26 @@ _Last updated: 2026-07-31 (theme now follows `config.theme` changes made by anot
     new output (non-vacuous). Rapid `t` cycling lands correctly with no snap-back.
   - **Known gap:** the theme *catalogue* (`ThemeRegistry`) is still loaded once at startup — adding or
     editing `~/.config/mctl/themes/*.json` needs a restart.
+
+- **Settings regrouped into tabs with a pinned action bar (this session):**
+  - `src/app/Router.tsx` — added `OWN_SCROLL` (a `ReadonlySet<RouteId>`, currently `{settings}`):
+    those routes render in a plain padded box instead of the shell's `<scrollbox>`, so a page can
+    pin its own chrome and own its scrolling. Every other route is unchanged.
+  - `src/app/Settings/index.tsx` — restructured to `PageHeader → Tabs → scrollbox(panel) → action
+    bar`. Five groups (`GroupId`): Locations / Defaults / Backups / Network / Appearance; the panel
+    is `key={group}` so a tab switch resets scroll. Focus ring is now per-group via
+    `ringIds(group, draft)` with the tab bar first (←/→ switch groups). `GROUP_OF_ISSUE` flags a
+    group's tab with `" !"` when one of its fields fails validation, so a hidden invalid field can't
+    silently disable Save. Section headings dropped (the tab names the group); the config-file path
+    moved into Locations as a read-only row. Revert/Save are 1-row `size="small" kind="ghost"`
+    buttons in the bottom bar.
+  - `src/components/Tabs.tsx` — the active tab's underline thickens (`━`) while the bar holds
+    keyboard focus; it had no focus affordance at all before.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 22/22; driven under a pty in a sandbox HOME at
+    100×30 and 100×24 — tabs render and ←/→ switch groups, the panel scrolls while the tab bar and
+    action bar stay pinned, the focus underline thickens/thins with the ring, emptying *Memory*
+    flags `Defaults !` from another tab, toggling EULA + Ctrl+S writes `eula: true` and the header
+    flips to "saved", and Dashboard (the scrollbox path) still renders.
 
 ## In progress
 

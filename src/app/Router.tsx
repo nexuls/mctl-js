@@ -38,6 +38,18 @@ import { Network } from "./Network/index.tsx";
 import { Settings } from "./Settings/index.tsx";
 import { alpha } from "../lib/colors.ts";
 
+/**
+ * Routes whose page manages its own vertical scrolling and is therefore hosted in
+ * a plain, non-scrolling box.
+ *
+ * The shell scrolls pages by default, which is right for a page that is simply a
+ * long document. It is wrong for a page with chrome that must stay put — Settings
+ * pins a tab bar above its panel and an action bar below it, and both would scroll
+ * out of view inside the shell's scrollbox. Such a page gets a definite height
+ * from this host and puts the scrollbox around its *panel* instead.
+ */
+const OWN_SCROLL: ReadonlySet<RouteId> = new Set<RouteId>(["settings"]);
+
 /** The active page component for a route. */
 function Page({ route }: { route: RouteId }) {
 	switch (route) {
@@ -124,10 +136,14 @@ function AppShell() {
 				titleColor={c.primary}
 			>
 				<NavRail active={route} onNavigate={navigate} />
+				{OWN_SCROLL.has(route) ? (
+					<box flexGrow={1} flexDirection="column">
+						<Page route={route} />
+					</box>
+				) : (
 				<scrollbox
 					flexGrow={1}
 					flexDirection="row"
-					padding={1}
 					scrollbarOptions={{
 						trackOptions: {
 							backgroundColor: c.surface,
@@ -137,6 +153,7 @@ function AppShell() {
 				>
 					<Page route={route} />
 				</scrollbox>
+				)}
 			</box>
 
 			{/* Bottom hint strip. While a field is capturing keys the shell's
