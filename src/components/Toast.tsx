@@ -133,7 +133,11 @@ export interface ToastVisual {
  * Terminal text does not reflow on its own here — each line is rendered as its
  * own `<text>` — so wrapping is our job. Exported for unit testing.
  */
-export function wrapText(text: string, width: number, maxLines: number): string[] {
+export function wrapText(
+	text: string,
+	width: number,
+	maxLines: number,
+): string[] {
 	if (width <= 0 || maxLines <= 0) return [];
 	const words = text.split(/\s+/).filter((w) => w.length > 0);
 	const lines: string[] = [];
@@ -173,7 +177,9 @@ export function wrapText(text: string, width: number, maxLines: number): string[
 	if (consumed.length < wanted.length) {
 		const last = lines[lines.length - 1] ?? "";
 		lines[lines.length - 1] =
-			last.length >= width ? `${last.slice(0, Math.max(0, width - 1))}…` : `${last}…`;
+			last.length >= width
+				? `${last.slice(0, Math.max(0, width - 1))}…`
+				: `${last}…`;
 	}
 	return lines;
 }
@@ -223,7 +229,10 @@ export function ToastCard({
 		: toast.icon === false
 			? undefined
 			: (toast.icon ?? TOAST_ICONS[toast.variant]);
-	const textWidth = Math.max(1, inner - (glyph ? 2 : 0) - (dismissible ? 2 : 0));
+	const textWidth = Math.max(
+		1,
+		inner - (glyph ? 2 : 0) - (dismissible ? 2 : 0),
+	);
 
 	const titleLines = wrapText(toast.title, textWidth, TITLE_LINES);
 	const descriptionLines = toast.description
@@ -256,7 +265,11 @@ export function ToastCard({
 				) : null}
 				<box flexDirection="column" flexGrow={1}>
 					{titleLines.map((line, i) => (
-						<text key={`t${i}`} fg={colors.foreground} attributes={TextAttributes.BOLD}>
+						<text
+							key={`t${i}`}
+							fg={colors.foreground}
+							attributes={TextAttributes.BOLD}
+						>
 							{line}
 						</text>
 					))}
@@ -283,7 +296,12 @@ export function ToastCard({
 				) : null}
 			</box>
 			{toast.remaining === undefined ? null : (
-				<ProgressBar value={toast.remaining} width={inner} variant={toast.variant} />
+				<ProgressBar
+					value={toast.remaining}
+					width={inner}
+					variant={toast.variant}
+					style="smooth-line"
+				/>
 			)}
 		</box>
 	);
@@ -344,7 +362,11 @@ export function ToastViewport({
 			right={align === "left" ? undefined : margin}
 			flexDirection="column"
 			alignItems={
-				align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start"
+				align === "center"
+					? "center"
+					: align === "right"
+						? "flex-end"
+						: "flex-start"
 			}
 			gap={1}
 		>

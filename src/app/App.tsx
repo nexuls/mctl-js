@@ -130,7 +130,7 @@ export async function renderApp(): Promise<void> {
             while a text field is being typed into. */}
         <InputCaptureProvider>
           <ToastProvider>
-        <App firstRun={firstRun} />
+            <App firstRun={firstRun} />
           </ToastProvider>
         </InputCaptureProvider>
       </EventBusProvider>
