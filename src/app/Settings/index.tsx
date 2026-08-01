@@ -35,6 +35,7 @@ import {
 	Hint,
 	Input,
 	RadioGroup,
+	ScrollBox,
 	Select,
 	Tabs,
 	type RadioItem,
@@ -304,7 +305,7 @@ export function Settings() {
 
 			{/* The only scrolling region: one group's fields. Keyed by group so
           switching tabs remounts the panel and its scroll starts at the top. */}
-			<scrollbox
+			<ScrollBox
 				key={group}
 				flexGrow={1}
 				paddingTop={1}
@@ -507,7 +508,7 @@ export function Settings() {
 						/>
 					</Section>
 				) : null}
-			</scrollbox>
+			</ScrollBox>
 
 			{/* Action bar — pinned to the bottom of the page, outside the scrolling
           panel, so Save is reachable from every group without scrolling. */}

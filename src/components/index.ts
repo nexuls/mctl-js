@@ -28,6 +28,7 @@ export {
 export { Breadcrumb, type Crumb, type BreadcrumbProps } from "./Breadcrumb.tsx";
 export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
+export { ScrollBox, type ScrollBoxProps } from "./ScrollBox.tsx";
 export {
   ToastCard,
   type ToastCardProps,

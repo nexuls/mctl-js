@@ -25,6 +25,7 @@ import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { alpha, mix } from "../lib/colors.ts";
+import { ScrollBox } from "../components/index.ts";
 import { onAccent } from "../components/support.ts";
 import { NAV, type NavItem, type RouteId } from "./routes.ts";
 
@@ -151,7 +152,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 	const tailCells = Math.max(0, viewportWidth - consumed);
 
 	return (
-		<scrollbox
+		<ScrollBox
 			// Two rows: the tabs, and the rule segments beneath them.
 			height={2}
 			width="100%"
@@ -210,6 +211,6 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 					</text>
 				</box>
 			</box>
-		</scrollbox>
+		</ScrollBox>
 	);
 }

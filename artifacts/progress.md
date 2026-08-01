@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-07-31 (Select width measurement fix)_
+_Last updated: 2026-08-01 (shell scroll acceleration)_
 
 ---
 
@@ -314,14 +314,25 @@ _Last updated: 2026-07-31 (Select width measurement fix)_
     outer widths 60 and 30 — 60 ⇒ tabs, 30 ⇒ dropdown, for both a fixed-width and a flex-sized field.
     Non-vacuous: with the fix stashed, the flex-sized field at width 60 still rendered as a dropdown.
 
+- **`ScrollBox` wrapper + shell scroll acceleration (this session):**
+  - `src/components/ScrollBox.tsx` (+ barrel export) — a pass-through wrapper around the
+    `<scrollbox>` intrinsic: every prop and the `ref` are forwarded untouched, and it adds one prop,
+    `enableAccel`, which supplies a stable `MacOSScrollAccel`. **Every `<scrollbox>` in `src/` was
+    replaced by it** — `Router.tsx`, `NavRail.tsx`, `Settings/index.tsx`, `components/Tabs.tsx`, and
+    both in `setup/SetupWizard.tsx`. Nothing renders the intrinsic directly any more.
+  - **Acceleration is enabled only on the shell page host** in `src/app/Router.tsx`; the tab strips,
+    the Settings panel and the wizard stay linear (see `memory.md` § Scroll acceleration for why).
+  - `src/components/ScrollBox.test.tsx` — 3 tests (50 total, 8 files): props/children/`ref` reach the
+    real `ScrollBoxRenderable`, the default is `LinearScrollAccel` vs `MacOSScrollAccel` with
+    `enableAccel`, and a 30-notch synthetic wheel burst travels 30 rows linear vs ~175 accelerated.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 50/50; driven under a pty at 100×30 in two sandbox
+    HOMEs — the first-run wizard's welcome renders, and with a config the NavRail bar, Servers, and
+    Settings (its `Tabs` strip + scrolling panel) all draw with no errors.
+
 ## In progress
 
-- **⚠ `src/app/test.tsx` is a TEMPORARY toast harness and `App.tsx` currently mounts it instead of
-  `<AppRouter />`.** It is a grid of chips raising every toast shape (variants, sticky, delayed,
-  promise, wrapping, six anchors, burst/queue, update-in-place, dismiss all) for eyeballing.
-  **Before committing: delete `app/test.tsx`, restore `return <AppRouter />;` in `App.tsx`, and drop
-  its import.**
-- Nothing else mid-implementation. All the above compiles, tests, and runs.
+- (The temporary `src/app/test.tsx` toast harness is gone and `App.tsx` mounts `<AppRouter />` again.)
+- Nothing mid-implementation. All the above compiles, tests, and runs.
 
 ## Next up (Phase 2)
 

@@ -25,7 +25,7 @@ import {
 	useIsCapturing,
 	useKeysCaptured,
 } from "../hooks/use-input-capture.tsx";
-import { Hint } from "../components/index.ts";
+import { Hint, ScrollBox } from "../components/index.ts";
 import { NAV, type RouteId } from "./routes.ts";
 import { NavRail } from "./NavRail.tsx";
 import { Dashboard } from "./Dashboard/index.tsx";
@@ -139,9 +139,11 @@ function AppShell() {
 						<Page route={route} />
 					</box>
 				) : (
-					<scrollbox
+					<ScrollBox
 						flexGrow={1}
 						flexDirection="row"
+						// A page can be many screens long, so the wheel accelerates here.
+						enableAccel
 						scrollbarOptions={{
 							trackOptions: {
 								backgroundColor: c.surface,
@@ -150,7 +152,7 @@ function AppShell() {
 						}}
 					>
 						<Page route={route} />
-					</scrollbox>
+					</ScrollBox>
 				)}
 			</box>
 

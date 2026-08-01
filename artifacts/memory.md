@@ -354,6 +354,31 @@ delete entries that stop being true. Newest-relevant first.
 - **`console.log` is swallowed under OpenTUI** — it is not a debugging channel here (and CLAUDE.md
   bans stdout writes outright). Use `lib/logger.ts` or write a captured frame to a file.
 
+## Scroll acceleration (2026-08-01)
+
+- **A `<scrollbox>` defaults to `LinearScrollAccel` — one line per wheel notch, forever.** On a tall
+  page that reads as "the wheel barely does anything". Pass `scrollAcceleration={…}`; `@opentui/core`
+  exports `MacOSScrollAccel` (from `lib/scroll-acceleration`, re-exported by the package root), which
+  keeps a 3-sample window of the intervals between scroll events and scales the delta by
+  `1 + A*(e^(v/tau) - 1)`, capped at `maxMultiplier` (defaults `A=0.8, tau=3, max=6`). A streak breaks
+  after 150 ms of silence, so a slow wheel stays exactly one line per notch.
+- **The accelerator is stateful, so the instance must be stable** — a fresh instance per render resets
+  the tick history on every keypress and silently degrades to linear.
+- **Nothing renders the `<scrollbox>` intrinsic directly any more — use `components/ScrollBox.tsx`.**
+  It is a pass-through wrapper (`ScrollBoxProps = OpenTuiScrollBoxProps & { enableAccel?: boolean }`;
+  props *and* `ref` spread straight through) that owns the `useMemo`'d accelerator and adds
+  `enableAccel`. It spreads `scrollAcceleration` **only when it resolves** — the renderable defaults to
+  `LinearScrollAccel` when the option is absent at construction, but its setter would store an explicit
+  `undefined`. An explicit `scrollAcceleration` from the caller wins over `enableAccel`.
+- **`enableAccel` is off by default and set at exactly one call site:** the shell page host in
+  `Router.tsx`. Acceleration is wrong for a short region — a 2-row tab strip (`NavRail`, `Tabs`) or a
+  small list overshoots on the first flick. The Settings panel and the wizard are still linear by
+  choice; flip them only if they feel sluggish in use.
+- Measured in `components/ScrollBox.test.tsx` with `createTestRenderer` + synthetic
+  `onMouseEvent({type:"scroll"})`: 30 notches 10 ms apart move **30** rows unaccelerated vs ~175
+  accelerated. `onMouseEvent` is `protected` and `scrollX`/`scrollY` are absent from the public
+  `ScrollBoxRenderable` type, so the test casts for both (runtime-correct, type-invisible).
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**

@@ -27,6 +27,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { alpha, mix } from "../lib/colors.ts";
+import { ScrollBox } from "./ScrollBox.tsx";
 import { onAccent } from "./support.ts";
 
 /** One tab. */
@@ -221,7 +222,7 @@ export function Tabs({
   );
 
   return (
-    <scrollbox
+    <ScrollBox
       // Two rows: the tabs, and the rule segments beneath them. A narrow
       // terminal scrolls the bar instead of wrapping it — and the accent
       // segment scrolls with the tab it belongs to.
@@ -300,6 +301,6 @@ export function Tabs({
           </text>
         </box>
       </box>
-    </scrollbox>
+    </ScrollBox>
   );
 }

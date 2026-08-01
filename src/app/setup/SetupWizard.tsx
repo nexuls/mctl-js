@@ -18,6 +18,7 @@ import { useCallback, useState } from "react";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useTheme } from "../../hooks/use-theme.tsx";
+import { ScrollBox } from "../../components/index.ts";
 import { Stepper } from "./Stepper.tsx";
 import { Welcome } from "./Welcome.tsx";
 import { DataRootStep } from "./steps/DataRootStep.tsx";
@@ -92,7 +93,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
 	if (stage === "welcome") {
 		return (
-			<scrollbox
+			<ScrollBox
 				flexGrow={1}
 				backgroundColor={pageBackground}
 				scrollbarOptions={{
@@ -103,7 +104,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 				}}
 			>
 				<Welcome onBegin={() => setStage("wizard")} />
-			</scrollbox>
+			</ScrollBox>
 		);
 	}
 
@@ -125,7 +126,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 	];
 
 	return (
-		<scrollbox
+		<ScrollBox
 			flexGrow={1}
 			backgroundColor={pageBackground}
 			scrollbarOptions={{
@@ -161,6 +162,6 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 					</box>
 				</box>
 			</box>
-		</scrollbox>
+		</ScrollBox>
 	);
 }
