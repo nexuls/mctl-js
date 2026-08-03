@@ -31,6 +31,7 @@ import { createProviderRegistry } from "../providers/index.ts";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
 import { installBoxClipPatch } from "../components/box-clip-patch.ts";
 import { installSelectionOptIn } from "../components/selection-opt-in.ts";
+import { installNegativeDimensionPatch } from "../components/negative-dimension-patch.ts";
 import { SetupWizard } from "./setup/index.ts";
 import { AppRouter } from "./Router.tsx";
 
@@ -76,6 +77,11 @@ export async function renderApp(): Promise<void> {
   // `selectable` explicitly (the console log lines) can be selected. Must run
   // before the first render — it re-registers the component catalogue.
   installSelectionOptIn();
+
+  // A negative `width`/`height` on any element means "terminal size minus that
+  // many cells", re-resolved on every resize. Patches the shared `Renderable`
+  // prototype, so it must run before the first renderable is constructed.
+  installNegativeDimensionPatch();
 
   // Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
   // the persisted theme id before the first paint. Front-end → core service:

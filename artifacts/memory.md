@@ -555,6 +555,45 @@ delete entries that stop being true. Newest-relevant first.
   accelerated. `onMouseEvent` is `protected` and `scrollX`/`scrollY` are absent from the public
   `ScrollBoxRenderable` type, so the test casts for both (runtime-correct, type-invisible).
 
+## Terminal-relative dimensions — negative width/height (2026-08-03, user request)
+
+- **A negative `width`/`height` on any element now means `terminal size - n`.** `<box width={-4}>`
+  is the terminal width minus 4 cells; `<scrollbox height={-2}>` the terminal height minus 2.
+  `src/components/negative-dimension-patch.ts` → `installNegativeDimensionPatch()`, called in
+  `renderApp()` beside the other two patches. This is the replacement for counting cells out of
+  `useTerminalDimensions()` by hand (what `NavRail` and `Tabs` still do for their rule tails).
+  - **Why it was needed:** OpenTUI's `width` is `number | "auto" | "<n>%"`, and a percentage
+    resolves against the **parent**, not the screen. There is no "screen minus a gutter" form.
+- **Two seams, because construction and updates do not share a code path:**
+  - **Construction** — `Renderable`'s constructor calls `validateOptions(id, options)`, which
+    **throws** `Invalid width for Renderable <id>: -4` on a negative *before* `setupYogaProperties`
+    runs. `validateOptions` is module-private, so nothing on the prototype can get in front of it:
+    the only seam is rewriting `options` before `super()`, i.e. re-registering the React component
+    catalogue as subclasses — the same trick `selection-opt-in.ts` uses.
+    - **Dead end:** wrapping `Renderable.prototype.setupYogaProperties` (my first cut). It is the
+      method that actually pushes the value into yoga, but the throw beats it by ~5 lines.
+  - **Updates** — the reconciler applies changed props as plain assignments (`instance.width =
+    value`, via `setProperty`'s `default:` branch, and `setStyle` does the same), so the
+    `width`/`height` accessors on `Renderable.prototype` are wrapped too. That path does **not**
+    validate — a negative reached yoga silently as undefined behaviour before this.
+- **Tracked and re-resolved on every terminal resize.** A size baked in at construction is stale
+  after the first SIGWINCH, so the raw negative is kept in a module `Map<Renderable, spec>` and
+  re-applied from `ctx.on("resize")` (the `CliRenderer` updates its own `width`/`height` *before*
+  emitting, so `ctx` is already current in the sweep). Entries drop on the renderable's
+  `"destroyed"` event; setting a non-negative value opts back out. The sweep calls the **original**
+  setter, or it would clear its own tracking.
+- **Clamped at 0.** A terminal narrower than the inset yields an empty element — resolving to a
+  negative would hit the same upstream `Invalid width` throw. (A laid-out renderable then reports
+  `Math.max(layout.width, 1)`, so `.width` reads 1, not 0.)
+- **Two catalogue patches must wrap `getComponentCatalogue()`, not `baseComponents`.**
+  `selection-opt-in.ts` was changed to do this. Both wrap-and-`extend()`; if both wrapped the
+  pristine `baseComponents`, the second `extend()` would re-register the same names over the
+  first's classes and **silently delete the first patch**. Wrapping what is currently registered
+  makes them compose in either order. Any future catalogue patch must follow this rule.
+- **Covers JSX elements only.** A renderable built by hand (`new BoxRenderable(...)`) still throws
+  on a negative constructor option; it is only affected on assignment. Nothing in `src/` builds
+  renderables by hand, and the test therefore mounts real JSX through `createRoot`.
+
 ## OpenTUI gotchas (added 2026-07-26)
 
 - **Box borders are NOT clipped by ancestor scissor rects — upstream bug, patched locally.**

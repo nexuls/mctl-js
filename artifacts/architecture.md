@@ -393,6 +393,28 @@ Viewports are content-sized rather than full-screen, so they never intercept the
 **queues** — a queued toast has no countdown until it is actually on screen — so a burst of reports
 loses none of them.
 
+## OpenTUI patches — `components/*-patch.ts` + `selection-opt-in.ts`
+
+Three UI-layer modules monkey-patch `@opentui/core` / `@opentui/react` before the first render.
+All are installed at the top of `renderApp()`, all are pure UI (no I/O, no domain knowledge), and
+each states in its header what would let it be deleted.
+
+- **`box-clip-patch.ts`** — upstream bug: the native `bufferDrawBox` ignores the scissor stack, so a
+  bordered `<box>` in a `<scrollbox>` paints its border over the surrounding chrome. Delete when
+  upstream clips it.
+- **`selection-opt-in.ts`** — makes drag-selection opt-in by re-registering the component catalogue
+  as subclasses that default `selectable` to `false`.
+- **`negative-dimension-patch.ts`** — extends the dimension vocabulary: a **negative `width` or
+  `height` means "terminal size minus that many cells"** (`<box width={-4}>`), re-resolved on every
+  terminal resize. OpenTUI's percentages resolve against the *parent*, so this is the only
+  screen-relative form. Two seams: the catalogue (the constructor validates and throws on a
+  negative before any prototype method runs) and the `width`/`height` accessors (the reconciler
+  applies prop updates as plain assignments).
+
+> **Rule for any future catalogue patch:** wrap `getComponentCatalogue()`, never the pristine
+> `baseComponents`. Both of the catalogue patches wrap-and-`extend()`; wrapping the pristine set
+> would make the second `extend()` re-register over the first and silently undo it.
+
 ---
 
 ## First-run wizard — `app/setup/`

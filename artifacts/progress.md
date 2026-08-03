@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-03 (Dashboard/Servers merge; Phase 2: server lifecycle)_
+_Last updated: 2026-08-03 (negative/terminal-relative dimensions; Dashboard/Servers merge; Phase 2)_
 
 ---
 
@@ -454,6 +454,29 @@ _Last updated: 2026-08-03 (Dashboard/Servers merge; Phase 2: server lifecycle)_
     driven under a pty at 110×40 in a sandbox `$HOME` with two discovered servers — the rail shows the
     five renumbered tabs, the table renders, `j` moves the caret and the expansion follows it, `2`
     reaches Jobs and `1` returns to the Dashboard.
+
+- **Terminal-relative dimensions — negative width/height (2026-08-03, user request).**
+  - `src/components/negative-dimension-patch.ts` → `installNegativeDimensionPatch()`, installed in
+    `renderApp()` beside the other two patches. A negative `width`/`height` on any JSX element now
+    means `terminal size - n` (`<box width={-4}>` = terminal width minus 4), clamped at 0 and
+    **re-resolved on every terminal resize**. Two seams: the React component catalogue (upstream's
+    constructor `validateOptions` *throws* on a negative before any prototype method runs) and the
+    `Renderable.prototype` `width`/`height` accessors (the reconciler applies prop updates as plain
+    assignments). Tracked renderables are dropped on `"destroyed"` or when set to a non-negative.
+  - `src/components/selection-opt-in.ts` — now wraps `getComponentCatalogue()` instead of
+    `baseComponents`, so the two catalogue patches compose in either order instead of the second
+    `extend()` silently replacing the first. **This is a rule for any future catalogue patch.**
+  - `src/components/negative-dimension-patch.test.tsx` — 7 tests (134 total, 14 files) mounting real
+    JSX through `createRoot` + `createTestRenderer`: construction, prop-update assignment, resize
+    tracking in both directions, opting back out, the positive/`auto`/`%` control, the clamp, and an
+    unmounted renderable leaving the sweep. Installs both catalogue patches together, so it also
+    guards their composition.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 134/134; **non-vacuous** — with the install
+    commented out 6 of the 7 fail (the untouched-dimensions control still passes, as it should).
+    A runtime check through the real reconciler confirmed both patches at once
+    (`width={-4}` → 36 at a 40-cell terminal, `<text>` non-selectable, `<text selectable>` selectable).
+    The real app driven under a pty at 100×30 in a sandbox `$HOME` renders the rail, tiles and table
+    with no stderr.
 
 ## In progress
 
