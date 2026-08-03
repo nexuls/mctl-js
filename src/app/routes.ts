@@ -2,9 +2,9 @@
  * Route definitions for the TUI — the set of screens the router can show and the
  * navigation rail's ordering. Pure data + types, no JSX and no I/O.
  *
- * The `server` (detail) route is intentionally **not** in {@link NAV}: it is
- * reached by selecting a row on the Servers page (it needs a `serverId` param),
- * not from the persistent rail.
+ * `server`, `console`, and `create` are intentionally **not** in {@link NAV}:
+ * they are reached from the Servers page and two of them need a `serverId`
+ * param, so a bare digit shortcut could not address them.
  */
 
 /** Every screen the router can render. */
@@ -12,14 +12,16 @@ export type RouteId =
   | "dashboard"
   | "servers"
   | "server"
+  | "console"
+  | "create"
   | "jobs"
   | "backups"
   | "network"
   | "settings";
 
-/** Parameters a route may carry (only the server detail page needs one today). */
+/** Parameters a route may carry. */
 export interface RouteParams {
-  /** The server whose detail page to show, for the `server` route. */
+  /** The server to show, for the `server` and `console` routes. */
   serverId?: string;
 }
 

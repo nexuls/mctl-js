@@ -26,6 +26,8 @@ import { IconProvider } from "../hooks/use-icons.tsx";
 import { EventBusProvider } from "../hooks/use-event-bus.tsx";
 import { InputCaptureProvider } from "../hooks/use-input-capture.tsx";
 import { ToastProvider } from "../hooks/use-toast.tsx";
+import { MctlProvider } from "../hooks/use-mctl.tsx";
+import { createProviderRegistry } from "../providers/index.ts";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
 import { installBoxClipPatch } from "../components/box-clip-patch.ts";
 import { SetupWizard } from "./setup/index.ts";
@@ -120,6 +122,11 @@ export async function renderApp(): Promise<void> {
   const subscribeThemeId = configSubscriber(events.bus, (c) => c.theme);
   const subscribeIconMode = configSubscriber(events.bus, (c) => c.icons);
 
+  // The concrete providers this build ships. Built once here at the front-end
+  // edge and injected, so nothing under `core/` or `hooks/` ever imports one
+  // (AGENTS.md § 3: core knows provider *interfaces* only).
+  const providers = createProviderRegistry();
+
   createRoot(renderer).render(
     <ThemeProvider
       registry={registry}
@@ -142,7 +149,12 @@ export async function renderApp(): Promise<void> {
               while a text field is being typed into. */}
           <InputCaptureProvider>
             <ToastProvider>
-              <App firstRun={firstRun} />
+              {/* The mutating core services. Below the bus (it rebuilds on
+                  ConfigChanged) and below the toast layer, so a page can raise
+                  a toast about a create it just started. */}
+              <MctlProvider providers={providers}>
+                <App firstRun={firstRun} />
+              </MctlProvider>
             </ToastProvider>
           </InputCaptureProvider>
         </EventBusProvider>

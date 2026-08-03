@@ -37,8 +37,34 @@ export const EventType = {
   ServerStateChanged: "ServerStateChanged",
   /** A registered server's path went missing (drive unmounted). Payload: `{ id }`. */
   ServerUnavailable: "ServerUnavailable",
-  // Later phases: JobProgress, InstallStepChanged, TunnelUp/Down, JavaInstalled,
-  // DownloadCompleted, PlayerJoined/Left, BackupFinished.
+
+  // ── Phase 2 ────────────────────────────────────────────────────────────────
+  /**
+   * A server was created and registered. Payload: `{ id, kind,
+   * minecraftVersion, path }`.
+   */
+  ServerCreated: "ServerCreated",
+  /** A server was removed from the registry. Payload: `{ id, deletedFiles }`. */
+  ServerDeleted: "ServerDeleted",
+  /** A server's `mctl.json` was edited. Payload: `{ id, fields }` (names only). */
+  ServerEdited: "ServerEdited",
+  /**
+   * Progress of a running job. **Local bus only** — never written to
+   * `events.jsonl`, because it fires many times a second and would rotate the
+   * shared log away. Payload: the `Job` snapshot.
+   */
+  JobProgress: "JobProgress",
+  /**
+   * A job reached a terminal state. This one *is* published cross-instance —
+   * it is the "something finished, re-read the disk" signal. Payload:
+   * `{ id, kind, serverId, state, error }`.
+   */
+  JobFinished: "JobFinished",
+  /** A JDK was installed by MCTL. Payload: `{ major, version, home }`. */
+  JavaInstalled: "JavaInstalled",
+
+  // Later phases: InstallStepChanged, TunnelUp/Down, DownloadCompleted,
+  // PlayerJoined/Left, BackupFinished.
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType] | (string & {});
 

@@ -354,6 +354,111 @@ delete entries that stop being true. Newest-relevant first.
 - **`console.log` is swallowed under OpenTUI** — it is not a debugging channel here (and CLAUDE.md
   bans stdout writes outright). Use `lib/logger.ts` or write a captured frame to a file.
 
+## Phase 2 — providers, Java, install, foreground runtime (2026-08-03)
+
+### Upstream APIs (verified live this session)
+
+- **PaperMC v3 is served from `fill.papermc.io`, NOT `api.papermc.io`.** The legacy host fronts v2
+  and its Cloudflare rules reject unknown clients outright (an HTML challenge page, not a 4xx), so a
+  v3 path there looks like a schema failure rather than a wrong host. Endpoints used:
+  `/v3/projects/paper` (versions grouped by minor line, an **object** — insertion order is the only
+  ordering signal), `/v3/projects/paper/versions/<v>` (→ `version.java.version.{minimum,maximum?}`),
+  `/v3/projects/paper/versions/<v>/builds/latest` (→ `downloads["server:default"]` with a **sha256**).
+  - The artefact key is `server:default`; a build without it is not a runnable server (error, not a
+    fallback). Builds carry a `channel` (`STABLE`/`ALPHA`) which `latest` does not filter — logged.
+- **Mojang is two hops:** `version_manifest_v2.json` → per-version package JSON at piston-meta, which
+  holds `downloads.server {url,sha1,size}` **and** `javaVersion.majorVersion`. Two consequences:
+  `downloads.server` is **absent before 1.2.5**, and `javaVersion` is a **floor with no max** (so
+  Vanilla reports `{min}` only). Mojang publishes **sha1**, Paper **sha256** — `lib/download.ts`
+  hashes both in one pass and checks whichever was supplied.
+- **Adoptium** `/v3/assets/latest/<major>/hotspot?architecture&image_type=jdk&os&vendor=eclipse`
+  returns an **array**; `binary.package.{link,checksum,size}`. Every Temurin archive has exactly one
+  top-level dir, so extraction needs `tar -xf … --strip-components=1` or the managed JDK lands one
+  level too deep for `detect.ts`.
+
+### Java selection
+
+- **`LTS_MAJORS = [25, 21, 17, 11, 8]`, and an unbounded requirement is capped at the newest LTS.**
+  `{min: 21}` with only a system Java **26** present resolves to *nothing installed* and fetches
+  Temurin 25 rather than launching on 26. This is not theoretical: launching Paper 1.21.4 on Arch's
+  Java 26 booted fine but **segfaulted in Paper's bundled `libasyncProfiler.so` during shutdown**
+  (`Recording::finishChunk`). Exception to the cap: `requirement.max` from upstream always wins, and
+  a `min` above the newest LTS raises the ceiling to `min` (else nothing would be valid).
+- **A bare `java: N` in `mctl.json` is a *preference*, `{pinned: N}` is *authoritative*.** The bare
+  form keeps a server on the JVM it was resolved with so a newly installed JDK doesn't silently
+  change it; the pinned form is never re-derived and is installed on demand if absent.
+- **Detection runs `java -XshowSettings:properties -version` on every candidate** and reads
+  `java.version`/`java.home`/`java.vendor` off **stderr**. Directory names lie (`java-17-openjdk`
+  symlinked to 21, `$JAVA_HOME` upgraded in place). Java 8 reports `1.8.0_412` — the major is the
+  *second* component. Probes are memoized per exe path, including **failures** (`cache.has()`, not a
+  truthiness check), and the cache is cleared after an install.
+
+### Statelessness under Phase 2
+
+- **Console capture lives in `~/.local/state/mctl/console/<id>.log`, not the server dir.** Two
+  reasons: MCTL owns exactly one file inside a server dir, and the capture must be readable by *any*
+  instance — `mctl logs -f` from a second terminal tails the same file the TUI shows. Truncated on
+  start (a follower must not replay the previous run's shutdown). New path helpers `consoleDir()` /
+  `consoleLogFile(id)`.
+- **The foreground runtime's one real limitation: `exec` only works from the owning process.** A Unix
+  pipe has no name, so a second instance cannot reach the child's stdin → typed
+  `SessionNotOwnedError` rather than a silently dropped command. Everything else *is* cross-instance:
+  `status` probes the descriptor, `logs` tails the shared file, and `stop` sends **SIGTERM** to the
+  recorded pid — which Minecraft's shutdown hook handles by saving the world, so a foreign stop is
+  still graceful (verified: 7.4 s, clean save).
+- **`withServerLock(id, fn)` (`core/session/lock.ts`) uses `open(path,"wx")`** — the atomic
+  check-and-create; a `pathExists` + write pair would race. A lock whose owner pid is dead is
+  **reclaimed**, not respected, or one crash wedges a server until the next startup sweep.
+- **`JobScheduler` holds jobs in memory, and that is not a violation.** A job is this process's own
+  in-flight work with no on-disk form (like a pending promise); what it *produces* is the durable
+  part. `JobProgress` is **local-bus only** (it fires ~10×/s and would rotate `events.jsonl` away in
+  seconds); only `JobFinished` is `publish`ed cross-instance.
+
+### Design decisions worth remembering
+
+- **`mctl.json.kind` was relaxed from the `ServerKind` enum to `z.string().min(1)`.** The
+  authoritative list of kinds is the runtime `ProviderRegistry`; duplicating it in a schema would
+  make a server created by a newer MCTL parse-fail and show as *unavailable* instead of "this build
+  has no `fabric` provider". `config.defaults.kind` keeps the enum — it only bounds a **picker**.
+- **`eula.txt` is the one deliberate exception to "MCTL writes only `mctl.json`".** Written **once,
+  at create, only on explicit opt-in**, into the *staging* dir; never read, rewritten, or deleted
+  after. Without it an opted-in create produces a server that refuses to boot.
+- **Deviations from `plan.md` § Runtime, both documented in `types/provider.ts`:** `start` takes a
+  `LaunchContext` (a runtime cannot spawn without the resolved java binary + JVM args, and
+  re-resolving inside each provider would duplicate `core/java/`), and **`restart` is not on the
+  interface** — it is `stop` + `start` with a *freshly resolved* context and lives on
+  `RuntimeManager`, so every runtime gets identical semantics.
+- **`core/context.ts` (`createContext(providers, bus)`) is the shared object graph.** `cli/context.ts`
+  and `hooks/use-mctl.tsx` are its two thin adapters — that is the mechanism that stops the front-ends
+  drifting. The registry is built at the front-end edge (`providers/index.ts`) and injected, so
+  nothing under `core/` or `hooks/` imports a concrete provider.
+- **`heapArgs` sets `-Xms` and `-Xmx` to the same value** — pre-committing the heap avoids the
+  stop-the-world resizes that read as lag spikes in the first hour; it is what every MC launch script
+  does.
+- **`lib/download.ts` is deliberately separate from `lib/http.ts`.** `http` caches small manifest
+  *bodies* on disk, which is exactly wrong for a 60 MB jar; `download` streams to a sibling temp file,
+  hashes as it goes, and `rename`s only after the digest matches — so a corrupt download never leaves
+  a plausible-looking jar behind.
+
+### Gotchas hit this session
+
+- **`parseArgs` must check `valued` before `boolean`.** `--java 21` (pin) and `--no-java` (skip) share
+  one flag name, so the name is in **both** sets; checking `boolean` first swallowed `--java 21` as a
+  bare boolean and left `21` in the positionals — `mctl edit x --java 26` reported success and changed
+  nothing. Regression-tested in `cli/args.test.ts`.
+  - And the negation is stored as the **boolean `false`**, not the string `"false"`, so `stringFlag`
+    (hence `intFlag`) skip it. Otherwise `--no-java` threw "must be a positive integer (got false)".
+- **`Button` only honours Enter/Space when `focused` is passed**, so an action bar without a focus
+  ring is **mouse-only**. The Server detail page owns a `useFocusRing` over its visible actions (the
+  set changes with the probed state; the ring clamps, so that is safe). Check this on any new page
+  with buttons.
+- **`Bun.spawn`'s `Subprocess` generic follows the stdio options**, so a helper that passes
+  `stdin: "ignore" | Uint8Array` cannot be typed `Subprocess<"pipe",…>` (`lib/shell.ts`).
+- **`FileSink.end()` may return a `number`, not a promise** — `await` it, don't `.catch()` it.
+- **A pty opened via `script` ignores `COLUMNS`/`LINES` env**; it inherits the parent size (24 rows
+  here), which silently hides anything below the fold. Prefix the command with `stty rows N cols M`
+  when driving the TUI — the create form's progress panel looked missing until that was fixed.
+
 ## Icon sets — Nerd / Unicode / ASCII (2026-08-03)
 
 - **Icons are theming's twin, and are built the same way**: pure catalogue in `core/icons/`, React

@@ -32,7 +32,7 @@ function stateLabel(server: Server): string {
  */
 export function formatServerTable(servers: Server[]): string {
   if (servers.length === 0) {
-    return "No servers yet. Create one with `mctl create <name>` (Phase 2).";
+    return "No servers yet. Create one with `mctl create <name>`.";
   }
   const rows = servers.map((s) => [
     s.id,

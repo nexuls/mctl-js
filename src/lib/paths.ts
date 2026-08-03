@@ -112,6 +112,26 @@ export function logsDir(): string {
   return join(stateDir(), "logs");
 }
 
+/**
+ * Directory of captured server console output, one file per server.
+ *
+ * This lives in MCTL's state directory rather than inside the server directory
+ * for two reasons. First, MCTL owns exactly **one** file inside a server dir
+ * (`mctl.json`) — the server's own `logs/latest.log` belongs to Minecraft.
+ * Second, and more importantly, the capture must be readable by *any* instance:
+ * `mctl logs survival` run from a script has to work while a different process
+ * is the one holding the child, and a shared, append-only file is the same
+ * no-IPC mechanism `events.jsonl` uses.
+ */
+export function consoleDir(): string {
+  return join(stateDir(), "console");
+}
+
+/** Captured console output for one server (append-only; rotated by the runtime). */
+export function consoleLogFile(id: string): string {
+  return join(consoleDir(), `${id}.log`);
+}
+
 // ── Data: $ROOT (default ~/.mctl) — relocatable, chosen at first run ──────────
 
 /** The default `$ROOT` when the first-run wizard offers one. */

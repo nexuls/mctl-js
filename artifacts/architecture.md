@@ -54,7 +54,8 @@ src/
   index.tsx            entry: parse argv → TUI (no args) | one-shot CLI
   cli/                 router.ts, commands/ (list, create, start, …), format.ts (--json vs table)
   app/                 the TUI — App.tsx, Router.tsx, setup/ (wizard), and PAGES live here now
-                         Dashboard/ Servers/ Server/ Console/ Jobs/ Backups/ Network/ Settings/
+                         Dashboard/ Servers/ Server/ ServerCreate/ Console/ Jobs/
+                         Backups/ Network/ Settings/
   components/          pure UI (Table, Console, ProgressBar, Modal, StatusBar…)
   hooks/               useServers, useServer, useJobs, useConsole, useEventLog…
   core/                config, theme, registry, session, events, jobs, server, java, runtime, network, backup
@@ -94,6 +95,7 @@ $ROOT/  (default ~/.mctl, chosen at first run, not editable after)
   events.jsonl           append-only cross-instance event log
   runtime/<id>.json      session descriptor: pid, runtime, sessionRef, port, startedAt
   runtime/<id>.lock      per-server action / supervisor locks
+  console/<id>.log       captured server console — shared, so any instance can tail it
   logs/                  MCTL's own logs
 ```
 
@@ -177,25 +179,104 @@ the step-3 scan, others are not). Create ⇒ write `mctl.json` then `registry.ad
 into `Server` **view models** by parsing each `mctl.json` and probing liveness (`core/session`).
 `listServers(serversDir)` / `getServer(id, serversDir)` are the **single read path** both front-ends
 use (CLI `list`/`status`, TUI `useServers`/`useServer`), re-derived from disk on every call — no cache.
-This module is **read-only**; the mutating `ServerManager` (create/delete/edit, install strategies) is
-Phase 2. A server that fails to load (missing path, invalid `mctl.json`) becomes an `unavailable` view
-model rather than throwing, so one bad server never breaks a listing.
+This module is **read-only**; mutation lives in `core/server/manager.ts` (below). A server that fails
+to load (missing path, invalid `mctl.json`) becomes an `unavailable` view model rather than throwing,
+so one bad server never breaks a listing.
 
 ---
 
-## Provider system — `core/registry/` (ProviderRegistry)
+## Provider system — `core/registry/provider-registry.ts`
 
-Dynamically registered modules, not compile-time wiring:
+Dynamically registered modules, not compile-time wiring. `ProviderRegistry` is an **instance**, not a
+module singleton: each front-end and each test builds its own, and a global would be the hidden
+authoritative state the rest of MCTL avoids.
 
 ```ts
-registry.register(new PaperProvider());
-registry.register(new TmuxRuntime());
-registry.register(new FilesystemBackupProvider());
+new ProviderRegistry()
+  .registerServer(new PaperProvider())
+  .registerServer(new VanillaProvider())
+  .registerRuntime(new ForegroundRuntime());
 ```
 
-Interfaces (`types/` + `core/*/`): `ServerProvider`, `RuntimeProvider`, `BackupProvider`,
-`NetworkProvider`. Core resolves by the `kind` / `runtime` / `network` fields in `mctl.json`. Write the
-interface against the first real implementation; generalize at the second.
+Interfaces live in **`types/provider.ts`** (`ServerProvider`, `RuntimeProvider`; `BackupProvider` and
+`NetworkProvider` arrive with Phase 4 — writing them now would design against imaginary code). Core
+resolves by the `kind` / `runtime` / `network` fields in `mctl.json`; an unresolvable id is a typed,
+user-facing `UnknownProviderError`, because it means the server was made by a build that knows a kind
+this one does not.
+
+**The one wiring point is `providers/index.ts` (`createProviderRegistry()`)**, called by each
+front-end. Nothing under `core/` or `hooks/` may import a concrete provider — that is the arrow that
+must not reverse.
+
+## Install & launch — `types/install.ts` + `core/server/install.ts`
+
+Install shape is an explicit tagged union, not a hidden branch inside one `install()`:
+
+- `InstallStrategy` — Phase 2 ships `directJar` (Vanilla, Paper). Phase 3 adds `loaderJar`,
+  `installer`, `buildFromSource`; every consumer already switches on `kind`, and the exhaustiveness
+  guard in `executeInstall` makes a new member a compile error rather than a silent no-op.
+- `LaunchSpec` — Phase 2 ships `jar`; `argFile` (Forge 1.17+) and `script` follow.
+
+`core/server/install.ts` executes a strategy into a directory and knows nothing about where those
+files will end up — which is what guarantees a failed install leaves no half-built server.
+
+## Java — `core/java/`
+
+Three modules, one responsibility each: `detect.ts` (find JDKs and ask each one what it is),
+`adoptium.ts` (resolve + fetch + extract Temurin), `java-manager.ts` (the selection **policy**).
+
+The policy is pure and exported (`chooseInstalled`, `preferredMajor`) so the rules are testable
+without a machine that happens to have four JDKs. The load-bearing rule: an **unbounded** requirement
+(`{min: 21}`) is capped at the newest LTS MCTL can fetch, so a machine holding only a newer non-LTS
+JDK gets an LTS installed rather than a server that mysteriously fails. A `{pinned}` in `mctl.json`
+always wins and is never re-derived.
+
+## Jobs — `core/jobs/`
+
+Long work becomes an observable `Job` rather than an awaited promise, so nothing blocks the render
+path. The in-memory job list is **not** a violation of "no authoritative in-memory state": a job is
+this process's own in-flight work with no on-disk representation, and what it produces (a jar, an
+`mctl.json`) is the durable part.
+
+Two tiers, deliberately asymmetric: `JobProgress` is emitted on the **local bus only** (it fires many
+times a second and would rotate `events.jsonl` away); only the terminal `JobFinished` is published
+cross-instance, which is the signal another instance actually needs — "re-read the disk".
+
+## Server mutation — `core/server/manager.ts`
+
+`ServerManager` is the mutating counterpart to the read-only `discover.ts`. Create is **staged**:
+everything is assembled in `$ROOT/downloads/staging/<uuid>/` and moved into place only after the
+download, digest check and `mctl.json` all succeed (`rename`, falling back to copy+remove on `EXDEV`,
+since a server may be created on another drive). Delete forgets a *location* by default; erasing
+files needs an explicit flag **and** a target that really contains an `mctl.json`, so a mis-pointed
+registry entry can never take an unrelated directory with it. Edit merges over the parsed file, so
+keys written by a newer MCTL survive.
+
+`eula.txt` is the single deliberate exception to "MCTL writes only `mctl.json` into a server dir":
+written once at create, only on explicit opt-in, into staging, and never touched again.
+
+## Runtime — `core/runtime/` + `providers/runtime/`
+
+`RuntimeManager` does everything *around* a runtime provider: resolve the provider, resolve Java,
+build the JVM args, take the per-server lock, announce the state change. `restart` lives here rather
+than on the interface because it is "stop, then start with a **freshly resolved** context".
+
+`ForegroundRuntime` ties the server to the MCTL process. Its handles map is process-local (an OS
+handle cannot be re-derived); every fact another instance needs is in `runtime/<id>.json`. Console
+output is captured to `~/.local/state/mctl/console/<id>.log` — outside the server directory, and
+shared, so any instance can tail it. Its one genuine limit: `exec` needs the child's stdin and so
+works only from the owning process (`SessionNotOwnedError`); `stop` from a foreign instance sends
+SIGTERM, which Minecraft's shutdown hook handles as a graceful save.
+
+**Locks — `core/session/lock.ts`.** `withServerLock(id, fn)` uses `open(path, "wx")`, whose
+check-and-create is atomic in the kernel. A lock owned by a dead pid is reclaimed, not respected.
+
+## The shared object graph — `core/context.ts`
+
+`createContext(providers, bus)` assembles config, paths, registry, bus, scheduler, `ServerManager`
+and `RuntimeManager`. `cli/context.ts` and `hooks/use-mctl.tsx` are its two thin adapters — that is
+the concrete mechanism behind "two front-ends, one core". The TUI's provider rebuilds the context on
+`ConfigChanged`, so a relocated `servers_dir` takes effect without a restart.
 
 ---
 
@@ -287,7 +368,12 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > above its panel and an action bar below it) instead names its route in `OWN_SCROLL` in `Router.tsx`
 > and is hosted in a plain `flexGrow` box; that host is what gives it a **definite height**, which an
 > inner `<scrollbox flexGrow={1}>` needs to resolve against. Such a page scrolls only its own panel —
-> never nest a page-level scrollbox inside the shell's.
+> never nest a page-level scrollbox inside the shell's. `OWN_SCROLL` currently holds `settings` and
+> `console` (which pins a command input under a scrolling output pane).
+
+> **Routes outside the rail.** `server`, `console`, and `create` are not in `NAV`: two of them need a
+> `serverId` param, so a bare digit shortcut could not address them. They are reached from Servers
+> (`Enter` / `c` / `n`) and from the detail page's action bar.
 
 ## Notifications — `components/Toast.tsx` + `hooks/use-toast.tsx`
 

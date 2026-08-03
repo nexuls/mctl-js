@@ -7,22 +7,15 @@
  * UI-free (no OpenTUI). It prints plain text to stdout/stderr and returns an
  * exit code; `src/index.tsx` calls `process.exit` with it.
  *
- * Only `help` and `version` are wired today. Every other command is a known
- * placeholder that reports the roadmap phase it arrives in — an honest stub, not
- * a silent no-op. Real commands (`list`, `status`, `init`, …) land per phase in
+ * Commands that do not exist yet are honest stubs reporting the roadmap phase
+ * they arrive in — never a silent no-op. Real commands land per phase in
  * `cli/commands/`.
  */
 
 /** Commands recognised by name, with the roadmap phase that implements them. */
 const PLANNED: Record<string, string> = {
-  create: "Phase 2",
-  start: "Phase 2",
-  stop: "Phase 2",
-  restart: "Phase 2",
-  logs: "Phase 2",
   backup: "Phase 4",
   restore: "Phase 4",
-  java: "Phase 2",
 };
 
 const HELP = `mctl — Minecraft server control (TUI + CLI)
@@ -31,14 +24,20 @@ Usage:
   mctl                 launch the interactive dashboard (TUI)
   mctl <command> [..]  run one command and exit (scriptable)
 
-Commands (planned):
+Commands:
   init                 first-run setup (headless)
   list                 list servers and their probed state
   status <id>          detailed status for one server
-  create <name>        create a new server
+  create <name>        create and install a new server
+  edit <id>            change a server's settings
+  delete <id>          remove a server (--files to erase its directory)
   start|stop|restart <id>
   logs <id> [-f]       stream a server's console
-  backup|restore <id>
+  exec <id> <cmd...>   send a command to a running server's console
+  java list|install    inspect or install Java runtimes
+
+Planned:
+  backup|restore <id>  (Phase 4)
 
 Flags:
   -h, --help           show this help
@@ -86,6 +85,33 @@ export async function runCli(argv: string[]): Promise<number> {
   if (command === "status") {
     const { runStatus } = await import("./commands/status.ts");
     return runStatus(argv.slice(1));
+  }
+
+  if (command === "create") {
+    const { runCreate } = await import("./commands/create.ts");
+    return runCreate(argv.slice(1));
+  }
+
+  if (command === "edit" || command === "delete") {
+    const { runEdit, runDelete } = await import("./commands/manage.ts");
+    return command === "edit" ? runEdit(argv.slice(1)) : runDelete(argv.slice(1));
+  }
+
+  if (command === "start" || command === "stop" || command === "restart") {
+    const { runStart, runStop, runRestart } = await import("./commands/start.ts");
+    if (command === "start") return runStart(argv.slice(1));
+    if (command === "stop") return runStop(argv.slice(1));
+    return runRestart(argv.slice(1));
+  }
+
+  if (command === "logs" || command === "exec") {
+    const { runLogs, runExec } = await import("./commands/logs.ts");
+    return command === "logs" ? runLogs(argv.slice(1)) : runExec(argv.slice(1));
+  }
+
+  if (command === "java") {
+    const { runJava } = await import("./commands/java.ts");
+    return runJava(argv.slice(1));
   }
 
   const phase = PLANNED[command];

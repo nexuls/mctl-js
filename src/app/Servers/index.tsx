@@ -95,7 +95,17 @@ export function Servers() {
   const open = (server: Server) => navigate("server", { serverId: server.id });
 
   useKeyboard((key) => {
+    // `n` works with an empty list — it is how the first server gets made.
+    if (key.name === "n") {
+      navigate("create");
+      return;
+    }
     if (servers.length === 0) return;
+    if (key.name === "c") {
+      const server = servers[selected];
+      if (server) navigate("console", { serverId: server.id });
+      return;
+    }
     if (key.name === "down" || key.name === "j") {
       setSelected((i) => Math.min(i + 1, servers.length - 1));
     } else if (key.name === "up" || key.name === "k") {
@@ -115,15 +125,15 @@ export function Servers() {
             ? `error: ${error}`
             : loading
               ? "reading servers…"
-              : `${servers.length} server${servers.length === 1 ? "" : "s"} ${icons.separator} ${icons.arrowUp}/${icons.arrowDown} move ${icons.separator} Enter open`
+              : `${servers.length} server${servers.length === 1 ? "" : "s"} ${icons.separator} ${icons.arrowUp}/${icons.arrowDown} move ${icons.separator} Enter open ${icons.separator} c console ${icons.separator} n new`
         }
       />
 
       {servers.length === 0 && !loading ? (
         <box flexGrow={1} justifyContent="center" alignItems="center">
           <text fg={colors.muted}>
-            No servers. Create one with{" "}
-            <span fg={colors.info}>mctl create &lt;name&gt;</span> (Phase 2).
+            No servers yet. Press <span fg={colors.info}>n</span> to create one,
+            or run <span fg={colors.info}>mctl create &lt;name&gt;</span>.
           </text>
         </box>
       ) : (

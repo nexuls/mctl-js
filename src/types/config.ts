@@ -52,8 +52,15 @@ export type CompressionKind = z.infer<typeof CompressionKind>;
 export const IconMode = z.enum(["auto", "nerd", "ascii"]);
 export type IconMode = z.infer<typeof IconMode>;
 
-/** Available Server Kinds, e.g. "vanilla", "paper", "fabric". */
-export const ServerKind = z.enum(["vanilla"]);
+/**
+ * Server kinds MCTL offers as a *default* in the setup wizard and Settings.
+ *
+ * Deliberately narrower than what a server may actually be: `mctl.json`'s `kind`
+ * is a free string resolved against the `ProviderRegistry` at runtime, so a
+ * server created by a newer MCTL still reads back. This enum only bounds the
+ * picker, and grows as each provider lands (Phase 2: vanilla, paper).
+ */
+export const ServerKind = z.enum(["vanilla", "paper"]);
 export type ServerKind = z.infer<typeof ServerKind>;
 
 /** Defaults applied to newly created servers (each is overridable per server). */

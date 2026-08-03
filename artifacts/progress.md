@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-03 (icon sets: Nerd / Unicode / ASCII)_
+_Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, install, foreground runtime)_
 
 ---
 
@@ -373,18 +373,80 @@ _Last updated: 2026-08-03 (icon sets: Nerd / Unicode / ASCII)_
     The wiring type-checks and the persist path is shared with the theme picker, but *picking a
     mode in the UI and seeing it written* is unconfirmed. Do this first next session.
 
+- **Phase 2 — server lifecycle (this session):** all four roadmap bullets landed.
+  - **Types:** `types/install.ts` (`InstallStrategy` — `directJar` today, tagged for Phase 3;
+    `LaunchSpec`; `VersionInfo`/`LoaderVersion`/`InstallRequest`), `types/java.ts`
+    (`JavaRequirement`, `JavaInstallation`, `LTS_MAJORS = [25,21,17,11,8]`), `types/provider.ts`
+    (`ServerProvider`, `RuntimeProvider`, `LaunchContext`). `MctlJson.kind` **relaxed to a free
+    string** (the registry is the authority); `ServerKind` enum grew `paper` and now bounds only the
+    settings/wizard picker. New event types: `ServerCreated/Deleted/Edited`, `JobProgress`,
+    `JobFinished`, `JavaInstalled`.
+  - **`core/registry/provider-registry.ts`** — `ProviderRegistry` (instance, not singleton) +
+    typed `UnknownProviderError`. **`providers/index.ts`** `createProviderRegistry()` is the single
+    wiring point, called by both front-ends.
+  - **Providers:** `providers/server/vanilla.ts` (Mojang manifest → per-version package JSON; sha1;
+    no server jar before 1.2.5) and `providers/server/paper.ts` (**`fill.papermc.io/v3`** — not
+    `api.papermc.io`; sha256; the only Phase-2 kind declaring a real Java *range*).
+  - **`lib/shell.ts`** (`run`, `which`) and **`lib/download.ts`** (streaming download → sibling temp
+    file, sha256+sha1 hashed in one pass, `rename` only after the digest matches, throttled progress).
+  - **`core/java/`** — `detect.ts` (probes every candidate with
+    `java -XshowSettings:properties -version`; managed/`$JAVA_HOME`/`$PATH`/system; memoized incl.
+    failures), `adoptium.ts` (Temurin resolve + download + `tar --strip-components=1` into
+    `$ROOT/java/temurin-<major>`), `java-manager.ts` (`resolveJava`, plus the **pure, exported**
+    policy `chooseInstalled`/`preferredMajor`).
+  - **`core/jobs/`** — `JobScheduler`: `run(spec, work)` → `{job, result}`, `list`/`active`/`cancel`,
+    `JobContext.step/progress/signal`. Progress local-bus only; `JobFinished` published.
+  - **`core/server/install.ts`** (`executeInstall` + `writeEulaAcceptance`) and
+    **`core/server/manager.ts`** (`ServerManager`: staged create, merge-not-replace edit, guarded
+    delete; `idFromName`; typed `ServerOperationError`).
+  - **`core/session/lock.ts`** — `withServerLock` via atomic `open(…, "wx")`, stale-owner reclaim.
+  - **`providers/runtime/foreground.ts`** + **`core/runtime/index.ts`** — spawn with `cwd` = server
+    dir, capture to `~/.local/state/mctl/console/<id>.log`, descriptor write, three-tier stop
+    (console `stop` → SIGTERM → SIGKILL), cross-instance `logs`/`stop`/`status`,
+    `SessionNotOwnedError` for foreign `exec`. `RuntimeManager` owns provider+Java resolution, the
+    lock, `heapArgs`, and `restart`.
+  - **`core/context.ts`** — `createContext(providers, bus)`, the shared object graph.
+  - **CLI:** `cli/args.ts` (flag parser), `cli/context.ts`, and commands `create`, `edit`, `delete`,
+    `start`, `stop`, `restart`, `logs`, `exec`, `java list|install`. Router rewired; only
+    `backup`/`restore` remain honest Phase-4 stubs.
+  - **TUI:** `hooks/use-mctl.tsx` (the mutating-core bridge, rebuilt on `ConfigChanged`),
+    `hooks/use-jobs.ts`, `hooks/use-console.ts`; pages `app/ServerCreate/` (form + live job progress)
+    and `app/Console/` (auto-scrolling output + command input); `app/Server/` gained a
+    focus-ringed action bar (Start/Stop/Restart/Console/Remove) and a delete confirmation `Dialog`;
+    `app/Jobs/` is now real; Servers gained `n` (new) and `c` (console). Routes `create`/`console`
+    added (not in `NAV`); `console` joined `OWN_SCROLL`.
+  - Tests (**127 total, 13 files**, +51): `core/java/java-manager.test.ts` (selection policy incl.
+    the LTS ceiling), `cli/args.test.ts` (incl. the `--java 21` / `--no-java` regression),
+    `core/session/lock.test.ts` (exclusion, stale reclaim, release-on-throw),
+    `core/server/manager.test.ts` (19 cases: create/edit/delete end-to-end against a temp `$HOME`
+    with a stub provider over `file://` — no network).
+  - **Verified for real, not just typed:** `bunx tsc --noEmit` clean; `bun test` 127/127.
+    In a sandbox `$HOME`: `mctl create --kind paper --mc 1.21.4` downloaded and sha256-verified the
+    51 MB Paper jar, wrote `mctl.json` + `eula.txt`, and registered the location; `mctl start`
+    booted Paper to `Done (16.955s)`; `mctl logs -n` tailed it; `mctl exec` **from a second
+    instance** correctly refused with `SessionNotOwnedError`; `mctl stop` **from a second instance**
+    stopped it gracefully in 7.4 s; `mctl java install 21` fetched, verified and extracted Temurin
+    21.0.12. Guards checked: duplicate id, `--files` without `--yes` (exit 2), unknown flag (exit 2),
+    `exec` on a stopped server, idempotent `stop`. Under a pty at 120×44: the create form filled and
+    submitted, painted `Resolving · paper 1.21.4` / `Writing configuration` with a progress bar,
+    toasted `Created tui-made`, and navigated to the detail page; **Start** (keyboard) launched it on
+    the *managed* Java 21, the Console page streamed live output, and **Stop** brought it down.
+
 ## In progress
 
-- (The temporary `src/app/test.tsx` toast harness is gone and `App.tsx` mounts `<AppRouter />` again.)
 - Nothing mid-implementation. All the above compiles, tests, and runs.
 
-## Next up (Phase 2)
+## Next up (Phase 3)
 
-1. `ServerProvider` + `InstallStrategy`; Vanilla and Paper (directJar) against recorded fixtures.
-2. Java resolution + Adoptium download (`lib/http.ts` gets its first real use), manual-pin prompt.
-3. Foreground runtime; console and log streaming.
-4. Create / delete / edit servers — the mutating `ServerManager` alongside the read-only
-   `core/server/discover.ts`, in both front-ends.
+1. Fabric and Quilt (`loaderJar`); Forge and NeoForge (`installer` → `argFile`/`script`) — the
+   `InstallStrategy`/`LaunchSpec` unions are tagged and `executeInstall` has an exhaustiveness guard,
+   so each is additive.
+2. Purpur, Velocity (both `directJar` — cheap once the loaders are in).
+3. **tmux runtime** (detached, re-attachable). This is what removes the foreground runtime's two
+   limitations: servers dying with the TUI, and `exec` only working from the owning process. It also
+   unblocks the `TODO(phase-3)` in `core/session/session-manager.ts` (confirm the tmux session /
+   docker container exists, not just the pid).
+4. Staged installs with **resume** (the staging dir is already per-uuid; nothing resumes yet).
 
 ## Demo / scratch
 
@@ -394,17 +456,46 @@ _Last updated: 2026-08-03 (icon sets: Nerd / Unicode / ASCII)_
 - **`Gallery.tsx` no longer exists** — the component showcase was removed; verify the UI kit by running
   the wizard (it exercises Input/Select/Toggle/Checkbox/RadioGroup/Button/Hint/FormField in anger).
 
+## Known gaps / carried forward
+
+- **The Settings → Appearance icon picker still has not been driven to completion under a pty**
+  (carried from last session; the scripted run hung and was killed). The wiring type-checks and
+  shares the theme picker's persist path, but *picking a mode in the UI and seeing `config.icons`
+  written* remains unconfirmed.
+- **The theme *catalogue* is still loaded once at startup** — adding or editing
+  `~/.config/mctl/themes/*.json` needs a restart.
+- **`mctl create` has no version picker in either front-end.** Both take a free-text version and fall
+  back to the kind's newest release. Listing versions is a network round-trip per kind and would make
+  the form unusable offline; revisit if users ask.
+- **The TUI create form does not offer a Java pin.** If nothing installed satisfies the requirement it
+  downloads a JDK inside the create job, which can be a ~200 MB step with only a progress bar to show
+  for it. The CLI has `--java <major>` / `--no-java`; the form does not.
+- **A `{pinned}` Java that is not installed is fetched silently** during create/start. That is the
+  right default, but there is no "ask first" prompt in the TUI (the `autoInstall: false` path exists
+  in `resolveJava` and is unused by the UI).
+- **`ServerProvider` implementations are not tested against recorded fixtures yet.** AGENTS.md asks
+  for this; the manager tests use a stub provider instead, and Vanilla/Paper were verified live.
+  Recording the three Paper endpoints and the two Mojang hops is the obvious next test.
+
 ## Notes for the next agent
 
-- **Do not scaffold empty phase-2+ folders** (providers, backups, network). Build per roadmap phase.
+- **Do not scaffold empty phase-3+ folders** (backups, network). Build per roadmap phase.
 - **Statelessness is non-negotiable:** never cache an authoritative server set; recompute from disk +
   `runtime/<id>.json` probes. Cross-instance sync = `fs.watch` + `events.jsonl` tail, no IPC/daemon.
 - **JSON/JSONL only** — no TOML anywhere. `mctl.json`, `config.json`, `secrets.json`, `events.jsonl`.
 - Pages live in `src/app/`, not `src/pages/`. CLI in `src/cli/`.
 - Registry + statelessness invariants live in `architecture.md` — read before touching discovery/session.
 - Verify with `bunx tsc --noEmit` (or `bun run typecheck`), `bun test`, and `bun run dev`. Tests must
-  live **inside `src/`** (a file outside it resolves a different copy of `@opentui/core`). Registry and
-  session still have no unit tests — prime candidates when Phase 2 touches them.
+  live **inside `src/`** (a file outside it resolves a different copy of `@opentui/core`). The
+  location registry itself still has no direct unit test, though `core/server/manager.test.ts` now
+  exercises it end to end.
+- **Isolating state in a test is just XDG env vars** — `lib/paths` reads them on every call, so
+  pointing `XDG_STATE_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME` at a temp dir in `beforeEach` isolates
+  the whole tree (see `core/server/manager.test.ts`, `core/session/lock.test.ts`).
+- **Driving the TUI under a pty:** prefix with `stty rows N cols M`; `script` ignores `COLUMNS`/`LINES`
+  and inherits the parent's size, silently hiding anything below the fold.
+- **Adding a provider is one file plus one line** in `providers/index.ts`. Nothing in `core/` changes.
+  `executeInstall`'s exhaustiveness guard will fail the build until the new strategy has a case.
 - **Path discipline:** never build an MCTL path by hand — call a `lib/paths.ts` helper. Never read/write
   a shared JSON file directly — go through `lib/fs.ts` (atomic) and validate with Zod.
 - Config service already exposes everything the wizard/`init` need: `writeConfig`, `writeSecrets`,

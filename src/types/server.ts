@@ -20,7 +20,7 @@
 
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { RuntimeKind, ServerKind } from "./config.ts";
+import { RuntimeKind } from "./config.ts";
 
 /** An absolute filesystem path; a relative path in state files is always a bug. */
 const AbsolutePath = z
@@ -60,8 +60,18 @@ export const MctlJson = z.looseObject({
   schemaVersion: z.number().int().positive().default(MCTL_JSON_VERSION),
   /** Human-facing server name. The id is derived from the directory name, not this. */
   name: z.string().min(1),
-  /** Server kind / provider id (`"vanilla"`, later `"paper"`, `"fabric"`, …). */
-  kind: ServerKind,
+  /**
+   * Server kind — the id of the `ServerProvider` that owns this server
+   * (`"vanilla"`, `"paper"`, later `"fabric"`, …).
+   *
+   * A free string, **not** the `ServerKind` enum, and deliberately so: the
+   * authoritative list of kinds is the runtime `ProviderRegistry`, and duplicating
+   * it in a schema would mean a server created by a newer MCTL fails to parse and
+   * shows up as *unavailable* rather than as "this build has no provider for
+   * `fabric`". An unknown kind surfaces as an `UnknownProviderError` at the
+   * moment it matters (start/install), which is a far better message.
+   */
+  kind: z.string().min(1),
   minecraftVersion: z.string().min(1),
   /** Loader version for Fabric/Forge/etc.; absent for vanilla-family servers. */
   loaderVersion: z.string().optional(),
