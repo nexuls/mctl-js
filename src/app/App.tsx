@@ -30,6 +30,7 @@ import { MctlProvider } from "../hooks/use-mctl.tsx";
 import { createProviderRegistry } from "../providers/index.ts";
 import { queryTerminalPalette } from "../hooks/use-terminal-colors.ts";
 import { installBoxClipPatch } from "../components/box-clip-patch.ts";
+import { installSelectionOptIn } from "../components/selection-opt-in.ts";
 import { SetupWizard } from "./setup/index.ts";
 import { AppRouter } from "./Router.tsx";
 
@@ -69,6 +70,13 @@ export async function renderApp(): Promise<void> {
   // around the scrollbox once scrolled. Install the fix before the first render.
   installBoxClipPatch();
 
+  // Drag-selection is opt-in: OpenTUI's text renderables are `selectable` by
+  // default and start a selection on left mouse-down, which fights with our
+  // click-to-navigate UI. This flips the default off, so only elements that pass
+  // `selectable` explicitly (the console log lines) can be selected. Must run
+  // before the first render — it re-registers the component catalogue.
+  installSelectionOptIn();
+
   // Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
   // the persisted theme id before the first paint. Front-end → core service:
   // the React tree never touches disk itself.
@@ -96,13 +104,6 @@ export async function renderApp(): Promise<void> {
     openConsoleOnError: true,
     enableMouseMovement: true,
   });
-
-  // Make everything non-selectable by default. OpenTUI text renderables are
-  // individually `selectable` and begin a drag-selection on left mouse-down,
-  // which highlights text and clashes with our click-to-navigate UI. Neutering
-  // the renderer's selection entry point disables that globally while leaving
-  // mouse clicks (onMouseDown handlers) fully intact.
-  renderer.startSelection = () => {};
 
   // Stop the event system when the renderer shuts down (Ctrl+C / quit), so
   // watchers and the tail don't outlive the UI.

@@ -556,6 +556,25 @@ delete entries that stop being true. Newest-relevant first.
     patching one copy's prototype does nothing to the other — this silently made a scratch-dir
     verification look like the patch was a no-op. First `bun test` in the repo; `test` script added.
 
+- **Drag-selection is opt-in, via a re-registered component catalogue.** OpenTUI's text-bearing
+  renderables (`text`, `code`, `markdown`, `input`, `textarea`, `ascii-font`, …) default
+  `selectable: true` (base `Renderable` is `false`), and a left mouse-down over one starts a
+  drag-selection — which highlights text and fights our click-to-navigate UI, where most labels are
+  also click targets.
+  - **Fix:** `src/components/selection-opt-in.ts` → `installSelectionOptIn()`, called in `renderApp()`
+    beside `installBoxClipPatch()`. It wraps every entry of `@opentui/react`'s `baseComponents` in a
+    subclass that, *only when the `selectable` prop was absent and the class defaulted to true*, sets
+    `this.selectable = false` after `super()`, then re-registers them with `extend()`. `<text
+    selectable>` (the server console) keeps working; everything else is inert.
+  - **Why not simpler:** `selectable` is resolved inside each renderable's own constructor as
+    `options.selectable ?? this._defaultOptions.selectable`, and `_defaultOptions` is a *class field*
+    (own property) — so it cannot be patched from the prototype. Subclassing is the only seam.
+  - **Dead end:** the earlier fix, `renderer.startSelection = () => {}`, disables selection *globally*
+    — an explicit `selectable` prop then does nothing. Don't go back to it.
+  - Catalogue components are all constructed by the reconciler as `new C(ctx, { id, ...props })`, so a
+    uniform `(ctx, options)` subclass is safe for all of them. `RenderableConstructor` resolves to the
+    *abstract* `BaseRenderable`, which TS refuses to `extend` in a class expression — narrow the base
+    to a structural `new (ctx, options) => { selectable?: boolean }` instead.
 - **Box border *sides* are `border={["top"|"right"|"bottom"|"left"]}`** — `border?: boolean |
   BorderSides[]`. There is **no** `borderTop`/`borderRight`/`borderBottom`/`borderLeft` prop (they
   fail typecheck). `borderColor` colours whichever sides are on.

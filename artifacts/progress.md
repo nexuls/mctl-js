@@ -432,6 +432,13 @@ _Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, instal
     toasted `Created tui-made`, and navigated to the detail page; **Start** (keyboard) launched it on
     the *managed* Java 21, the Console page streamed live output, and **Stop** brought it down.
 
+- **Drag-selection made opt-in (2026-08-03).** `src/components/selection-opt-in.ts` →
+  `installSelectionOptIn()`, called in `renderApp()` next to `installBoxClipPatch()`. Replaces the
+  blanket `renderer.startSelection = () => {}`, which had disabled selection everywhere including
+  where it was wanted. Now `<text selectable>` (the console log lines) selects and everything else
+  ignores drag. Verified at runtime against the real catalogue: `text` → `false` by default, `true`
+  with the prop, `false` with `selectable={false}`; `box`/`input` unaffected. `bunx tsc --noEmit` clean.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
