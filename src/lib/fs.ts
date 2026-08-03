@@ -23,7 +23,9 @@ import {
 	appendFile,
 	access,
 	statfs,
+	stat,
 } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 /** True if `path` exists and is accessible, false otherwise. Never throws. */
@@ -121,6 +123,93 @@ export async function diskFree(path: string): Promise<DiskUsage | undefined> {
 	} catch {
 		return undefined;
 	}
+}
+
+/** The result of walking a directory tree to add up what it holds. */
+export interface DirSize {
+	/** Total bytes of every regular file found. */
+	bytes: number;
+	/** Number of regular files counted. */
+	files: number;
+	/**
+	 * True when the walk stopped early at `maxEntries`, so `bytes` is a lower
+	 * bound. Callers should render it as "at least" rather than as a measurement.
+	 */
+	truncated: boolean;
+}
+
+/** Options for {@link dirSize}. */
+export interface DirSizeOptions {
+	/**
+	 * Stop after visiting this many entries and report `truncated`. A guard
+	 * against a pathological tree (a world with a million region files) turning a
+	 * cosmetic size readout into a multi-second stall.
+	 */
+	maxEntries?: number;
+	/** Subdirectory names to skip entirely, matched on the basename. */
+	exclude?: ReadonlySet<string>;
+}
+
+/**
+ * Recursively total the size of every regular file under `dir`. Returns zeroes
+ * when the directory is absent, and never throws — an unreadable subtree is
+ * skipped, because this exists to decorate a UI and must not be able to fail a
+ * page.
+ *
+ * **Symlinks are not followed** (only `isFile()` entries are added, and a link
+ * reports as neither file nor directory here), so a world symlinked onto another
+ * drive is not double-counted and a link loop cannot hang the walk. This is
+ * `du`-like, not `du -L`.
+ *
+ * Directories are walked level by level with each level read concurrently: the
+ * cost is syscall latency rather than CPU, and a serial walk of a large world
+ * directory is several times slower.
+ */
+export async function dirSize(
+	dir: string,
+	options: DirSizeOptions = {},
+): Promise<DirSize> {
+	const maxEntries = options.maxEntries ?? 200_000;
+	let bytes = 0;
+	let files = 0;
+	let seen = 0;
+	let truncated = false;
+	let level = [dir];
+
+	while (level.length > 0 && !truncated) {
+		const next: string[] = [];
+		await Promise.all(
+			level.map(async (current) => {
+				let entries: Dirent[];
+				try {
+					entries = await readdir(current, { withFileTypes: true });
+				} catch {
+					return; // Unreadable subtree: skip it rather than failing the walk.
+				}
+				for (const entry of entries) {
+					if (seen >= maxEntries) {
+						truncated = true;
+						return;
+					}
+					seen += 1;
+					const full = join(current, entry.name);
+					if (entry.isDirectory()) {
+						if (!options.exclude?.has(entry.name)) next.push(full);
+					} else if (entry.isFile()) {
+						try {
+							bytes += (await stat(full)).size;
+							files += 1;
+						} catch {
+							// Vanished between readdir and stat (a rotating log): ignore.
+						}
+					}
+				}
+			}),
+		);
+		level = next;
+	}
+
+	return { bytes, files, truncated };
 }
 
 /**

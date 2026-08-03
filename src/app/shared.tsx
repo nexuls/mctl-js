@@ -7,8 +7,11 @@
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../hooks/use-theme.tsx";
 import type { ThemeColors } from "../types/theme.ts";
-import type { ServerState } from "../types/server.ts";
+import type { Server, ServerState } from "../types/server.ts";
 import type { IconName } from "../types/icons.ts";
+import type { ServerInsight } from "../core/server/inspect.ts";
+import type { ProcessUsage } from "../lib/proc.ts";
+import { formatBytes } from "../lib/format.ts";
 
 /** The accent colour a server's run state should read in (badge, dot, label). */
 export function serverStateColor(
@@ -46,6 +49,56 @@ export function serverStateIcon(state: ServerState): IconName {
 		default:
 			return "unknownState";
 	}
+}
+
+/**
+ * How long a server has been up, or `undefined` when it is not running.
+ *
+ * Derived from the session descriptor's `startedAt` at render time rather than
+ * being carried on the view model: the number changes every second with no event
+ * behind it, so the only place it can be correct is where it is drawn.
+ */
+export function uptimeOf(server: Server): number | undefined {
+	if (!server.session) return undefined;
+	const started = Date.parse(server.session.startedAt);
+	return Number.isFinite(started) ? Date.now() - started : undefined;
+}
+
+/** CPU share as a percentage of one core, e.g. `"212%"`. */
+export function cpuText(usage: ProcessUsage | undefined, empty: string): string {
+	return usage ? `${Math.round(usage.cpuPercent)}%` : empty;
+}
+
+/** Resident memory, e.g. `"1.8 GB"`. */
+export function memoryText(
+	usage: ProcessUsage | undefined,
+	empty: string,
+): string {
+	return usage ? formatBytes(usage.rssBytes) : empty;
+}
+
+/**
+ * Online / maximum players, e.g. `"3/20"`.
+ *
+ * The online count only exists while the server answers a list ping, so a
+ * stopped (or still-booting) server shows its configured cap alone — `"–/20"`
+ * says "twenty slots, nobody home" where `"0/20"` would claim a live reading.
+ */
+export function playersText(
+	insight: ServerInsight | undefined,
+	empty: string,
+): string {
+	if (insight?.status) {
+		return `${insight.status.playersOnline}/${insight.status.playersMax}`;
+	}
+	const max = insight?.properties?.maxPlayers;
+	return max === undefined ? empty : `${empty}/${max}`;
+}
+
+/** A boolean setting as a short, colour-free label. */
+export function yesNo(value: boolean | undefined, empty: string): string {
+	if (value === undefined) return empty;
+	return value ? "yes" : "no";
 }
 
 /** Props for {@link PageHeader}. */

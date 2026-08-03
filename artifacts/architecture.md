@@ -185,6 +185,21 @@ so one bad server never breaks a listing.
 
 ---
 
+**Inspection — `core/server/inspect.ts`.** The read-only twin of discovery: where `discover.ts`
+answers "what servers exist and are they up", inspection answers "and what are they *doing*".
+`inspectServer(server)` composes Minecraft's own `server.properties` (`core/server/properties.ts`),
+the player rosters, the `mods/`/`plugins/` jar counts, a process sample (`lib/proc.ts`) and a live
+Server List Ping (`core/server/ping.ts`); `measureSize(server)` walks the directory tree
+(`lib/fs.dirSize`). Two calls, not one, because their costs differ by orders of magnitude — the UI
+polls the first every few seconds and the second every minute. Nothing is cached, and every field is
+optional: a server that has never booted has no `server.properties`, a stopped one no process, a
+booting one no ping.
+
+The list ping is the only way to learn a **live player count** without RCON or a mod — it is the
+protocol the vanilla multiplayer screen speaks, so it needs no credentials and works for every
+server kind. TPS/MSPT, per-server network traffic, and JVM heap occupancy are deliberately absent:
+none is obtainable from outside the JVM, and the UI says so rather than showing a guess.
+
 ## Provider system — `core/registry/provider-registry.ts`
 
 Dynamically registered modules, not compile-time wiring. `ProviderRegistry` is an **instance**, not a
@@ -425,19 +440,46 @@ path overrides → defaults → backup policy → network → review & write. Wr
 Zod schema so everything but `root` is editable later; `configVersion` drives forward migration.
 `mctl init` is the headless equivalent, same fields as flags, identical `config.json` output.
 
+## Tables — `components/Table.tsx`
+
+The shared column-aligned list, pure-UI like everything else in `components/`. **A terminal row
+cannot reflow**, so responsiveness here is column *dropping*, not wrapping: `layoutColumns` (pure and
+exported, so the rules are testable without a renderer) resolves natural widths, sheds the
+lowest-`priority` columns until the rest fit, then hands the leftover to the `flex` columns —
+iteratively, so a column that hits its `max` returns its share instead of leaving a hole. The
+invariant: **resolved widths plus gaps never exceed the available width**, at any width. A `max` on
+a flexible column matters as much as a `min`; without one, a single column absorbs a wide terminal's
+whole slack and the row reads as padding.
+
+`scrollRows` keeps the header pinned above a scrolling body, for a page that owns its scrolling; it
+reserves one cell for the scrollbar (matched by the header's padding) because a scrollbox draws its
+scrollbar inside its own width.
+
 ## Dashboard — `app/Dashboard/`
 
 The landing screen **and** the fleet list: the former Servers page was folded into it (2026-08-03), so
 there is one place that answers "what do I have and what is it doing". Layout is summary tiles →
-column header → one row per server, and the **selected row expands in place** beneath itself with the
-fields the table has no column for (name, loader, java, memory, network, path) plus the live session
-(pid/port/startedAt) when the server is running. Expansion follows selection rather than being a
-separate toggle — there is only ever one open panel, so the page cannot become a wall of detail.
+`Table` → one row per server, and the **selected row expands in place** beneath itself. Its route is
+in `OWN_SCROLL`, so the tiles and the column header stay pinned while only the rows scroll.
+
+The split with the Server page is deliberate: **the dashboard carries what changes** (state, players,
+CPU, memory, uptime, size, port) and the detail page carries the long tail. Columns and tiles both
+adapt to the terminal width — the table by dropping columns in priority order, the tiles by shedding
+the resource totals and shortening a label. Expansion follows selection rather than being a separate
+toggle — there is only ever one open panel, so the page cannot become a wall of detail.
 
 `Enter` opens the full detail page (`server`), `c` the console, `n` the create form; ↑/↓ or j/k move.
 A mouse click selects an unselected row and opens an already-selected one, so the pointer and the
 keyboard mean the same thing. Recent activity was dropped: the event feed read as debug output next
 to the server table, and `events.jsonl` is a sync mechanism, not a user-facing log.
+
+## Server detail — `app/Server/`
+
+The exhaustive view of one server, and the owner of its lifecycle actions. Six panels — Status,
+Resources, Players, World & rules, Storage & content, Configuration — in two columns when the
+terminal can carry them and one when it cannot. Everything beyond `mctl.json` comes from
+`useServerInsight`, which polls `core/server/inspect.ts`. The Resources panel names TPS/MSPT as
+unavailable rather than omitting them: a gap where a number is expected reads as a bug.
 
 ## Settings — `app/Settings/`
 

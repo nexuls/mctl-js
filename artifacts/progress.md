@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-03 (negative/terminal-relative dimensions; Dashboard/Servers merge; Phase 2)_
+_Last updated: 2026-08-03 (server inspection + responsive Table; richer Dashboard/Server pages)_
 
 ---
 
@@ -478,6 +478,58 @@ _Last updated: 2026-08-03 (negative/terminal-relative dimensions; Dashboard/Serv
     The real app driven under a pty at 100×30 in a sandbox `$HOME` renders the rail, tiles and table
     with no stderr.
 
+- **Server inspection + a responsive Table; richer Dashboard and Server pages (this session, user
+  request).** "Make the table look good (full width), make it responsive, add more columns and info."
+  - **New core read path — `src/core/server/inspect.ts`** (read-only twin of `discover.ts`):
+    `inspectServer(server)` (cheap tier: `server.properties`, roster JSONs, `mods/`+`plugins/` jar
+    counts, process sample, list ping) and `measureSize(server)` (expensive tier: the directory
+    walk). Nothing cached; every field optional.
+    - `src/core/server/properties.ts` — Java `.properties` parser + coercion to a typed
+      `ServerProperties` with Minecraft's documented defaults (numeric pre-1.13 gamemode/difficulty,
+      `\uXXXX` escapes, line continuation, hardcore's effective difficulty, `§` codes stripped for
+      display and kept in `raw`).
+    - `src/core/server/ping.ts` — **Server List Ping** (1.7+ JSON status): varint framing, handshake
+      → status request → JSON response, chat-component MOTD flattening, 2 s timeout. The only way to
+      a live player count without RCON.
+    - `src/lib/proc.ts` — `sampleUsage(pid)`: two procfs snapshots ~220 ms apart for a real CPU rate,
+      RSS, thread count; `ps` fallback off Linux (flagged as a lifetime average).
+    - `src/lib/fs.ts` — `dirSize(dir, {maxEntries, exclude})`: level-by-level concurrent walk, does
+      not follow symlinks, never throws, reports `truncated`.
+    - `src/lib/net.ts` — `lanAddress()` for the suggested join address.
+    - `src/lib/format.ts` — `formatDuration`, `parseMemorySize`.
+  - **`src/hooks/use-server-insights.ts`** — `useServerInsights(servers)` / `useServerInsight(server)`:
+    self-chaining polls (4 s cheap, 60 s sizes; 2 s on the detail page) keyed on a server
+    id/state/pid signature, holding a derived projection only.
+  - **`src/components/Table.tsx`** (+ barrel, + `use-box-width.ts` extracted from `Form.tsx`) — the
+    responsive table: pure `layoutColumns` (priority dropping → iterative flex distribution with
+    `max` caps → last-resort shedding), `fitCell`, selection, click-to-select/activate, an expanded
+    row slot, and `scrollRows` with a reserved scrollbar cell.
+  - **Dashboard rewritten** — 4–7 responsive stat tiles (servers/running/players/cpu/memory/on
+    disk/unavailable-when-nonzero) and a full-width table of ID, STATE, PLAYERS, CPU, MEM, UPTIME,
+    KIND, MC, PORT, SIZE, RUNTIME, JAVA, MOTD, shedding columns as the terminal narrows. The
+    expanded row panel now has three groups (Server / Live / World) that stack when narrow. Route
+    added to `OWN_SCROLL` in `Router.tsx`.
+  - **Server page rewritten** — six panels (Status, Resources with CPU/memory meters, Players with
+    the online sample and rosters, World & rules with the full `server.properties` read, Storage &
+    content, Configuration), two columns at ≥96 cells and one below. TPS/MSPT/network traffic/heap
+    occupancy are named as unavailable rather than omitted.
+  - Tests (**182 total, 19 files**, +48): `components/Table.test.ts` (the never-overflow invariant at
+    every width 1–200, drop order, `max` capping, `fitCell` truncation incl. the multi-cell ASCII
+    ellipsis), `core/server/ping.test.ts` (**driven against a real TCP server** speaking the
+    protocol: decode, segmented response, no listener, immediate hang-up, garbage, timeout),
+    `core/server/properties.test.ts`, `lib/format.test.ts`, `lib/fs.test.ts` (symlinks, truncation,
+    exclusions).
+  - **Two real defects found by those tests and fixed:** the ping never resolved when a peer hung up
+    without replying (needed an `end` listener — see `memory.md`), and `layoutColumns` could return a
+    row wider than the terminal when only required columns were left.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 182/182; and driven under **tmux** at 140×44,
+    140×32, 96×26, 90×30, 70×30 and 62×24 against a sandbox `$HOME` holding three fabricated servers
+    (one registered-but-missing) plus a stand-in "running" server — a live pid that answers a real
+    list ping on 25565. Confirmed on screen: players `3/40` with names, CPU 5% of 8 cores, RSS
+    against the 4G heap, uptime, 1 ms latency, advertised version, mods/plugins/datapacks counts,
+    world vs total size, the full rules panel, columns dropping in priority order as the terminal
+    narrowed, and header/row alignment holding once the scrollbar appeared.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
@@ -503,6 +555,16 @@ _Last updated: 2026-08-03 (negative/terminal-relative dimensions; Dashboard/Serv
   the wizard (it exercises Input/Select/Toggle/Checkbox/RadioGroup/Button/Hint/FormField in anger).
 
 ## Known gaps / carried forward
+
+- **TPS / MSPT, per-server network traffic, and JVM heap occupancy are still unavailable** and are
+  labelled as such in the Resources panel. TPS needs an RCON client (Phase 4/5) — that is the single
+  highest-value addition to the Server page once RCON lands, and `server.properties` already tells
+  us whether RCON is enabled and on which port.
+- **The disk walk has no cross-instance sharing or cache.** Every open TUI re-walks every server
+  directory once a minute. Fine for a handful of servers; if it ever bites, the answer is a cached
+  measurement under `~/.cache/mctl/` with an mtime check, not a longer interval.
+- **`ServerProvider` fixtures still absent** (below) — the new `ping.ts` *is* tested against a real
+  socket, which is the pattern to copy for them.
 
 - **The Settings → Appearance icon picker still has not been driven to completion under a pty**
   (carried from last session; the scripted run hung and was killed). The wiring type-checks and

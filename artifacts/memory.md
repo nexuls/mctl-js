@@ -5,6 +5,71 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Server inspection + responsive Table (2026-08-03, user request)
+
+- **Everything a server "is doing" now comes from `core/server/inspect.ts`**, the read-only twin of
+  `discover.ts`: `inspectServer(server)` (cheap tier) and `measureSize(server)` (expensive tier).
+  Sources: `server.properties`, the four roster JSONs, `mods/`+`plugins/` jar counts, a procfs
+  sample, and a **Server List Ping**. Nothing cached; re-derived per call like everything else.
+  - **The tiers are split because their costs differ by orders of magnitude.** Cheap ≈ 250 ms
+    (dominated by the CPU sample, below); the directory walk is thousands of `stat`s. The hook polls
+    them at 4 s and 60 s respectively.
+- **Live player count comes from the Minecraft Server List Ping, not RCON** (`core/server/ping.ts`).
+  It is the protocol the vanilla multiplayer screen uses, so it needs no op, no credentials, and no
+  config, and it works for every server kind. 1.7+ JSON status path only; a pre-1.7 server just
+  drops the handshake and reports as "not responding".
+  - **`socket.on("end")` is load-bearing, not belt-and-braces.** With a `data` listener attached the
+    socket is in flowing mode, and a peer that sends FIN without replying leaves it half-open —
+    `"close"` does not fire until the timeout, so listening for `close` alone stalls every probe of a
+    booting server by the full 2 s. Found by the test that hangs up immediately.
+  - MOTD arrives as a bare string, `{text}`, or a `{text, extra:[…]}` tree; all three are flattened,
+    and legacy `§x` codes are stripped (they render as mojibake in a terminal). `server.properties`
+    strips them too, but keeps the original in `properties.raw`.
+- **CPU% is sampled twice ~220 ms apart** (`lib/proc.ts`), because a single cumulative
+  `/proc/<pid>/stat` reading can only yield a *lifetime average* — useless on a server up for hours,
+  which is exactly when you look. `/proc/<pid>/stat`'s fields are split from after the **last** `)`
+  (the comm field can contain spaces and parens). Non-Linux falls back to `ps -o rss=,%cpu=`, which
+  *is* a lifetime average — hence the `cpuIsLifetimeAverage` flag. On Linux an unreadable
+  `/proc/<pid>` means "dead", so it does **not** fall through to `ps` (that spawned a child per
+  stopped server).
+- **What is deliberately NOT shown, and why:** TPS/MSPT (needs RCON `/tps` or a mod), per-server
+  network traffic (the kernel exposes no per-process socket byte counters), and JVM heap
+  *occupancy* (needs JMX). The Resources panel says so in a row rather than leaving a gap — a
+  mysterious absence reads as a bug. `memory` is RSS against the *configured* heap.
+- **`components/Table.tsx` is the new responsive table** and the first user of `layoutColumns`, which
+  is pure and exported. **A terminal row cannot reflow**, so responsiveness is column *dropping*:
+  natural widths → drop by `priority` (lowest first, rightmost among equals, `required` never) →
+  distribute the leftover to `flex` columns, iteratively so a column hitting its `max` hands its
+  share back → last resort, shed from the right until even one cell per column fits.
+  - **The invariant the tests pin: the widths plus gaps never exceed the available width**, at every
+    width from 1 to 200. A row that overflows by one cell wraps and destroys the alignment.
+  - **`max` on a flex column is not cosmetic.** Without it the id column ate every spare cell on a
+    140-wide terminal and the row read as one name in a field of whitespace. The Dashboard caps id
+    at 24 and gives the real slack to a low-priority `motd` column, so a wide terminal shows more
+    information rather than more padding.
+  - **A `scrollRows` table must reserve a cell for the scrollbar** (`SCROLLBAR_RESERVE`, matched by
+    the header's `paddingRight`). The scrollbox draws it *inside* its own width, so without the
+    reserve the rows sit one cell left of the header — and only once the list outgrows the viewport,
+    i.e. a misalignment that appears out of nowhere.
+- **`flexGrow`/`flexBasis` share the parent's MAIN axis.** The three groups in the Dashboard's
+  expanded panel carry them only when laid out as a row; keeping them in the stacked (column) layout
+  made the groups fight over the panel's *height* and rendered as **overlapping text**. `DetailGroup`
+  takes a `columned` prop for exactly this.
+- **`useBoxWidth` moved out of `Form.tsx` into `components/use-box-width.ts`** (Table needs it too).
+  Same rule as before: attach the ref on every render path, never gate the measured element behind
+  the branch the measurement decides.
+- **`dashboard` joined `OWN_SCROLL`** so the tiles and the column header stay pinned while the rows
+  scroll. A table whose header scrolls away is unreadable past one screen of servers.
+- Dashboard tiles: the `unavailable` tile is rendered **only when non-zero** (it is 0 for every
+  healthy fleet and cost a tile to say nothing), the resource tiles drop below 112 cells, and its
+  label shortens to `missing` below 76 — measured thresholds, from the width at which the label
+  wraps and grows the whole strip by a row.
+- The players tile counts slots of **responding** servers only; summing every stopped server's
+  `max-players` advertised a fleet capacity nobody could join.
+- **`formatDuration` caps at two units and drops the hours past 100 days** — nine cells would not fit
+  the 8-cell uptime column. Column widths are a real constraint on the humanizers, and the test
+  asserts it.
+
 ## Dashboard absorbed the Servers screen (2026-08-03, user request)
 
 - **There is no Servers page any more.** `src/app/Servers/` is deleted and the `servers` route is gone

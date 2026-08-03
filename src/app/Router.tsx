@@ -54,6 +54,10 @@ const OWN_SCROLL: ReadonlySet<RouteId> = new Set<RouteId>([
 	// The console pins its command input below a scrolling output pane, exactly
 	// the Settings shape: chrome that must not scroll away.
 	"console",
+	// The dashboard pins its summary tiles and the server table's column header
+	// above the scrolling rows — a table whose header scrolls away is unreadable
+	// the moment the list is longer than the screen.
+	"dashboard",
 ]);
 
 /** The active page component for a route. */

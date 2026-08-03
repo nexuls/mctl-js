@@ -30,6 +30,16 @@ export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
 export { ScrollBox, type ScrollBoxProps } from "./ScrollBox.tsx";
 export {
+	Table,
+	type TableProps,
+	type TableColumn,
+	type TableCell,
+	type ResolvedColumn,
+	layoutColumns,
+	fitCell,
+} from "./Table.tsx";
+export { useBoxWidth } from "./use-box-width.ts";
+export {
 	ToastCard,
 	type ToastCardProps,
 	ToastViewport,
