@@ -110,7 +110,8 @@ export function layoutColumns<T>(
 	const natural = (c: TableColumn<T>) => c.width ?? c.min ?? c.header.length;
 	const kept = [...columns];
 	const totalFor = (list: TableColumn<T>[]) =>
-		list.reduce((sum, c) => sum + natural(c), 0) + gap * Math.max(0, list.length - 1);
+		list.reduce((sum, c) => sum + natural(c), 0) +
+		gap * Math.max(0, list.length - 1);
 
 	// Pass 2 — drop, least important first. Scanning right-to-left on equal
 	// priority means a table listing "id, kind, mc, players" sheds "players"
@@ -136,10 +137,7 @@ export function layoutColumns<T>(
 	// before any content. Shed from the right (the least significant end) until
 	// the minimum footprint fits, `required` included, because a row that spills
 	// past the viewport is worse than a missing column.
-	while (
-		kept.length > 1 &&
-		kept.length + gap * (kept.length - 1) > available
-	) {
+	while (kept.length > 1 && kept.length + gap * (kept.length - 1) > available) {
 		kept.pop();
 	}
 
@@ -295,7 +293,7 @@ export function Table<T>({
 	// The ref is attached on every render path (there is only one), so the
 	// measurement can never be gated behind the branch it decides — the trap that
 	// once froze `Select` into a dropdown forever.
-	const outer = width ?? (measured || terminalWidth);
+	const outer = (width ?? (measured || terminalWidth)) - 1;
 	// A scrollbox draws its scrollbar *inside* its own width, so the rows would
 	// be one cell narrower than the header — and only once the list grew past the
 	// viewport, which is a misalignment that appears out of nowhere. The cell is
@@ -310,10 +308,11 @@ export function Table<T>({
 				const key = keyOf(row);
 				const selected = key === selectedKey;
 				return (
-					<box key={key} flexDirection="column" flexShrink={0}>
+					<box key={key} flexDirection="column" flexShrink={0} marginBottom={1}>
 						<box
 							flexDirection="row"
 							gap={gap}
+							paddingX={1}
 							backgroundColor={
 								selected ? alpha(colors.primary, 0.18) : undefined
 							}
@@ -357,12 +356,13 @@ export function Table<T>({
 					border={["bottom"]}
 					borderColor={colors.border}
 					flexShrink={0}
-					paddingRight={scrollRows ? SCROLLBAR_RESERVE : 0}
+					paddingX={1}
+					paddingRight={scrollRows ? SCROLLBAR_RESERVE : 1}
 				>
 					{resolved.map(({ column, width: cellWidth }) => (
 						<text
 							key={column.id}
-							fg={colors.secondary}
+							fg={colors.primary}
 							attributes={TextAttributes.BOLD}
 						>
 							{fitCell(

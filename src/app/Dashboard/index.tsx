@@ -29,9 +29,8 @@ import { useRouter } from "../../hooks/use-router.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import type { Server } from "../../types/server.ts";
 import type { ServerInsight, ServerSize } from "../../core/server/inspect.ts";
-import { Table, type TableColumn } from "../../components/index.ts";
+import { Hint, Table, type TableColumn } from "../../components/index.ts";
 import { formatBytes, formatDuration } from "../../lib/format.ts";
-import { alpha } from "../../lib/colors.ts";
 import {
 	cpuText,
 	memoryText,
@@ -41,6 +40,7 @@ import {
 	uptimeOf,
 	yesNo,
 } from "../shared.tsx";
+import { alpha } from "../../lib/colors.ts";
 
 /**
  * Terminal width below which the summary strip sheds its resource totals and
@@ -237,10 +237,10 @@ function ServerDetails({
 		<box
 			flexDirection="column"
 			marginLeft={2}
-			marginBottom={1}
-			paddingX={1}
+			padding={1}
 			border={["left"]}
 			borderColor={colors.primary}
+			backgroundColor={alpha(colors.primary, 0.18)}
 		>
 			<box flexDirection={stacked ? "column" : "row"} gap={stacked ? 0 : 3}>
 				<DetailGroup title="Server" columned={!stacked}>
@@ -249,6 +249,17 @@ function ServerDetails({
 					<Detail label="java" value={javaLabel(server, empty)} />
 					<Detail label="heap" value={server.memory} />
 					<Detail label="runtime" value={server.runtime} />
+				</DetailGroup>
+
+				<DetailGroup title="World" columned={!stacked}>
+					<Detail
+						label="motd"
+						value={insight?.status?.motd ?? properties?.motd ?? empty}
+					/>
+					<Detail label="mode" value={properties?.gamemode ?? empty} />
+					<Detail label="difficulty" value={properties?.difficulty ?? empty} />
+					<Detail label="pvp" value={yesNo(properties?.pvp, empty)} />
+					<Detail label="content" value={contentLabel(insight, size, empty)} />
 				</DetailGroup>
 
 				<DetailGroup title="Live" columned={!stacked}>
@@ -266,9 +277,7 @@ function ServerDetails({
 							<Detail
 								label="latency"
 								value={
-									insight?.status
-										? `${insight.status.latencyMs} ms`
-										: empty
+									insight?.status ? `${insight.status.latencyMs} ms` : empty
 								}
 							/>
 							<Detail
@@ -284,28 +293,13 @@ function ServerDetails({
 						<text fg={colors.muted}>not running</text>
 					)}
 				</DetailGroup>
-
-				<DetailGroup title="World" columned={!stacked}>
-					<Detail label="motd" value={insight?.status?.motd ?? properties?.motd ?? empty} />
-					<Detail label="mode" value={properties?.gamemode ?? empty} />
-					<Detail
-						label="difficulty"
-						value={properties?.difficulty ?? empty}
-					/>
-					<Detail label="pvp" value={yesNo(properties?.pvp, empty)} />
-					<Detail
-						label="content"
-						value={contentLabel(insight, size, empty)}
-					/>
-				</DetailGroup>
 			</box>
 
 			<box marginTop={1} flexDirection="column">
 				<Detail label="path" value={server.path} />
-				<text fg={colors.muted}>
+				<text fg={colors.muted} alignSelf="flex-end">
 					<span fg={colors.info}>Enter</span> full details {icons.separator}{" "}
-					<span fg={colors.info}>c</span> console {icons.separator}{" "}
-					<span fg={colors.info}>n</span> new server
+					<span fg={colors.info}>c</span> console
 				</text>
 			</box>
 		</box>
@@ -400,7 +394,10 @@ export function Dashboard() {
 			required: true,
 			render: (server) => ({
 				text: server.id,
-				fg: servers[selected]?.id === server.id ? colors.primary : colors.foreground,
+				fg:
+					servers[selected]?.id === server.id
+						? colors.primary
+						: colors.foreground,
 				attributes:
 					servers[selected]?.id === server.id ? TextAttributes.BOLD : undefined,
 			}),
@@ -410,7 +407,7 @@ export function Dashboard() {
 			// narrower and the one state that most needs reading gets an ellipsis.
 			id: "state",
 			header: "state",
-			width: 13,
+			width: 10,
 			required: true,
 			render: (server) => ({
 				// State reads as shape *and* colour, so it survives a colour-blind eye.
@@ -528,37 +525,20 @@ export function Dashboard() {
 				fg: colors.muted,
 			}),
 		},
-		{
-			// The slack column: it takes whatever room is left over on a wide
-			// terminal and shows something worth reading there instead of padding.
-			// First to be dropped, since every other column is a fact the row would
-			// otherwise not carry at all.
-			id: "motd",
-			header: "motd",
-			min: 12,
-			flex: 4,
-			priority: 5,
-			render: (server) => {
-				const insight = insights[server.id];
-				return {
-					text: insight?.status?.motd || insight?.properties?.motd || empty,
-					fg: colors.muted,
-				};
-			},
-		},
 	];
 
 	return (
-		<box flexDirection="column" flexGrow={1} paddingX={1}>
-			<box flexDirection="row" gap={1} marginBottom={1} flexShrink={0}>
+		<box flexDirection="column" flexGrow={1}>
+			<box
+				flexDirection="row"
+				gap={1}
+				marginBottom={1}
+				flexShrink={0}
+				paddingX={1}
+			>
 				<StatTile
-					label="servers"
-					value={String(summary.total)}
-					color={colors.primary}
-				/>
-				<StatTile
-					label="running"
-					value={String(summary.running)}
+					label="servers running"
+					value={`${String(summary.running)}/${String(summary.total)}`}
 					color={summary.running > 0 ? colors.success : colors.muted}
 				/>
 				<StatTile
@@ -566,15 +546,15 @@ export function Dashboard() {
 					value={`${summary.playersOnline}/${summary.playersMax}`}
 					color={summary.playersOnline > 0 ? colors.success : colors.muted}
 				/>
+				<StatTile
+					label="cpu"
+					value={`${Math.round(summary.cpuPercent)}%`}
+					color={colors.info}
+				/>
 				{narrow ? null : (
 					<>
 						{/* A percentage of one core, as `top` reports it — a four-core
 						    machine can legitimately read 400%. */}
-						<StatTile
-							label="cpu"
-							value={`${Math.round(summary.cpuPercent)}%`}
-							color={colors.info}
-						/>
 						<StatTile
 							label="memory"
 							value={formatBytes(summary.memoryBytes)}
@@ -604,6 +584,7 @@ export function Dashboard() {
 				columns={columns}
 				rows={servers}
 				keyOf={(server) => server.id}
+				gap={2}
 				selectedKey={servers[selected]?.id}
 				onSelect={(_, index) => setSelected(index)}
 				onActivate={(server) => open(server)}
@@ -638,14 +619,20 @@ export function Dashboard() {
 				}
 			/>
 
-			<box flexShrink={0}>
-				<text fg={colors.muted}>
-					{" "}
-					<span fg={colors.info}>↑↓/jk</span> move {icons.separator}{" "}
-					<span fg={colors.info}>Enter</span> details {icons.separator}{" "}
-					<span fg={colors.info}>c</span> console {icons.separator}{" "}
-					<span fg={colors.info}>n</span> new
-				</text>
+			<box
+				flexShrink={0}
+				border={["top"]}
+				borderColor={colors.border}
+				paddingX={1}
+			>
+				<Hint
+					items={[
+						{ keys: "↑↓/jk", label: "move" },
+						{ keys: "Enter", label: "details" },
+						{ keys: "c", label: "console" },
+						{ keys: "n", label: "new server" },
+					]}
+				/>
 			</box>
 		</box>
 	);

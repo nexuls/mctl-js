@@ -70,7 +70,7 @@ const nord: Theme = {
 			foreground: "#eceff4", // nord6
 			surface: "#3b4252", // nord1
 			border: "#434c5e", // nord2
-			muted: "#4c566a", // nord3
+			muted: "#708abd", // nord3
 			primary: "#88c0d0", // nord8
 			secondary: "#b48ead", // nord15
 			success: "#a3be8c", // nord14
