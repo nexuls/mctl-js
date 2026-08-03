@@ -19,37 +19,37 @@ import type { Theme } from "../../types/theme.ts";
  * theme (canvas #ffffff, accent #0969da, …).
  */
 const github: Theme = {
-  id: "github",
-  name: "GitHub",
-  source: "builtin",
-  colors: {
-    dark: {
-      background: "#0d1117",
-      foreground: "#e6edf3",
-      surface: "#161b22",
-      border: "#30363d",
-      muted: "#8b949e",
-      primary: "#58a6ff",
-      secondary: "#bc8cff",
-      success: "#3fb950",
-      warning: "#d29922",
-      error: "#f85149",
-      info: "#79c0ff",
-    },
-    light: {
-      background: "#ffffff",
-      foreground: "#1f2328",
-      surface: "#f6f8fa",
-      border: "#d0d7de",
-      muted: "#59636e",
-      primary: "#0969da",
-      secondary: "#8250df",
-      success: "#1a7f37",
-      warning: "#9a6700",
-      error: "#cf222e",
-      info: "#0550ae",
-    },
-  },
+	id: "github",
+	name: "GitHub",
+	source: "builtin",
+	colors: {
+		dark: {
+			background: "#0d1117",
+			foreground: "#e6edf3",
+			surface: "#161b22",
+			border: "#30363d",
+			muted: "#8b949e",
+			primary: "#58a6ff",
+			secondary: "#bc8cff",
+			success: "#3fb950",
+			warning: "#d29922",
+			error: "#f85149",
+			info: "#79c0ff",
+		},
+		light: {
+			background: "#ffffff",
+			foreground: "#1f2328",
+			surface: "#f6f8fa",
+			border: "#d0d7de",
+			muted: "#59636e",
+			primary: "#0969da",
+			secondary: "#8250df",
+			success: "#1a7f37",
+			warning: "#9a6700",
+			error: "#cf222e",
+			info: "#0550ae",
+		},
+	},
 };
 
 /**
@@ -61,37 +61,37 @@ const github: Theme = {
  * darker Frost blues (nord9/10) so accents stay legible on a pale background.
  */
 const nord: Theme = {
-  id: "nord",
-  name: "Nord",
-  source: "builtin",
-  colors: {
-    dark: {
-      background: "#2e3440", // nord0
-      foreground: "#eceff4", // nord6
-      surface: "#3b4252", // nord1
-      border: "#434c5e", // nord2
-      muted: "#4c566a", // nord3
-      primary: "#88c0d0", // nord8
-      secondary: "#b48ead", // nord15
-      success: "#a3be8c", // nord14
-      warning: "#ebcb8b", // nord13
-      error: "#bf616a", // nord11
-      info: "#81a1c1", // nord9
-    },
-    light: {
-      background: "#eceff4", // nord6
-      foreground: "#2e3440", // nord0
-      surface: "#e5e9f0", // nord5
-      border: "#d8dee9", // nord4
-      muted: "#4c566a", // nord3
-      primary: "#5e81ac", // nord10 — darker Frost, legible on light
-      secondary: "#b48ead", // nord15
-      success: "#a3be8c", // nord14
-      warning: "#ebcb8b", // nord13
-      error: "#bf616a", // nord11
-      info: "#81a1c1", // nord9
-    },
-  },
+	id: "nord",
+	name: "Nord",
+	source: "builtin",
+	colors: {
+		dark: {
+			background: "#2e3440", // nord0
+			foreground: "#eceff4", // nord6
+			surface: "#3b4252", // nord1
+			border: "#434c5e", // nord2
+			muted: "#4c566a", // nord3
+			primary: "#88c0d0", // nord8
+			secondary: "#b48ead", // nord15
+			success: "#a3be8c", // nord14
+			warning: "#ebcb8b", // nord13
+			error: "#bf616a", // nord11
+			info: "#81a1c1", // nord9
+		},
+		light: {
+			background: "#eceff4", // nord6
+			foreground: "#2e3440", // nord0
+			surface: "#e5e9f0", // nord5
+			border: "#d8dee9", // nord4
+			muted: "#4c566a", // nord3
+			primary: "#5e81ac", // nord10 — darker Frost, legible on light
+			secondary: "#b48ead", // nord15
+			success: "#a3be8c", // nord14
+			warning: "#ebcb8b", // nord13
+			error: "#bf616a", // nord11
+			info: "#81a1c1", // nord9
+		},
+	},
 };
 
 /**
@@ -99,7 +99,7 @@ const nord: Theme = {
  * this is the single place built-ins are declared.
  */
 export const BUILTIN_THEMES: ReadonlyMap<string, Theme> = new Map(
-  [github, nord].map((t) => [t.id, t]),
+	[github, nord].map((t) => [t.id, t]),
 );
 
 /**

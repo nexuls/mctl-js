@@ -24,9 +24,9 @@ import { RuntimeKind } from "./config.ts";
 
 /** An absolute filesystem path; a relative path in state files is always a bug. */
 const AbsolutePath = z
-  .string()
-  .min(1)
-  .refine(isAbsolute, { message: "must be an absolute path" });
+	.string()
+	.min(1)
+	.refine(isAbsolute, { message: "must be an absolute path" });
 
 /**
  * Current `mctl.json` schema version. Bumped when the on-disk shape changes in a
@@ -41,8 +41,8 @@ export const MCTL_JSON_VERSION = 1;
  * must never be re-derived. Mirrors `plan.md` § Core Objects.
  */
 export const JavaPin = z.union([
-  z.number().int().positive(),
-  z.object({ pinned: z.number().int().positive() }),
+	z.number().int().positive(),
+	z.object({ pinned: z.number().int().positive() }),
 ]);
 export type JavaPin = z.infer<typeof JavaPin>;
 
@@ -57,43 +57,43 @@ export type JavaPin = z.infer<typeof JavaPin>;
  * read/parse round-trip on a server created by a newer MCTL.
  */
 export const MctlJson = z.looseObject({
-  schemaVersion: z.number().int().positive().default(MCTL_JSON_VERSION),
-  /** Human-facing server name. The id is derived from the directory name, not this. */
-  name: z.string().min(1),
-  /**
-   * Server kind — the id of the `ServerProvider` that owns this server
-   * (`"vanilla"`, `"paper"`, later `"fabric"`, …).
-   *
-   * A free string, **not** the `ServerKind` enum, and deliberately so: the
-   * authoritative list of kinds is the runtime `ProviderRegistry`, and duplicating
-   * it in a schema would mean a server created by a newer MCTL fails to parse and
-   * shows up as *unavailable* rather than as "this build has no provider for
-   * `fabric`". An unknown kind surfaces as an `UnknownProviderError` at the
-   * moment it matters (start/install), which is a far better message.
-   */
-  kind: z.string().min(1),
-  minecraftVersion: z.string().min(1),
-  /** Loader version for Fabric/Forge/etc.; absent for vanilla-family servers. */
-  loaderVersion: z.string().optional(),
-  /** Resolved Java major, or an explicit `{ pinned }`. Absent until Phase 2 resolves it. */
-  java: JavaPin.optional(),
-  /** JVM heap, e.g. `"2G"`. Free-form; validated by the runtime later. */
-  memory: z.string().default("2G"),
-  /** Runtime provider id the server runs under. */
-  runtime: RuntimeKind.default("foreground"),
-  /** Network profile name; `"direct"` unless a tunnel profile is chosen. */
-  network: z.string().default("direct"),
-  /** ISO-8601 creation timestamp, written at create time (Phase 2). */
-  createdAt: z.string().optional(),
+	schemaVersion: z.number().int().positive().default(MCTL_JSON_VERSION),
+	/** Human-facing server name. The id is derived from the directory name, not this. */
+	name: z.string().min(1),
+	/**
+	 * Server kind — the id of the `ServerProvider` that owns this server
+	 * (`"vanilla"`, `"paper"`, later `"fabric"`, …).
+	 *
+	 * A free string, **not** the `ServerKind` enum, and deliberately so: the
+	 * authoritative list of kinds is the runtime `ProviderRegistry`, and duplicating
+	 * it in a schema would mean a server created by a newer MCTL fails to parse and
+	 * shows up as *unavailable* rather than as "this build has no provider for
+	 * `fabric`". An unknown kind surfaces as an `UnknownProviderError` at the
+	 * moment it matters (start/install), which is a far better message.
+	 */
+	kind: z.string().min(1),
+	minecraftVersion: z.string().min(1),
+	/** Loader version for Fabric/Forge/etc.; absent for vanilla-family servers. */
+	loaderVersion: z.string().optional(),
+	/** Resolved Java major, or an explicit `{ pinned }`. Absent until Phase 2 resolves it. */
+	java: JavaPin.optional(),
+	/** JVM heap, e.g. `"2G"`. Free-form; validated by the runtime later. */
+	memory: z.string().default("2G"),
+	/** Runtime provider id the server runs under. */
+	runtime: RuntimeKind.default("foreground"),
+	/** Network profile name; `"direct"` unless a tunnel profile is chosen. */
+	network: z.string().default("direct"),
+	/** ISO-8601 creation timestamp, written at create time (Phase 2). */
+	createdAt: z.string().optional(),
 });
 export type MctlJson = z.infer<typeof MctlJson>;
 
 /** One entry in the Server Location Registry: an id pointing at an absolute path. */
 export const ServerRegistryEntry = z.object({
-  /** Stable server id (derived from the directory name at create/discovery time). */
-  id: z.string().min(1),
-  /** Absolute path to the server directory (may live outside `servers_dir`). */
-  path: AbsolutePath,
+	/** Stable server id (derived from the directory name at create/discovery time). */
+	id: z.string().min(1),
+	/** Absolute path to the server directory (may live outside `servers_dir`). */
+	path: AbsolutePath,
 });
 export type ServerRegistryEntry = z.infer<typeof ServerRegistryEntry>;
 
@@ -103,8 +103,8 @@ export type ServerRegistryEntry = z.infer<typeof ServerRegistryEntry>;
  * state, written atomically. See `architecture.md` § Server Location Registry.
  */
 export const ServerRegistryFile = z.object({
-  version: z.number().int().positive().default(1),
-  servers: z.array(ServerRegistryEntry).default([]),
+	version: z.number().int().positive().default(1),
+	servers: z.array(ServerRegistryEntry).default([]),
 });
 export type ServerRegistryFile = z.infer<typeof ServerRegistryFile>;
 
@@ -116,20 +116,20 @@ export type ServerRegistryFile = z.infer<typeof ServerRegistryFile>;
  * never server config.
  */
 export const RuntimeSession = z.object({
-  /** OS process id to probe for liveness. */
-  pid: z.number().int().positive(),
-  /** Runtime provider that owns this session. */
-  runtime: RuntimeKind,
-  /**
-   * Provider-specific session handle — a tmux session name or docker container
-   * id — used to confirm the session still exists for detached runtimes. Absent
-   * for the foreground runtime, whose liveness is the pid alone.
-   */
-  sessionRef: z.string().optional(),
-  /** Port the server bound, when known. */
-  port: z.number().int().positive().optional(),
-  /** ISO-8601 start time. */
-  startedAt: z.string(),
+	/** OS process id to probe for liveness. */
+	pid: z.number().int().positive(),
+	/** Runtime provider that owns this session. */
+	runtime: RuntimeKind,
+	/**
+	 * Provider-specific session handle — a tmux session name or docker container
+	 * id — used to confirm the session still exists for detached runtimes. Absent
+	 * for the foreground runtime, whose liveness is the pid alone.
+	 */
+	sessionRef: z.string().optional(),
+	/** Port the server bound, when known. */
+	port: z.number().int().positive().optional(),
+	/** ISO-8601 start time. */
+	startedAt: z.string(),
 });
 export type RuntimeSession = z.infer<typeof RuntimeSession>;
 
@@ -145,10 +145,10 @@ export type RuntimeSession = z.infer<typeof RuntimeSession>;
  *  - `unknown`     — the descriptor could not be probed conclusively.
  */
 export const ServerState = z.enum([
-  "running",
-  "stopped",
-  "unavailable",
-  "unknown",
+	"running",
+	"stopped",
+	"unavailable",
+	"unknown",
 ]);
 export type ServerState = z.infer<typeof ServerState>;
 
@@ -159,30 +159,30 @@ export type ServerState = z.infer<typeof ServerState>;
  * only server type the UI and CLI ever see — they never touch a provider type.
  */
 export interface Server {
-  /** Server id, derived from the directory name; the registry key. */
-  id: string;
-  /** Human-facing name from `mctl.json` (falls back to `id` when unavailable). */
-  name: string;
-  /** Server kind / provider id. */
-  kind: string;
-  /** Minecraft version. */
-  minecraftVersion: string;
-  /** Loader version, when the kind has one. */
-  loaderVersion?: string;
-  /** Resolved Java major or explicit pin, when known. */
-  java?: JavaPin;
-  /** JVM heap string, e.g. `"2G"`. */
-  memory: string;
-  /** Runtime provider id. */
-  runtime: string;
-  /** Network profile name. */
-  network: string;
-  /** Absolute path to the server directory. */
-  path: string;
-  /** Live-probed run state (never stored). */
-  state: ServerState;
-  /** False when the registry path is missing — the server can't be loaded. */
-  available: boolean;
-  /** Live session details when `state === "running"`, else absent. */
-  session?: RuntimeSession;
+	/** Server id, derived from the directory name; the registry key. */
+	id: string;
+	/** Human-facing name from `mctl.json` (falls back to `id` when unavailable). */
+	name: string;
+	/** Server kind / provider id. */
+	kind: string;
+	/** Minecraft version. */
+	minecraftVersion: string;
+	/** Loader version, when the kind has one. */
+	loaderVersion?: string;
+	/** Resolved Java major or explicit pin, when known. */
+	java?: JavaPin;
+	/** JVM heap string, e.g. `"2G"`. */
+	memory: string;
+	/** Runtime provider id. */
+	runtime: string;
+	/** Network profile name. */
+	network: string;
+	/** Absolute path to the server directory. */
+	path: string;
+	/** Live-probed run state (never stored). */
+	state: ServerState;
+	/** False when the registry path is missing — the server can't be loaded. */
+	available: boolean;
+	/** Live session details when `state === "running"`, else absent. */
+	session?: RuntimeSession;
 }

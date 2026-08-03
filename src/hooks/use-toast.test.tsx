@@ -16,7 +16,12 @@ import { createRoot } from "@opentui/react";
 import { useEffect } from "react";
 import { ThemeRegistry } from "../core/theme/registry.ts";
 import { ThemeProvider } from "./use-theme.tsx";
-import { ToastProvider, useToast, type ToastApi, type ToastProviderProps } from "./use-toast.tsx";
+import {
+	ToastProvider,
+	useToast,
+	type ToastApi,
+	type ToastProviderProps,
+} from "./use-toast.tsx";
 
 /** Mount a tree that hands the raising callback the toast API, and render it. */
 async function mount(
@@ -49,7 +54,10 @@ async function mount(
 }
 
 /** Render repeatedly for `ms`, so timers fire and their effects reach a frame. */
-async function advance(harness: { renderOnce: () => Promise<unknown> }, ms: number) {
+async function advance(
+	harness: { renderOnce: () => Promise<unknown> },
+	ms: number,
+) {
 	const until = Date.now() + ms;
 	do {
 		await Bun.sleep(20);

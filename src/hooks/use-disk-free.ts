@@ -22,28 +22,28 @@ const DEBOUNCE_MS = 150;
  *   resolve to `undefined`.
  */
 export function useDiskFree(path: string): DiskUsage | undefined {
-  const [usage, setUsage] = useState<DiskUsage | undefined>(undefined);
+	const [usage, setUsage] = useState<DiskUsage | undefined>(undefined);
 
-  useEffect(() => {
-    if (!path.startsWith("/")) {
-      setUsage(undefined);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      diskFree(path)
-        .then((u) => {
-          if (!cancelled) setUsage(u);
-        })
-        .catch(() => {
-          if (!cancelled) setUsage(undefined);
-        });
-    }, DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [path]);
+	useEffect(() => {
+		if (!path.startsWith("/")) {
+			setUsage(undefined);
+			return;
+		}
+		let cancelled = false;
+		const timer = setTimeout(() => {
+			diskFree(path)
+				.then((u) => {
+					if (!cancelled) setUsage(u);
+				})
+				.catch(() => {
+					if (!cancelled) setUsage(undefined);
+				});
+		}, DEBOUNCE_MS);
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, [path]);
 
-  return usage;
+	return usage;
 }

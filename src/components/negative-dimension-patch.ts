@@ -47,9 +47,9 @@
 import type { RenderContext, Renderable } from "@opentui/core";
 import { Renderable as RenderableClass } from "@opentui/core";
 import {
-  extend,
-  getComponentCatalogue,
-  type RenderableConstructor,
+	extend,
+	getComponentCatalogue,
+	type RenderableConstructor,
 } from "@opentui/react";
 
 /** The two axes this patch understands. */
@@ -60,8 +60,8 @@ type NegativeSpec = Partial<Record<Axis, number>>;
 
 /** Just the constructor options this patch reads or rewrites. */
 interface DimensionOptions {
-  width?: unknown;
-  height?: unknown;
+	width?: unknown;
+	height?: unknown;
 }
 
 /**
@@ -70,8 +70,8 @@ interface DimensionOptions {
  * expression, so the base is narrowed to just what this wrapper touches.
  */
 type DimensionConstructor = new (
-  ctx: RenderContext,
-  options: DimensionOptions,
+	ctx: RenderContext,
+	options: DimensionOptions,
 ) => Renderable;
 
 /**
@@ -93,7 +93,7 @@ let patched = false;
 
 /** A dimension is terminal-relative when it is a finite negative number. */
 function isNegativeDimension(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value < 0;
+	return typeof value === "number" && Number.isFinite(value) && value < 0;
 }
 
 /**
@@ -102,8 +102,8 @@ function isNegativeDimension(value: unknown): value is number {
  * than a negative one, which upstream rejects.
  */
 function resolve(ctx: RenderContext, axis: Axis, raw: number): number {
-  const terminal = axis === "width" ? ctx.width : ctx.height;
-  return Math.max(0, terminal + raw);
+	const terminal = axis === "width" ? ctx.width : ctx.height;
+	return Math.max(0, terminal + raw);
 }
 
 /**
@@ -112,27 +112,27 @@ function resolve(ctx: RenderContext, axis: Axis, raw: number): number {
  * out of terminal-relative sizing.
  */
 function track(r: Renderable, axis: Axis, raw: number | undefined): void {
-  const existing = specs.get(r);
+	const existing = specs.get(r);
 
-  if (raw === undefined) {
-    if (!existing) return;
-    delete existing[axis];
-    if (existing.width === undefined && existing.height === undefined) {
-      specs.delete(r);
-    }
-    return;
-  }
+	if (raw === undefined) {
+		if (!existing) return;
+		delete existing[axis];
+		if (existing.width === undefined && existing.height === undefined) {
+			specs.delete(r);
+		}
+		return;
+	}
 
-  if (existing) {
-    existing[axis] = raw;
-    return;
-  }
+	if (existing) {
+		existing[axis] = raw;
+		return;
+	}
 
-  specs.set(r, { [axis]: raw });
-  // `Renderable.destroy()` emits this; without it the map would keep the whole
-  // subtree of every unmounted page alive.
-  r.once("destroyed", () => specs.delete(r));
-  wireResize(r.ctx);
+	specs.set(r, { [axis]: raw });
+	// `Renderable.destroy()` emits this; without it the map would keep the whole
+	// subtree of every unmounted page alive.
+	r.once("destroyed", () => specs.delete(r));
+	wireResize(r.ctx);
 }
 
 /**
@@ -140,21 +140,21 @@ function track(r: Renderable, axis: Axis, raw: number | undefined): void {
  * `width`/`height` *before* emitting, so `ctx` is already current in the sweep.
  */
 function wireResize(ctx: RenderContext): void {
-  if (wiredContexts.has(ctx)) return;
-  wiredContexts.add(ctx);
-  ctx.on("resize", reapplyAll);
+	if (wiredContexts.has(ctx)) return;
+	wiredContexts.add(ctx);
+	ctx.on("resize", reapplyAll);
 }
 
 /** Push freshly resolved sizes into every tracked renderable. */
 function reapplyAll(): void {
-  for (const [r, spec] of specs) {
-    if (spec.width !== undefined) {
-      originalWidthSet.call(r, resolve(r.ctx, "width", spec.width));
-    }
-    if (spec.height !== undefined) {
-      originalHeightSet.call(r, resolve(r.ctx, "height", spec.height));
-    }
-  }
+	for (const [r, spec] of specs) {
+		if (spec.width !== undefined) {
+			originalWidthSet.call(r, resolve(r.ctx, "width", spec.width));
+		}
+		if (spec.height !== undefined) {
+			originalHeightSet.call(r, resolve(r.ctx, "height", spec.height));
+		}
+	}
 }
 
 /**
@@ -164,24 +164,24 @@ function reapplyAll(): void {
  * for the next diff, so it must not be mutated.
  */
 function resolveOptions<T extends DimensionOptions>(
-  ctx: RenderContext,
-  options: T,
+	ctx: RenderContext,
+	options: T,
 ): T {
-  const negWidth = isNegativeDimension(options?.width)
-    ? options.width
-    : undefined;
-  const negHeight = isNegativeDimension(options?.height)
-    ? options.height
-    : undefined;
+	const negWidth = isNegativeDimension(options?.width)
+		? options.width
+		: undefined;
+	const negHeight = isNegativeDimension(options?.height)
+		? options.height
+		: undefined;
 
-  if (negWidth === undefined && negHeight === undefined) return options;
+	if (negWidth === undefined && negHeight === undefined) return options;
 
-  const resolved = { ...options };
-  if (negWidth !== undefined) resolved.width = resolve(ctx, "width", negWidth);
-  if (negHeight !== undefined) {
-    resolved.height = resolve(ctx, "height", negHeight);
-  }
-  return resolved;
+	const resolved = { ...options };
+	if (negWidth !== undefined) resolved.width = resolve(ctx, "width", negWidth);
+	if (negHeight !== undefined) {
+		resolved.height = resolve(ctx, "height", negHeight);
+	}
+	return resolved;
 }
 
 /**
@@ -189,33 +189,33 @@ function resolveOptions<T extends DimensionOptions>(
  * tracked the same way a construction-time prop is.
  */
 function patchAccessors(): void {
-  const proto = RenderableClass.prototype;
+	const proto = RenderableClass.prototype;
 
-  for (const axis of ["width", "height"] as const) {
-    const descriptor = Object.getOwnPropertyDescriptor(proto, axis);
-    const originalSet = descriptor?.set;
-    if (!descriptor || !originalSet) {
-      throw new Error(
-        `installNegativeDimensionPatch: Renderable.prototype.${axis} has no setter — @opentui/core changed shape`,
-      );
-    }
+	for (const axis of ["width", "height"] as const) {
+		const descriptor = Object.getOwnPropertyDescriptor(proto, axis);
+		const originalSet = descriptor?.set;
+		if (!descriptor || !originalSet) {
+			throw new Error(
+				`installNegativeDimensionPatch: Renderable.prototype.${axis} has no setter — @opentui/core changed shape`,
+			);
+		}
 
-    if (axis === "width") originalWidthSet = originalSet;
-    else originalHeightSet = originalSet;
+		if (axis === "width") originalWidthSet = originalSet;
+		else originalHeightSet = originalSet;
 
-    Object.defineProperty(proto, axis, {
-      ...descriptor,
-      set(this: Renderable, value: unknown) {
-        if (isNegativeDimension(value)) {
-          track(this, axis, value);
-          originalSet.call(this, resolve(this.ctx, axis, value));
-          return;
-        }
-        track(this, axis, undefined);
-        originalSet.call(this, value);
-      },
-    });
-  }
+		Object.defineProperty(proto, axis, {
+			...descriptor,
+			set(this: Renderable, value: unknown) {
+				if (isNegativeDimension(value)) {
+					track(this, axis, value);
+					originalSet.call(this, resolve(this.ctx, axis, value));
+					return;
+				}
+				track(this, axis, undefined);
+				originalSet.call(this, value);
+			},
+		});
+	}
 }
 
 /**
@@ -227,29 +227,29 @@ function patchAccessors(): void {
  * order instead of one silently replacing the other.
  */
 function patchCatalogue(): void {
-  const wrapped: Record<string, RenderableConstructor> = {};
+	const wrapped: Record<string, RenderableConstructor> = {};
 
-  for (const [name, Base] of Object.entries(getComponentCatalogue()) as [
-    string,
-    DimensionConstructor,
-  ][]) {
-    wrapped[name] = class extends Base {
-      constructor(ctx: RenderContext, options: DimensionOptions) {
-        super(ctx, resolveOptions(ctx, options));
+	for (const [name, Base] of Object.entries(getComponentCatalogue()) as [
+		string,
+		DimensionConstructor,
+	][]) {
+		wrapped[name] = class extends Base {
+			constructor(ctx: RenderContext, options: DimensionOptions) {
+				super(ctx, resolveOptions(ctx, options));
 
-        // Remember the raw request so resizes can re-resolve it. Done after
-        // `super()` because `this` is what gets tracked.
-        if (isNegativeDimension(options?.width)) {
-          track(this, "width", options.width);
-        }
-        if (isNegativeDimension(options?.height)) {
-          track(this, "height", options.height);
-        }
-      }
-    } as unknown as RenderableConstructor;
-  }
+				// Remember the raw request so resizes can re-resolve it. Done after
+				// `super()` because `this` is what gets tracked.
+				if (isNegativeDimension(options?.width)) {
+					track(this, "width", options.width);
+				}
+				if (isNegativeDimension(options?.height)) {
+					track(this, "height", options.height);
+				}
+			}
+		} as unknown as RenderableConstructor;
+	}
 
-  extend(wrapped);
+	extend(wrapped);
 }
 
 /**
@@ -257,9 +257,9 @@ function patchCatalogue(): void {
  * Call once, before the first render; a second call is a no-op.
  */
 export function installNegativeDimensionPatch(): void {
-  if (patched) return;
-  patched = true;
+	if (patched) return;
+	patched = true;
 
-  patchAccessors();
-  patchCatalogue();
+	patchAccessors();
+	patchCatalogue();
 }

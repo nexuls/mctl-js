@@ -40,16 +40,16 @@ const PROBE_TIMEOUT_MS = 10_000;
  * default `java` is still offered.
  */
 const SYSTEM_JDK_DIRS =
-  process.platform === "darwin"
-    ? ["/Library/Java/JavaVirtualMachines", "/opt/homebrew/opt"]
-    : ["/usr/lib/jvm", "/usr/lib64/jvm", "/opt/java"];
+	process.platform === "darwin"
+		? ["/Library/Java/JavaVirtualMachines", "/opt/homebrew/opt"]
+		: ["/usr/lib/jvm", "/usr/lib64/jvm", "/opt/java"];
 
 /** Probe results keyed by executable path; see the module note on memoization. */
 const probeCache = new Map<string, JavaInstallation | undefined>();
 
 /** The `java` executable inside a JDK home, honouring Windows' `.exe`. */
 function javaBinary(home: string): string {
-  return join(home, "bin", process.platform === "win32" ? "java.exe" : "java");
+	return join(home, "bin", process.platform === "win32" ? "java.exe" : "java");
 }
 
 /**
@@ -61,21 +61,21 @@ function javaBinary(home: string): string {
  *  - **Java 9+** report `21.0.12` — the major is the first component.
  */
 export function majorOf(version: string): number | undefined {
-  const parts = version.trim().split(".");
-  const first = Number.parseInt(parts[0] ?? "", 10);
-  if (!Number.isInteger(first)) return undefined;
-  if (first === 1) {
-    const second = Number.parseInt(parts[1] ?? "", 10);
-    return Number.isInteger(second) ? second : undefined;
-  }
-  return first;
+	const parts = version.trim().split(".");
+	const first = Number.parseInt(parts[0] ?? "", 10);
+	if (!Number.isInteger(first)) return undefined;
+	if (first === 1) {
+		const second = Number.parseInt(parts[1] ?? "", 10);
+		return Number.isInteger(second) ? second : undefined;
+	}
+	return first;
 }
 
 /** Pull `key = value` out of `-XshowSettings:properties` output. */
 function property(output: string, key: string): string | undefined {
-  // Lines look like `    java.version = 21.0.12` (leading whitespace varies).
-  const match = new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`, "m").exec(output);
-  return match?.[1]?.trim();
+	// Lines look like `    java.version = 21.0.12` (leading whitespace varies).
+	const match = new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`, "m").exec(output);
+	return match?.[1]?.trim();
 }
 
 /**
@@ -88,44 +88,47 @@ function property(output: string, key: string): string | undefined {
  * @param source how this candidate was found, recorded on the result.
  */
 export async function probeJava(
-  javaPath: string,
-  source: JavaSource,
+	javaPath: string,
+	source: JavaSource,
 ): Promise<JavaInstallation | undefined> {
-  // `has` rather than a truthiness check: a *failed* probe is memoized as
-  // `undefined` and must not be retried on every subsequent lookup.
-  if (probeCache.has(javaPath)) return probeCache.get(javaPath);
+	// `has` rather than a truthiness check: a *failed* probe is memoized as
+	// `undefined` and must not be retried on every subsequent lookup.
+	if (probeCache.has(javaPath)) return probeCache.get(javaPath);
 
-  let result: JavaInstallation | undefined;
-  try {
-    const { code, stdout, stderr } = await run(
-      javaPath,
-      ["-XshowSettings:properties", "-version"],
-      { timeoutMs: PROBE_TIMEOUT_MS },
-    );
-    // The properties dump goes to stderr on every JDK; stdout is joined in
-    // anyway so a future JVM that moves it does not silently break detection.
-    const output = `${stderr}\n${stdout}`;
-    const version = property(output, "java\\.version");
-    const home = property(output, "java\\.home");
-    const major = version ? majorOf(version) : undefined;
-    if (code === 0 && version && home && major !== undefined) {
-      result = {
-        major,
-        version,
-        javaPath,
-        home,
-        source,
-        vendor: property(output, "java\\.vendor"),
-      };
-    } else {
-      logger.debug({ javaPath, code }, "candidate did not report a usable version");
-    }
-  } catch (err) {
-    logger.debug({ javaPath, err: String(err) }, "java probe failed");
-  }
+	let result: JavaInstallation | undefined;
+	try {
+		const { code, stdout, stderr } = await run(
+			javaPath,
+			["-XshowSettings:properties", "-version"],
+			{ timeoutMs: PROBE_TIMEOUT_MS },
+		);
+		// The properties dump goes to stderr on every JDK; stdout is joined in
+		// anyway so a future JVM that moves it does not silently break detection.
+		const output = `${stderr}\n${stdout}`;
+		const version = property(output, "java\\.version");
+		const home = property(output, "java\\.home");
+		const major = version ? majorOf(version) : undefined;
+		if (code === 0 && version && home && major !== undefined) {
+			result = {
+				major,
+				version,
+				javaPath,
+				home,
+				source,
+				vendor: property(output, "java\\.vendor"),
+			};
+		} else {
+			logger.debug(
+				{ javaPath, code },
+				"candidate did not report a usable version",
+			);
+		}
+	} catch (err) {
+		logger.debug({ javaPath, err: String(err) }, "java probe failed");
+	}
 
-  probeCache.set(javaPath, result);
-  return result;
+	probeCache.set(javaPath, result);
+	return result;
 }
 
 /**
@@ -144,51 +147,57 @@ export async function probeJava(
  *   (a caller with no config yet, e.g. `mctl java list` before `mctl init`).
  */
 export async function detectJavaInstallations(
-  javaDir?: string,
+	javaDir?: string,
 ): Promise<JavaInstallation[]> {
-  const candidates: Array<{ javaPath: string; source: JavaSource }> = [];
+	const candidates: Array<{ javaPath: string; source: JavaSource }> = [];
 
-  if (javaDir) {
-    for (const name of await readDirIfExists(javaDir)) {
-      candidates.push({ javaPath: javaBinary(join(javaDir, name)), source: "managed" });
-    }
-  }
+	if (javaDir) {
+		for (const name of await readDirIfExists(javaDir)) {
+			candidates.push({
+				javaPath: javaBinary(join(javaDir, name)),
+				source: "managed",
+			});
+		}
+	}
 
-  const javaHome = process.env.JAVA_HOME;
-  if (javaHome) candidates.push({ javaPath: javaBinary(javaHome), source: "javaHome" });
+	const javaHome = process.env.JAVA_HOME;
+	if (javaHome)
+		candidates.push({ javaPath: javaBinary(javaHome), source: "javaHome" });
 
-  const onPath = await which(process.platform === "win32" ? "java.exe" : "java");
-  if (onPath) candidates.push({ javaPath: onPath, source: "path" });
+	const onPath = await which(
+		process.platform === "win32" ? "java.exe" : "java",
+	);
+	if (onPath) candidates.push({ javaPath: onPath, source: "path" });
 
-  for (const dir of SYSTEM_JDK_DIRS) {
-    for (const name of await readDirIfExists(dir)) {
-      const home = join(dir, name);
-      // macOS bundles wrap the JDK one level deeper.
-      const bundled = join(home, "Contents", "Home");
-      candidates.push({
-        javaPath: javaBinary((await pathExists(bundled)) ? bundled : home),
-        source: "system",
-      });
-    }
-  }
+	for (const dir of SYSTEM_JDK_DIRS) {
+		for (const name of await readDirIfExists(dir)) {
+			const home = join(dir, name);
+			// macOS bundles wrap the JDK one level deeper.
+			const bundled = join(home, "Contents", "Home");
+			candidates.push({
+				javaPath: javaBinary((await pathExists(bundled)) ? bundled : home),
+				source: "system",
+			});
+		}
+	}
 
-  const byHome = new Map<string, JavaInstallation>();
-  for (const candidate of candidates) {
-    const found = await probeJava(candidate.javaPath, candidate.source);
-    if (!found) continue;
-    // First writer wins, so the precedence order above holds.
-    if (!byHome.has(found.home)) byHome.set(found.home, found);
-  }
+	const byHome = new Map<string, JavaInstallation>();
+	for (const candidate of candidates) {
+		const found = await probeJava(candidate.javaPath, candidate.source);
+		if (!found) continue;
+		// First writer wins, so the precedence order above holds.
+		if (!byHome.has(found.home)) byHome.set(found.home, found);
+	}
 
-  const installations = [...byHome.values()].sort((a, b) => b.major - a.major);
-  logger.debug(
-    { count: installations.length, majors: installations.map((i) => i.major) },
-    "detected java installations",
-  );
-  return installations;
+	const installations = [...byHome.values()].sort((a, b) => b.major - a.major);
+	logger.debug(
+		{ count: installations.length, majors: installations.map((i) => i.major) },
+		"detected java installations",
+	);
+	return installations;
 }
 
 /** Drop the memoized probe results — used by tests and after a JDK install. */
 export function clearJavaProbeCache(): void {
-  probeCache.clear();
+	probeCache.clear();
 }

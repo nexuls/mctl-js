@@ -19,29 +19,32 @@ import { useEventBus } from "./use-event-bus.tsx";
 import { useMctl } from "./use-mctl.tsx";
 
 /** Event types that mean the job list may have changed. */
-const JOB_EVENTS = new Set<string>([EventType.JobProgress, EventType.JobFinished]);
+const JOB_EVENTS = new Set<string>([
+	EventType.JobProgress,
+	EventType.JobFinished,
+]);
 
 /**
  * Every job this instance has run, newest first, updating as they progress.
  * Empty until the core context is available.
  */
 export function useJobs(): Job[] {
-  const bus = useEventBus();
-  const { context } = useMctl();
-  const [jobs, setJobs] = useState<Job[]>([]);
+	const bus = useEventBus();
+	const { context } = useMctl();
+	const [jobs, setJobs] = useState<Job[]>([]);
 
-  useEffect(() => {
-    if (!context) {
-      setJobs([]);
-      return;
-    }
-    setJobs(context.jobs.list());
-    return bus.subscribe((event) => {
-      // Re-reading the whole (short) list rather than patching one entry keeps
-      // this in step with the scheduler even for events we don't model here.
-      if (JOB_EVENTS.has(event.type)) setJobs(context.jobs.list());
-    });
-  }, [bus, context]);
+	useEffect(() => {
+		if (!context) {
+			setJobs([]);
+			return;
+		}
+		setJobs(context.jobs.list());
+		return bus.subscribe((event) => {
+			// Re-reading the whole (short) list rather than patching one entry keeps
+			// this in step with the scheduler even for events we don't model here.
+			if (JOB_EVENTS.has(event.type)) setJobs(context.jobs.list());
+		});
+	}, [bus, context]);
 
-  return jobs;
+	return jobs;
 }

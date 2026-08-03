@@ -15,7 +15,13 @@
 
 import { useState } from "react";
 import { useKeyboard } from "@opentui/react";
-import { Button, Input, Select, Checkbox, Hint } from "../../components/index.ts";
+import {
+	Button,
+	Input,
+	Select,
+	Checkbox,
+	Hint,
+} from "../../components/index.ts";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
@@ -40,204 +46,205 @@ const TEXT_FIELDS = new Set<string>(["name", "mc", "memory"]);
 
 /** Runtime options. Only `foreground` exists in Phase 2; tmux/docker come later. */
 const RUNTIMES: { value: RuntimeKind; label: string }[] = [
-  { value: "foreground", label: "foreground" },
+	{ value: "foreground", label: "foreground" },
 ];
 
 export function ServerCreate() {
-  const { colors } = useTheme();
-  const { icons } = useIcons();
-  const { navigate } = useRouter();
-  const bus = useEventBus();
-  const toast = useToast();
-  const { context } = useMctl();
-  const { config } = useConfig();
+	const { colors } = useTheme();
+	const { icons } = useIcons();
+	const { navigate } = useRouter();
+	const bus = useEventBus();
+	const toast = useToast();
+	const { context } = useMctl();
+	const { config } = useConfig();
 
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<string>(config?.defaults.kind ?? "paper");
-  const [minecraftVersion, setMinecraftVersion] = useState("");
-  const [memory, setMemory] = useState(config?.defaults.memory ?? "2G");
-  const [runtime, setRuntime] = useState<RuntimeKind>(
-    config?.defaults.runtime ?? "foreground",
-  );
-  const [eula, setEula] = useState(config?.defaults.eula ?? false);
-  const [job, setJob] = useState<Job>();
+	const [name, setName] = useState("");
+	const [kind, setKind] = useState<string>(config?.defaults.kind ?? "paper");
+	const [minecraftVersion, setMinecraftVersion] = useState("");
+	const [memory, setMemory] = useState(config?.defaults.memory ?? "2G");
+	const [runtime, setRuntime] = useState<RuntimeKind>(
+		config?.defaults.runtime ?? "foreground",
+	);
+	const [eula, setEula] = useState(config?.defaults.eula ?? false);
+	const [job, setJob] = useState<Job>();
 
-  const ring = useFocusRing(FIELDS);
-  // While a text field owns the ring, the shell's digit/q/t shortcuts stand down
-  // so typing "2" edits the field instead of navigating to Jobs.
-  useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
+	const ring = useFocusRing(FIELDS);
+	// While a text field owns the ring, the shell's digit/q/t shortcuts stand down
+	// so typing "2" edits the field instead of navigating to Jobs.
+	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
 
-  const id = idFromName(name);
-  const busy = job !== undefined && (job.state === "queued" || job.state === "running");
-  const invalid = name.trim() === "" || id === "";
+	const id = idFromName(name);
+	const busy =
+		job !== undefined && (job.state === "queued" || job.state === "running");
+	const invalid = name.trim() === "" || id === "";
 
-  const submit = async () => {
-    if (!context || invalid || busy) return;
+	const submit = async () => {
+		if (!context || invalid || busy) return;
 
-    let started: Awaited<ReturnType<typeof context.servers.createServer>>;
-    try {
-      started = await context.servers.createServer({
-        name: name.trim(),
-        kind: kind as ServerKind,
-        minecraftVersion: minecraftVersion.trim() || undefined,
-        memory: memory.trim() || undefined,
-        runtime,
-        eula,
-      });
-    } catch (err) {
-      // Pre-flight failures (id taken, unknown kind, path in use) never become a
-      // job, so they are reported here rather than through the progress panel.
-      toast.error("Could not create server", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-      return;
-    }
+		let started: Awaited<ReturnType<typeof context.servers.createServer>>;
+		try {
+			started = await context.servers.createServer({
+				name: name.trim(),
+				kind: kind as ServerKind,
+				minecraftVersion: minecraftVersion.trim() || undefined,
+				memory: memory.trim() || undefined,
+				runtime,
+				eula,
+			});
+		} catch (err) {
+			// Pre-flight failures (id taken, unknown kind, path in use) never become a
+			// job, so they are reported here rather than through the progress panel.
+			toast.error("Could not create server", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+			return;
+		}
 
-    setJob(started.job);
-    const unsubscribe = bus.subscribe((event) => {
-      if (event.type !== EventType.JobProgress) return;
-      const update = event.payload as Job;
-      if (update.id === started.job.id) setJob({ ...update });
-    });
+		setJob(started.job);
+		const unsubscribe = bus.subscribe((event) => {
+			if (event.type !== EventType.JobProgress) return;
+			const update = event.payload as Job;
+			if (update.id === started.job.id) setJob({ ...update });
+		});
 
-    try {
-      const server = await started.result;
-      toast.success(`Created ${server.id}`, {
-        description: `${server.kind} ${server.minecraftVersion} at ${server.path}`,
-      });
-      navigate("server", { serverId: server.id });
-    } catch (err) {
-      toast.error("Create failed", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      unsubscribe();
-      setJob(undefined);
-    }
-  };
+		try {
+			const server = await started.result;
+			toast.success(`Created ${server.id}`, {
+				description: `${server.kind} ${server.minecraftVersion} at ${server.path}`,
+			});
+			navigate("server", { serverId: server.id });
+		} catch (err) {
+			toast.error("Create failed", {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			unsubscribe();
+			setJob(undefined);
+		}
+	};
 
-  // Enter submits from any field except the button, which owns its own Enter.
-  useKeyboard((key) => {
-    if (key.name !== "return" || ring.focus === "create" || busy) return;
-    if (ring.focus === undefined) return;
-    void submit();
-  });
+	// Enter submits from any field except the button, which owns its own Enter.
+	useKeyboard((key) => {
+		if (key.name !== "return" || ring.focus === "create" || busy) return;
+		if (ring.focus === undefined) return;
+		void submit();
+	});
 
-  return (
-    <box flexDirection="column" flexGrow={1} paddingX={1}>
-      <PageHeader
-        title="New server"
-        subtitle={
-          busy
-            ? "creating…"
-            : `Tab moves ${icons.separator} Enter creates ${icons.separator} Esc cancels`
-        }
-      />
+	return (
+		<box flexDirection="column" flexGrow={1} paddingX={1}>
+			<PageHeader
+				title="New server"
+				subtitle={
+					busy
+						? "creating…"
+						: `Tab moves ${icons.separator} Enter creates ${icons.separator} Esc cancels`
+				}
+			/>
 
-      <Input
-        label="Name"
-        hint={id === "" ? "required" : `id: ${id}`}
-        value={name}
-        onChange={setName}
-        focused={ring.isFocused("name")}
-        onFocused={() => ring.setFocus("name")}
-        width="100%"
-      />
-      <Select
-        label="Kind"
-        options={(context?.providers.servers() ?? []).map((provider) => ({
-          value: provider.id,
-          label: provider.displayName,
-        }))}
-        value={kind}
-        onChange={setKind}
-        focused={ring.isFocused("kind")}
-        onFocused={() => ring.setFocus("kind")}
-        width="100%"
-      />
-      <Input
-        label="Minecraft version"
-        hint="empty = newest release for this kind"
-        value={minecraftVersion}
-        onChange={setMinecraftVersion}
-        focused={ring.isFocused("mc")}
-        onFocused={() => ring.setFocus("mc")}
-        width="100%"
-      />
-      <Input
-        label="Memory"
-        hint="JVM heap, e.g. 2G or 4096M"
-        value={memory}
-        onChange={setMemory}
-        focused={ring.isFocused("memory")}
-        onFocused={() => ring.setFocus("memory")}
-        width="100%"
-      />
-      <Select
-        label="Runtime"
-        options={RUNTIMES}
-        value={runtime}
-        onChange={(value) => setRuntime(value as RuntimeKind)}
-        focused={ring.isFocused("runtime")}
-        onFocused={() => ring.setFocus("runtime")}
-        width="100%"
-      />
-      <Checkbox
-        label="EULA"
-        hint="required before a server will start"
-        caption="I accept the Minecraft EULA (minecraft.net/eula)"
-        checked={eula}
-        onChange={setEula}
-        focused={ring.isFocused("eula")}
-        onFocused={() => ring.setFocus("eula")}
-      />
+			<Input
+				label="Name"
+				hint={id === "" ? "required" : `id: ${id}`}
+				value={name}
+				onChange={setName}
+				focused={ring.isFocused("name")}
+				onFocused={() => ring.setFocus("name")}
+				width="100%"
+			/>
+			<Select
+				label="Kind"
+				options={(context?.providers.servers() ?? []).map((provider) => ({
+					value: provider.id,
+					label: provider.displayName,
+				}))}
+				value={kind}
+				onChange={setKind}
+				focused={ring.isFocused("kind")}
+				onFocused={() => ring.setFocus("kind")}
+				width="100%"
+			/>
+			<Input
+				label="Minecraft version"
+				hint="empty = newest release for this kind"
+				value={minecraftVersion}
+				onChange={setMinecraftVersion}
+				focused={ring.isFocused("mc")}
+				onFocused={() => ring.setFocus("mc")}
+				width="100%"
+			/>
+			<Input
+				label="Memory"
+				hint="JVM heap, e.g. 2G or 4096M"
+				value={memory}
+				onChange={setMemory}
+				focused={ring.isFocused("memory")}
+				onFocused={() => ring.setFocus("memory")}
+				width="100%"
+			/>
+			<Select
+				label="Runtime"
+				options={RUNTIMES}
+				value={runtime}
+				onChange={(value) => setRuntime(value as RuntimeKind)}
+				focused={ring.isFocused("runtime")}
+				onFocused={() => ring.setFocus("runtime")}
+				width="100%"
+			/>
+			<Checkbox
+				label="EULA"
+				hint="required before a server will start"
+				caption="I accept the Minecraft EULA (minecraft.net/eula)"
+				checked={eula}
+				onChange={setEula}
+				focused={ring.isFocused("eula")}
+				onFocused={() => ring.setFocus("eula")}
+			/>
 
-      {job ? (
-        <box flexDirection="column" marginTop={1} gap={0}>
-          <text fg={colors.secondary}>
-            {job.step ?? job.title}
-            {job.message ? ` ${icons.separator} ${job.message}` : ""}
-          </text>
-          <ProgressBar
-            value={job.fraction ?? 0}
-            indeterminate={job.fraction === undefined}
-            width={40}
-            readout="percent"
-          />
-        </box>
-      ) : (
-        <box flexDirection="row" gap={1} marginTop={1}>
-          <Button
-            kind="solid"
-            variant="primary"
-            size="small"
-            focused={ring.isFocused("create")}
-            onFocused={() => ring.setFocus("create")}
-            onClick={() => void submit()}
-            disabled={invalid}
-          >
-            Create
-          </Button>
-          <Button
-            kind="ghost"
-            variant="neutral"
-            size="small"
-            onClick={() => navigate("dashboard")}
-          >
-            Cancel
-          </Button>
-        </box>
-      )}
+			{job ? (
+				<box flexDirection="column" marginTop={1} gap={0}>
+					<text fg={colors.secondary}>
+						{job.step ?? job.title}
+						{job.message ? ` ${icons.separator} ${job.message}` : ""}
+					</text>
+					<ProgressBar
+						value={job.fraction ?? 0}
+						indeterminate={job.fraction === undefined}
+						width={40}
+						readout="percent"
+					/>
+				</box>
+			) : (
+				<box flexDirection="row" gap={1} marginTop={1}>
+					<Button
+						kind="solid"
+						variant="primary"
+						size="small"
+						focused={ring.isFocused("create")}
+						onFocused={() => ring.setFocus("create")}
+						onClick={() => void submit()}
+						disabled={invalid}
+					>
+						Create
+					</Button>
+					<Button
+						kind="ghost"
+						variant="neutral"
+						size="small"
+						onClick={() => navigate("dashboard")}
+					>
+						Cancel
+					</Button>
+				</box>
+			)}
 
-      <box marginTop={1}>
-        <Hint
-          items={[
-            { keys: "Tab", label: "next field" },
-            { keys: "Enter", label: "create" },
-            { keys: "Esc", label: "cancel" },
-          ]}
-        />
-      </box>
-    </box>
-  );
+			<box marginTop={1}>
+				<Hint
+					items={[
+						{ keys: "Tab", label: "next field" },
+						{ keys: "Enter", label: "create" },
+						{ keys: "Esc", label: "cancel" },
+					]}
+				/>
+			</box>
+		</box>
+	);
 }

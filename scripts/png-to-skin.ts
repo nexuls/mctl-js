@@ -79,8 +79,10 @@ function decodePng(buf: Buffer): Pixels {
 		off += 12 + len; // 4 len + 4 type + len + 4 crc
 	}
 
-	if (bitDepth !== 8) throw new Error(`Unsupported bit depth ${bitDepth} (need 8)`);
-	const channels = colorType === 2 ? 3 : colorType === 6 ? 4 : colorType === 3 ? 1 : 0;
+	if (bitDepth !== 8)
+		throw new Error(`Unsupported bit depth ${bitDepth} (need 8)`);
+	const channels =
+		colorType === 2 ? 3 : colorType === 6 ? 4 : colorType === 3 ? 1 : 0;
 	if (channels === 0) throw new Error(`Unsupported colour type ${colorType}`);
 
 	const raw = inflateSync(Buffer.concat(idat));
@@ -94,16 +96,28 @@ function decodePng(buf: Buffer): Pixels {
 		for (let x = 0; x < stride; x++) {
 			const a = x >= channels ? unfiltered[dst + x - channels] : 0;
 			const b = y > 0 ? unfiltered[dst - stride + x] : 0;
-			const c = y > 0 && x >= channels ? unfiltered[dst - stride + x - channels] : 0;
+			const c =
+				y > 0 && x >= channels ? unfiltered[dst - stride + x - channels] : 0;
 			const v = raw[src + x];
 			let out: number;
 			switch (filter) {
-				case 0: out = v!; break;
-				case 1: out = v! + a!; break;
-				case 2: out = v! + b!; break;
-				case 3: out = v! + ((a! + b!) >> 1); break;
-				case 4: out = v! + paeth(a!, b!, c!); break;
-				default: throw new Error(`Unknown filter ${filter}`);
+				case 0:
+					out = v!;
+					break;
+				case 1:
+					out = v! + a!;
+					break;
+				case 2:
+					out = v! + b!;
+					break;
+				case 3:
+					out = v! + ((a! + b!) >> 1);
+					break;
+				case 4:
+					out = v! + paeth(a!, b!, c!);
+					break;
+				default:
+					throw new Error(`Unknown filter ${filter}`);
 			}
 			unfiltered[dst + x] = out & 0xff;
 		}
@@ -155,7 +169,10 @@ const CODES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
  * from anti-aliasing collapse onto them. Returns a map from original hex → the
  * representative hex it was quantised to.
  */
-function quantise(cells: (RGB | null)[], threshold: number): Map<string, string> {
+function quantise(
+	cells: (RGB | null)[],
+	threshold: number,
+): Map<string, string> {
 	const counts = new Map<string, { rgb: RGB; n: number }>();
 	for (const c of cells) {
 		if (!c) continue;

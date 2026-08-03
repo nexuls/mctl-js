@@ -6,10 +6,7 @@
  * shared `getServer` read path — the same view model the TUI Server page renders.
  */
 
-import {
-  loadConfig,
-  resolveRootPaths,
-} from "../../core/config/index.ts";
+import { loadConfig, resolveRootPaths } from "../../core/config/index.ts";
 import { getServer } from "../../core/server/discover.ts";
 import { wantsJson, toJson, formatServerStatus } from "../format.ts";
 import { reportConfigError } from "./list.ts";
@@ -29,30 +26,30 @@ Flags:
  * @returns process exit code (2 when the id is missing or unknown).
  */
 export async function runStatus(argv: string[]): Promise<number> {
-  if (argv.includes("-h") || argv.includes("--help")) {
-    console.log(HELP);
-    return 0;
-  }
+	if (argv.includes("-h") || argv.includes("--help")) {
+		console.log(HELP);
+		return 0;
+	}
 
-  const id = argv.find((a) => !a.startsWith("-"));
-  if (id === undefined) {
-    console.error("mctl: status needs a server id. Usage: `mctl status <id>`.");
-    return 2;
-  }
+	const id = argv.find((a) => !a.startsWith("-"));
+	if (id === undefined) {
+		console.error("mctl: status needs a server id. Usage: `mctl status <id>`.");
+		return 2;
+	}
 
-  let serversDir: string;
-  try {
-    serversDir = resolveRootPaths(await loadConfig()).serversDir;
-  } catch (err) {
-    return reportConfigError(err);
-  }
+	let serversDir: string;
+	try {
+		serversDir = resolveRootPaths(await loadConfig()).serversDir;
+	} catch (err) {
+		return reportConfigError(err);
+	}
 
-  const server = await getServer(id, serversDir);
-  if (!server) {
-    console.error(`mctl: no server with id \`${id}\`. Run \`mctl list\`.`);
-    return 2;
-  }
+	const server = await getServer(id, serversDir);
+	if (!server) {
+		console.error(`mctl: no server with id \`${id}\`. Run \`mctl list\`.`);
+		return 2;
+	}
 
-  console.log(wantsJson(argv) ? toJson(server) : formatServerStatus(server));
-  return 0;
+	console.log(wantsJson(argv) ? toJson(server) : formatServerStatus(server));
+	return 0;
 }

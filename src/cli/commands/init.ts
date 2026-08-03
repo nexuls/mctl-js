@@ -12,11 +12,11 @@
  */
 
 import {
-  configExists,
-  ensureDirTree,
-  resolveRootPaths,
-  writeConfig,
-  writeSecrets,
+	configExists,
+	ensureDirTree,
+	resolveRootPaths,
+	writeConfig,
+	writeSecrets,
 } from "../../core/config/index.ts";
 import { configFile, defaultRoot } from "../../lib/paths.ts";
 import { CONFIG_VERSION } from "../../types/config.ts";
@@ -52,17 +52,17 @@ Other:
 
 /** Long flags that take a value; everything else is a boolean switch. */
 const VALUE_FLAGS = new Set([
-  "root",
-  "servers-dir",
-  "backups-dir",
-  "mc",
-  "kind",
-  "memory",
-  "runtime",
-  "backup-provider",
-  "compression",
-  "network",
-  "theme",
+	"root",
+	"servers-dir",
+	"backups-dir",
+	"mc",
+	"kind",
+	"memory",
+	"runtime",
+	"backup-provider",
+	"compression",
+	"network",
+	"theme",
 ]);
 
 /** Boolean switches. */
@@ -70,8 +70,8 @@ const BOOL_FLAGS = new Set(["eula", "backup", "force", "json", "help"]);
 
 /** Parsed `init` arguments: string options and boolean switches. */
 interface InitArgs {
-  values: Record<string, string>;
-  flags: Record<string, boolean>;
+	values: Record<string, string>;
+	flags: Record<string, boolean>;
 }
 
 /**
@@ -80,38 +80,38 @@ interface InitArgs {
  * rather than being silently ignored.
  */
 function parseArgs(argv: string[]): InitArgs {
-  const values: Record<string, string> = {};
-  const flags: Record<string, boolean> = {};
+	const values: Record<string, string> = {};
+	const flags: Record<string, boolean> = {};
 
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
-    if (arg === "-h") {
-      flags.help = true;
-      continue;
-    }
-    if (!arg.startsWith("--")) {
-      throw new Error(`unexpected argument \`${arg}\``);
-    }
-    const body = arg.slice(2);
-    const eq = body.indexOf("=");
-    const name = eq >= 0 ? body.slice(0, eq) : body;
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i]!;
+		if (arg === "-h") {
+			flags.help = true;
+			continue;
+		}
+		if (!arg.startsWith("--")) {
+			throw new Error(`unexpected argument \`${arg}\``);
+		}
+		const body = arg.slice(2);
+		const eq = body.indexOf("=");
+		const name = eq >= 0 ? body.slice(0, eq) : body;
 
-    if (VALUE_FLAGS.has(name)) {
-      if (eq >= 0) {
-        values[name] = body.slice(eq + 1);
-      } else {
-        const value = argv[++i];
-        if (value === undefined) throw new Error(`\`--${name}\` needs a value`);
-        values[name] = value;
-      }
-    } else if (BOOL_FLAGS.has(name)) {
-      flags[name] = true;
-    } else {
-      throw new Error(`unknown flag \`--${name}\``);
-    }
-  }
+		if (VALUE_FLAGS.has(name)) {
+			if (eq >= 0) {
+				values[name] = body.slice(eq + 1);
+			} else {
+				const value = argv[++i];
+				if (value === undefined) throw new Error(`\`--${name}\` needs a value`);
+				values[name] = value;
+			}
+		} else if (BOOL_FLAGS.has(name)) {
+			flags[name] = true;
+		} else {
+			throw new Error(`unknown flag \`--${name}\``);
+		}
+	}
 
-  return { values, flags };
+	return { values, flags };
 }
 
 /**
@@ -121,32 +121,32 @@ function parseArgs(argv: string[]): InitArgs {
  * choices.
  */
 function buildConfig(args: InitArgs): unknown {
-  const { values, flags } = args;
+	const { values, flags } = args;
 
-  const defaults: Record<string, unknown> = {};
-  if (values.mc) defaults.minecraftVersion = values.mc;
-  if (values.kind) defaults.kind = values.kind;
-  if (values.memory) defaults.memory = values.memory;
-  if (values.runtime) defaults.runtime = values.runtime;
-  if (flags.eula) defaults.eula = true;
+	const defaults: Record<string, unknown> = {};
+	if (values.mc) defaults.minecraftVersion = values.mc;
+	if (values.kind) defaults.kind = values.kind;
+	if (values.memory) defaults.memory = values.memory;
+	if (values.runtime) defaults.runtime = values.runtime;
+	if (flags.eula) defaults.eula = true;
 
-  const backup: Record<string, unknown> = {};
-  if (flags.backup) backup.enabled = true;
-  if (values["backup-provider"]) backup.provider = values["backup-provider"];
-  if (values.compression) backup.compression = values.compression;
+	const backup: Record<string, unknown> = {};
+	if (flags.backup) backup.enabled = true;
+	if (values["backup-provider"]) backup.provider = values["backup-provider"];
+	if (values.compression) backup.compression = values.compression;
 
-  const config: Record<string, unknown> = {
-    configVersion: CONFIG_VERSION,
-    root: values.root ?? defaultRoot(),
-  };
-  if (values["servers-dir"]) config.servers_dir = values["servers-dir"];
-  if (values["backups-dir"]) config.backups_dir = values["backups-dir"];
-  if (values.theme) config.theme = values.theme;
-  if (Object.keys(defaults).length > 0) config.defaults = defaults;
-  if (Object.keys(backup).length > 0) config.backup = backup;
-  if (values.network) config.network = { defaultProfile: values.network };
+	const config: Record<string, unknown> = {
+		configVersion: CONFIG_VERSION,
+		root: values.root ?? defaultRoot(),
+	};
+	if (values["servers-dir"]) config.servers_dir = values["servers-dir"];
+	if (values["backups-dir"]) config.backups_dir = values["backups-dir"];
+	if (values.theme) config.theme = values.theme;
+	if (Object.keys(defaults).length > 0) config.defaults = defaults;
+	if (Object.keys(backup).length > 0) config.backup = backup;
+	if (values.network) config.network = { defaultProfile: values.network };
 
-  return config;
+	return config;
 }
 
 /**
@@ -155,62 +155,58 @@ function buildConfig(args: InitArgs): unknown {
  * @returns the process exit code.
  */
 export async function runInit(argv: string[]): Promise<number> {
-  let args: InitArgs;
-  try {
-    args = parseArgs(argv);
-  } catch (err) {
-    console.error(`mctl init: ${err instanceof Error ? err.message : err}`);
-    console.error("Run `mctl init --help`.");
-    return 1;
-  }
+	let args: InitArgs;
+	try {
+		args = parseArgs(argv);
+	} catch (err) {
+		console.error(`mctl init: ${err instanceof Error ? err.message : err}`);
+		console.error("Run `mctl init --help`.");
+		return 1;
+	}
 
-  if (args.flags.help) {
-    console.log(USAGE);
-    return 0;
-  }
+	if (args.flags.help) {
+		console.log(USAGE);
+		return 0;
+	}
 
-  // Refuse to clobber an existing setup unless explicitly forced — config is
-  // permanent-ish (the data root can't move) and overwriting it silently would
-  // be a footgun.
-  if ((await configExists()) && !args.flags.force) {
-    console.error(
-      `mctl init: config already exists at ${configFile()}. Use --force to overwrite.`,
-    );
-    return 1;
-  }
+	// Refuse to clobber an existing setup unless explicitly forced — config is
+	// permanent-ish (the data root can't move) and overwriting it silently would
+	// be a footgun.
+	if ((await configExists()) && !args.flags.force) {
+		console.error(
+			`mctl init: config already exists at ${configFile()}. Use --force to overwrite.`,
+		);
+		return 1;
+	}
 
-  try {
-    const config = await writeConfig(buildConfig(args));
-    await writeSecrets({});
-    await ensureDirTree(config);
-    const paths = resolveRootPaths(config);
+	try {
+		const config = await writeConfig(buildConfig(args));
+		await writeSecrets({});
+		await ensureDirTree(config);
+		const paths = resolveRootPaths(config);
 
-    if (args.flags.json) {
-      console.log(
-        JSON.stringify(
-          { configFile: configFile(), config, paths },
-          null,
-          2,
-        ),
-      );
-      return 0;
-    }
+		if (args.flags.json) {
+			console.log(
+				JSON.stringify({ configFile: configFile(), config, paths }, null, 2),
+			);
+			return 0;
+		}
 
-    console.log(`Initialised MCTL.`);
-    console.log(`  config     ${configFile()}`);
-    console.log(`  data root  ${paths.root}`);
-    console.log(`  servers    ${paths.serversDir}`);
-    console.log(`  backups    ${paths.backupsDir}`);
-    console.log(
-      `  defaults   ${config.defaults.kind} · MC ${config.defaults.minecraftVersion ?? "latest"} · ${config.defaults.memory} · ${config.defaults.runtime}`,
-    );
-    console.log(
-      `  backups    ${config.backup.enabled ? `on · ${config.backup.provider} · ${config.backup.compression}` : "off (manual only)"}`,
-    );
-    console.log(`\nRun \`mctl\` to open the dashboard.`);
-    return 0;
-  } catch (err) {
-    console.error(`mctl init: ${err instanceof Error ? err.message : err}`);
-    return 1;
-  }
+		console.log(`Initialised MCTL.`);
+		console.log(`  config     ${configFile()}`);
+		console.log(`  data root  ${paths.root}`);
+		console.log(`  servers    ${paths.serversDir}`);
+		console.log(`  backups    ${paths.backupsDir}`);
+		console.log(
+			`  defaults   ${config.defaults.kind} · MC ${config.defaults.minecraftVersion ?? "latest"} · ${config.defaults.memory} · ${config.defaults.runtime}`,
+		);
+		console.log(
+			`  backups    ${config.backup.enabled ? `on · ${config.backup.provider} · ${config.backup.compression}` : "off (manual only)"}`,
+		);
+		console.log(`\nRun \`mctl\` to open the dashboard.`);
+		return 0;
+	} catch (err) {
+		console.error(`mctl init: ${err instanceof Error ? err.message : err}`);
+		return 1;
+	}
 }

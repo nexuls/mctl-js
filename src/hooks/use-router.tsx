@@ -12,43 +12,43 @@
  */
 
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState,
+	type ReactNode,
 } from "react";
 import type { RouteId, RouteParams } from "../app/routes.ts";
 
 /** The current location. */
 interface Location {
-  route: RouteId;
-  params: RouteParams;
+	route: RouteId;
+	params: RouteParams;
 }
 
 /** The router API exposed to pages and the shell. */
 export interface Router {
-  /** The active route. */
-  route: RouteId;
-  /** The active route's params (empty object when none). */
-  params: RouteParams;
-  /** Go to `route`, pushing the current location onto the back-stack. */
-  navigate: (route: RouteId, params?: RouteParams) => void;
-  /** Return to the previous location; no-op at the root. */
-  back: () => void;
-  /** Whether there is somewhere to go `back` to. */
-  canBack: boolean;
+	/** The active route. */
+	route: RouteId;
+	/** The active route's params (empty object when none). */
+	params: RouteParams;
+	/** Go to `route`, pushing the current location onto the back-stack. */
+	navigate: (route: RouteId, params?: RouteParams) => void;
+	/** Return to the previous location; no-op at the root. */
+	back: () => void;
+	/** Whether there is somewhere to go `back` to. */
+	canBack: boolean;
 }
 
 const RouterContext = createContext<Router | undefined>(undefined);
 
 /** Props for {@link RouterProvider}. */
 interface RouterProviderProps {
-  /** The route to start on. Defaults to `"dashboard"`. */
-  initialRoute?: RouteId;
-  params?: RouteParams;
-  children: ReactNode;
+	/** The route to start on. Defaults to `"dashboard"`. */
+	initialRoute?: RouteId;
+	params?: RouteParams;
+	children: ReactNode;
 }
 
 /**
@@ -57,60 +57,59 @@ interface RouterProviderProps {
  * page back to the Dashboard) rather than always quitting.
  */
 export function RouterProvider({
-  initialRoute = "dashboard",
-  params = {},
-  children,
+	initialRoute = "dashboard",
+	params = {},
+	children,
 }: RouterProviderProps) {
-  const [location, setLocation] = useState<Location>({
-    route: initialRoute,
-    params: params,
-  });
-  const [stack, setStack] = useState<Location[]>([]);
+	const [location, setLocation] = useState<Location>({
+		route: initialRoute,
+		params: params,
+	});
+	const [stack, setStack] = useState<Location[]>([]);
 
-  const navigate = useCallback(
-    (route: RouteId, params: RouteParams = {}) => {
-      setLocation((current) => {
-        // Ignore a navigate to the identical location (same route + same params)
-        // so it doesn't pollute the back-stack with duplicates.
-        if (
-          current.route === route &&
-          current.params.serverId === params.serverId
-        ) {
-          return current;
-        }
-        setStack((s) => [...s, current]);
-        return { route, params };
-      });
-    },
-    [],
-  );
+	const navigate = useCallback((route: RouteId, params: RouteParams = {}) => {
+		setLocation((current) => {
+			// Ignore a navigate to the identical location (same route + same params)
+			// so it doesn't pollute the back-stack with duplicates.
+			if (
+				current.route === route &&
+				current.params.serverId === params.serverId
+			) {
+				return current;
+			}
+			setStack((s) => [...s, current]);
+			return { route, params };
+		});
+	}, []);
 
-  const back = useCallback(() => {
-    setStack((s) => {
-      if (s.length === 0) return s;
-      const previous = s[s.length - 1];
-      if (previous) setLocation(previous);
-      return s.slice(0, -1);
-    });
-  }, []);
+	const back = useCallback(() => {
+		setStack((s) => {
+			if (s.length === 0) return s;
+			const previous = s[s.length - 1];
+			if (previous) setLocation(previous);
+			return s.slice(0, -1);
+		});
+	}, []);
 
-  const value = useMemo<Router>(
-    () => ({
-      route: location.route,
-      params: location.params,
-      navigate,
-      back,
-      canBack: stack.length > 0,
-    }),
-    [location, navigate, back, stack.length],
-  );
+	const value = useMemo<Router>(
+		() => ({
+			route: location.route,
+			params: location.params,
+			navigate,
+			back,
+			canBack: stack.length > 0,
+		}),
+		[location, navigate, back, stack.length],
+	);
 
-  return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
+	return (
+		<RouterContext.Provider value={value}>{children}</RouterContext.Provider>
+	);
 }
 
 /** Access the router. Throws if used outside a {@link RouterProvider}. */
 export function useRouter(): Router {
-  const ctx = useContext(RouterContext);
-  if (!ctx) throw new Error("useRouter must be used within a RouterProvider");
-  return ctx;
+	const ctx = useContext(RouterContext);
+	if (!ctx) throw new Error("useRouter must be used within a RouterProvider");
+	return ctx;
 }

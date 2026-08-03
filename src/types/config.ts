@@ -24,9 +24,9 @@ export const CONFIG_VERSION = 1;
 
 /** An absolute filesystem path. Relative paths in config are always a mistake. */
 const AbsolutePath = z
-  .string()
-  .min(1)
-  .refine(isAbsolute, { message: "must be an absolute path" });
+	.string()
+	.min(1)
+	.refine(isAbsolute, { message: "must be an absolute path" });
 
 /** How a server is run by default. Mirrors the runtime provider ids. */
 export const RuntimeKind = z.enum(["foreground", "tmux", "docker"]);
@@ -65,16 +65,16 @@ export type ServerKind = z.infer<typeof ServerKind>;
 
 /** Defaults applied to newly created servers (each is overridable per server). */
 export const ServerDefaults = z.object({
-  /** Default Minecraft version; absent means "resolve latest at create time". */
-  minecraftVersion: z.string().optional(),
-  /** Default server kind/provider id, e.g. "paper", "vanilla", "fabric". */
-  kind: ServerKind.default("vanilla"),
-  /** Default JVM heap, e.g. "2G". Free-form; validated by the runtime later. */
-  memory: z.string().default("2G"),
-  /** Default runtime provider. */
-  runtime: RuntimeKind.default("foreground"),
-  /** Whether MCTL auto-accepts the Minecraft EULA on create. Off by default. */
-  eula: z.boolean().default(false),
+	/** Default Minecraft version; absent means "resolve latest at create time". */
+	minecraftVersion: z.string().optional(),
+	/** Default server kind/provider id, e.g. "paper", "vanilla", "fabric". */
+	kind: ServerKind.default("vanilla"),
+	/** Default JVM heap, e.g. "2G". Free-form; validated by the runtime later. */
+	memory: z.string().default("2G"),
+	/** Default runtime provider. */
+	runtime: RuntimeKind.default("foreground"),
+	/** Whether MCTL auto-accepts the Minecraft EULA on create. Off by default. */
+	eula: z.boolean().default(false),
 });
 export type ServerDefaults = z.infer<typeof ServerDefaults>;
 
@@ -84,14 +84,14 @@ export type BackupProvider = z.infer<typeof BackupProvider>;
 
 /** Backup policy defaults. Providers/scheduling land in Phase 4; shape is stable now. */
 export const BackupPolicy = z.object({
-  enabled: z.boolean().default(false),
-  /** Backup provider id, e.g. "filesystem", "s3", "drive". */
-  provider: BackupProvider.default("filesystem"),
-  /** Optional cron schedule; absent means manual-only. */
-  schedule: z.string().optional(),
-  /** Optional retention count (keep N most recent). */
-  retention: z.number().int().positive().optional(),
-  compression: CompressionKind.default("tar.zst"),
+	enabled: z.boolean().default(false),
+	/** Backup provider id, e.g. "filesystem", "s3", "drive". */
+	provider: BackupProvider.default("filesystem"),
+	/** Optional cron schedule; absent means manual-only. */
+	schedule: z.string().optional(),
+	/** Optional retention count (keep N most recent). */
+	retention: z.number().int().positive().optional(),
+	compression: CompressionKind.default("tar.zst"),
 });
 export type BackupPolicy = z.infer<typeof BackupPolicy>;
 
@@ -105,17 +105,17 @@ export type NetworkProvider = z.infer<typeof NetworkProvider>;
  * the concrete providers land in Phase 4 and define their own schemas.
  */
 export const NetworkProfile = z.object({
-  provider: NetworkProvider.default("direct"),
-  options: z.record(z.string(), z.unknown()).optional(),
+	provider: NetworkProvider.default("direct"),
+	options: z.record(z.string(), z.unknown()).optional(),
 });
 export type NetworkProfile = z.infer<typeof NetworkProfile>;
 
 /** Network configuration: a default profile name plus the named profiles. */
 export const NetworkConfig = z.object({
-  defaultProfile: NetworkProvider.default("direct"),
-  profiles: z
-    .record(z.string(), NetworkProfile)
-    .default({ direct: { provider: "direct" } }),
+	defaultProfile: NetworkProvider.default("direct"),
+	profiles: z
+		.record(z.string(), NetworkProfile)
+		.default({ direct: { provider: "direct" } }),
 });
 export type NetworkConfig = z.infer<typeof NetworkConfig>;
 
@@ -125,25 +125,25 @@ export type NetworkConfig = z.infer<typeof NetworkConfig>;
  * `root/backups` but may point elsewhere (large worlds on another drive).
  */
 export const Config = z.object({
-  configVersion: z.number().int().positive().default(CONFIG_VERSION),
-  root: AbsolutePath,
-  servers_dir: AbsolutePath.optional(),
-  backups_dir: AbsolutePath.optional(),
-  // Active theme id: a built-in ("github", "nord"), a custom theme's filename,
-  // or "terminal" (the default) for the live host-terminal palette. Just an id —
-  // the palette itself is resolved by the theme registry at startup, so a config
-  // naming a since-deleted theme degrades gracefully rather than storing colours.
-  theme: z.string().min(1).default("terminal"),
-  // Glyph family for the UI, alongside `theme` as the other half of the
-  // appearance settings. An enum rather than a free string: unlike themes, icon
-  // sets are not user-extensible — they are a fixed table in `core/icons/`.
-  icons: IconMode.default("auto"),
-  // `.prefault({})` = input-side default: an absent section is parsed as `{}`,
-  // which fills each nested field's own default. (`.default()` in Zod v4 wants a
-  // fully-formed output object, which would duplicate every nested default here.)
-  defaults: ServerDefaults.prefault({}),
-  backup: BackupPolicy.prefault({}),
-  network: NetworkConfig.prefault({}),
+	configVersion: z.number().int().positive().default(CONFIG_VERSION),
+	root: AbsolutePath,
+	servers_dir: AbsolutePath.optional(),
+	backups_dir: AbsolutePath.optional(),
+	// Active theme id: a built-in ("github", "nord"), a custom theme's filename,
+	// or "terminal" (the default) for the live host-terminal palette. Just an id —
+	// the palette itself is resolved by the theme registry at startup, so a config
+	// naming a since-deleted theme degrades gracefully rather than storing colours.
+	theme: z.string().min(1).default("terminal"),
+	// Glyph family for the UI, alongside `theme` as the other half of the
+	// appearance settings. An enum rather than a free string: unlike themes, icon
+	// sets are not user-extensible — they are a fixed table in `core/icons/`.
+	icons: IconMode.default("auto"),
+	// `.prefault({})` = input-side default: an absent section is parsed as `{}`,
+	// which fills each nested field's own default. (`.default()` in Zod v4 wants a
+	// fully-formed output object, which would duplicate every nested default here.)
+	defaults: ServerDefaults.prefault({}),
+	backup: BackupPolicy.prefault({}),
+	network: NetworkConfig.prefault({}),
 });
 export type Config = z.infer<typeof Config>;
 

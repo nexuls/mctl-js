@@ -28,7 +28,12 @@
  * UI-layer module: no I/O, no domain knowledge.
  */
 
-import { BoxRenderable, OptimizedBuffer, RGBA, type Renderable } from "@opentui/core";
+import {
+	BoxRenderable,
+	OptimizedBuffer,
+	RGBA,
+	type Renderable,
+} from "@opentui/core";
 
 /** Rect in screen cells. */
 interface Rect {
@@ -50,9 +55,15 @@ let patched = false;
 /** Fully transparent — cells the box does not paint must not overwrite the destination. */
 const TRANSPARENT = RGBA.fromValues(0, 0, 0, 0);
 
-function ensureScratch(widthMethod: "wcwidth" | "unicode", width: number, height: number): OptimizedBuffer {
+function ensureScratch(
+	widthMethod: "wcwidth" | "unicode",
+	width: number,
+	height: number,
+): OptimizedBuffer {
 	if (!scratch) {
-		scratch = OptimizedBuffer.create(width, height, widthMethod, { respectAlpha: true });
+		scratch = OptimizedBuffer.create(width, height, widthMethod, {
+			respectAlpha: true,
+		});
 	} else {
 		// No-op inside OptimizedBuffer when the dimensions already match.
 		scratch.resize(width, height);
@@ -87,7 +98,11 @@ function ancestorClip(node: Renderable): Rect | null {
 		};
 		if (internals.buffered) return clip;
 
-		if (internals.overflow !== "visible" && current.width > 0 && current.height > 0) {
+		if (
+			internals.overflow !== "visible" &&
+			current.width > 0 &&
+			current.height > 0
+		) {
 			const rect = internals.getScissorRect();
 			clip = clip ? intersect(clip, rect) : rect;
 			if (clip.width <= 0 || clip.height <= 0) return clip;
@@ -118,7 +133,12 @@ function contains(outer: Rect, inner: Rect): boolean {
 }
 
 function overlaps(a: Rect, b: Rect): boolean {
-	return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+	return (
+		a.x < b.x + b.width &&
+		b.x < a.x + a.width &&
+		a.y < b.y + b.height &&
+		b.y < a.y + a.height
+	);
 }
 
 /**

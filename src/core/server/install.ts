@@ -36,43 +36,43 @@ const logger = log("install");
  *   fetched or does not match its published digest.
  */
 export async function executeInstall(
-  strategy: InstallStrategy,
-  dir: string,
-  job?: JobContext,
+	strategy: InstallStrategy,
+	dir: string,
+	job?: JobContext,
 ): Promise<void> {
-  await ensureDir(dir);
+	await ensureDir(dir);
 
-  switch (strategy.kind) {
-    case "directJar": {
-      const dest = join(dir, strategy.dest);
-      job?.step("Downloading", 0);
-      logger.info({ url: strategy.url, dest }, "downloading server jar");
-      await downloadFile(strategy.url, dest, {
-        sha256: strategy.sha256,
-        sha1: strategy.sha1,
-        size: strategy.size,
-        signal: job?.signal,
-        onProgress: (progress) => {
-          job?.progress(
-            progress.fraction,
-            progress.total
-              ? `${formatBytes(progress.received)} / ${formatBytes(progress.total)}`
-              : formatBytes(progress.received),
-          );
-        },
-      });
-      // The digest check inside `downloadFile` *is* the verification step; there
-      // is nothing further to run for a directly-runnable jar.
-      job?.step("Verifying", 1);
-      return;
-    }
-    default: {
-      // Exhaustiveness guard: a Phase-3 strategy added to the union without a
-      // case here fails to compile rather than silently installing nothing.
-      const never: never = strategy.kind;
-      throw new Error(`unsupported install strategy: ${String(never)}`);
-    }
-  }
+	switch (strategy.kind) {
+		case "directJar": {
+			const dest = join(dir, strategy.dest);
+			job?.step("Downloading", 0);
+			logger.info({ url: strategy.url, dest }, "downloading server jar");
+			await downloadFile(strategy.url, dest, {
+				sha256: strategy.sha256,
+				sha1: strategy.sha1,
+				size: strategy.size,
+				signal: job?.signal,
+				onProgress: (progress) => {
+					job?.progress(
+						progress.fraction,
+						progress.total
+							? `${formatBytes(progress.received)} / ${formatBytes(progress.total)}`
+							: formatBytes(progress.received),
+					);
+				},
+			});
+			// The digest check inside `downloadFile` *is* the verification step; there
+			// is nothing further to run for a directly-runnable jar.
+			job?.step("Verifying", 1);
+			return;
+		}
+		default: {
+			// Exhaustiveness guard: a Phase-3 strategy added to the union without a
+			// case here fails to compile rather than silently installing nothing.
+			const never: never = strategy.kind;
+			throw new Error(`unsupported install strategy: ${String(never)}`);
+		}
+	}
 }
 
 /** The text Mojang's server writes and re-reads to record EULA acceptance. */
@@ -92,6 +92,6 @@ eula=true
  * opted-in create useless.
  */
 export async function writeEulaAcceptance(dir: string): Promise<void> {
-  await Bun.write(join(dir, "eula.txt"), EULA_CONTENTS);
-  logger.info({ dir }, "wrote eula.txt (user accepted)");
+	await Bun.write(join(dir, "eula.txt"), EULA_CONTENTS);
+	logger.info({ dir }, "wrote eula.txt (user accepted)");
 }

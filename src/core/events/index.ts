@@ -23,10 +23,10 @@ const logger = log("events");
 
 /** A running event system: the shared bus and a single teardown function. */
 export interface EventSystem {
-  /** The in-process bus every hook/command subscribes to. */
-  bus: EventBus;
-  /** Stop the tail and watchers and drop all subscribers. Idempotent. */
-  stop: () => Promise<void>;
+	/** The in-process bus every hook/command subscribes to. */
+	bus: EventBus;
+	/** Stop the tail and watchers and drop all subscribers. Idempotent. */
+	stop: () => Promise<void>;
 }
 
 /**
@@ -38,25 +38,25 @@ export interface EventSystem {
  * paths first. Call `stop()` before process exit.
  */
 export async function startEventSystem(): Promise<EventSystem> {
-  const bus = new EventBus();
-  // Rotate an oversized log before the tail records its start offset, so a long
-  // run of a previous instance can't leave the file growing unboundedly. The
-  // tail also rotates opportunistically while running.
-  await trimEventLog();
-  const stopTail = await startTail(bus);
-  const stopWatchers = await startWatchers(bus);
-  logger.debug("event system started (tail + watchers)");
+	const bus = new EventBus();
+	// Rotate an oversized log before the tail records its start offset, so a long
+	// run of a previous instance can't leave the file growing unboundedly. The
+	// tail also rotates opportunistically while running.
+	await trimEventLog();
+	const stopTail = await startTail(bus);
+	const stopWatchers = await startWatchers(bus);
+	logger.debug("event system started (tail + watchers)");
 
-  let stopped = false;
-  return {
-    bus,
-    stop: async () => {
-      if (stopped) return;
-      stopped = true;
-      stopTail();
-      stopWatchers();
-      bus.clear();
-      logger.debug("event system stopped");
-    },
-  };
+	let stopped = false;
+	return {
+		bus,
+		stop: async () => {
+			if (stopped) return;
+			stopped = true;
+			stopTail();
+			stopWatchers();
+			bus.clear();
+			logger.debug("event system stopped");
+		},
+	};
 }

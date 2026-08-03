@@ -19,8 +19,16 @@ import { log } from "../../lib/logger.ts";
 import type { RootPaths } from "../../lib/paths.ts";
 import type { Config } from "../../types/config.ts";
 import { EventType } from "../../types/events.ts";
-import type { LaunchContext, LogOptions, StopOptions } from "../../types/provider.ts";
-import type { RuntimeSession, Server, ServerState } from "../../types/server.ts";
+import type {
+	LaunchContext,
+	LogOptions,
+	StopOptions,
+} from "../../types/provider.ts";
+import type {
+	RuntimeSession,
+	Server,
+	ServerState,
+} from "../../types/server.ts";
 import type { EventBus } from "../events/bus.ts";
 import { publish } from "../events/log.ts";
 import { resolveJava } from "../java/index.ts";
@@ -33,24 +41,24 @@ const logger = log("runtime");
 
 /** Everything the manager needs, injected so it stays testable and UI-free. */
 export interface RuntimeManagerDeps {
-  /** Loaded, validated configuration. */
-  config: Config;
-  /** Data paths derived from it. */
-  paths: RootPaths;
-  /** Concrete providers registered for this process. */
-  providers: ProviderRegistry;
-  /** The process event bus. */
-  bus: EventBus;
+	/** Loaded, validated configuration. */
+	config: Config;
+	/** Data paths derived from it. */
+	paths: RootPaths;
+	/** Concrete providers registered for this process. */
+	providers: ProviderRegistry;
+	/** The process event bus. */
+	bus: EventBus;
 }
 
 /** Options for {@link RuntimeManager.start}. */
 export interface StartOptions {
-  /**
-   * Allow downloading a JDK if none installed satisfies the server's
-   * requirement. Default `true`; a UI that wants to prompt first passes `false`
-   * and handles `JavaNotResolvedError`.
-   */
-  autoInstallJava?: boolean;
+	/**
+	 * Allow downloading a JDK if none installed satisfies the server's
+	 * requirement. Default `true`; a UI that wants to prompt first passes `false`
+	 * and handles `JavaNotResolvedError`.
+	 */
+	autoInstallJava?: boolean;
 }
 
 /**
@@ -64,132 +72,141 @@ export interface StartOptions {
  * @throws {ServerOperationError} when the value is not a JVM size literal.
  */
 export function heapArgs(memory: string): string[] {
-  const value = memory.trim();
-  if (!/^\d+[kmgKMG]?$/.test(value)) {
-    throw new ServerOperationError(
-      undefined,
-      `invalid memory value "${memory}": expected a JVM size like "2G" or "4096M"`,
-    );
-  }
-  return [`-Xms${value}`, `-Xmx${value}`];
+	const value = memory.trim();
+	if (!/^\d+[kmgKMG]?$/.test(value)) {
+		throw new ServerOperationError(
+			undefined,
+			`invalid memory value "${memory}": expected a JVM size like "2G" or "4096M"`,
+		);
+	}
+	return [`-Xms${value}`, `-Xmx${value}`];
 }
 
 export class RuntimeManager {
-  readonly #deps: RuntimeManagerDeps;
+	readonly #deps: RuntimeManagerDeps;
 
-  constructor(deps: RuntimeManagerDeps) {
-    this.#deps = deps;
-  }
+	constructor(deps: RuntimeManagerDeps) {
+		this.#deps = deps;
+	}
 
-  /**
-   * Start a server: resolve its provider, its Java, and its launch spec, then
-   * hand a complete {@link LaunchContext} to the runtime.
-   *
-   * Held under the server's lock for the whole resolution *and* spawn, so two
-   * instances racing on `mctl start survival` cannot both get past the
-   * already-running check (architecture.md § Statelessness, "Concurrency").
-   *
-   * @throws {ServerOperationError} when the server is missing, unavailable, or
-   *   already running.
-   * @throws {ResourceBusyError} when another instance is starting it right now.
-   * @throws {UnknownProviderError} for an unregistered `kind` or `runtime`.
-   * @throws {JavaNotResolvedError} when no suitable Java can be found or fetched.
-   */
-  async start(id: string, options: StartOptions = {}): Promise<RuntimeSession> {
-    const { paths, providers, bus } = this.#deps;
+	/**
+	 * Start a server: resolve its provider, its Java, and its launch spec, then
+	 * hand a complete {@link LaunchContext} to the runtime.
+	 *
+	 * Held under the server's lock for the whole resolution *and* spawn, so two
+	 * instances racing on `mctl start survival` cannot both get past the
+	 * already-running check (architecture.md § Statelessness, "Concurrency").
+	 *
+	 * @throws {ServerOperationError} when the server is missing, unavailable, or
+	 *   already running.
+	 * @throws {ResourceBusyError} when another instance is starting it right now.
+	 * @throws {UnknownProviderError} for an unregistered `kind` or `runtime`.
+	 * @throws {JavaNotResolvedError} when no suitable Java can be found or fetched.
+	 */
+	async start(id: string, options: StartOptions = {}): Promise<RuntimeSession> {
+		const { paths, providers, bus } = this.#deps;
 
-    return withServerLock(id, async () => {
-      const server = await this.#require(id);
-      if (server.state === "running") {
-        throw new ServerOperationError(id, `server "${id}" is already running`);
-      }
+		return withServerLock(id, async () => {
+			const server = await this.#require(id);
+			if (server.state === "running") {
+				throw new ServerOperationError(id, `server "${id}" is already running`);
+			}
 
-      const kind = providers.server(server.kind);
-      const runtime = providers.runtime(server.runtime);
+			const kind = providers.server(server.kind);
+			const runtime = providers.runtime(server.runtime);
 
-      const requirement = await kind.javaRequirement(
-        server.minecraftVersion,
-        server.loaderVersion,
-      );
-      const java = await resolveJava(requirement, server.java, paths, {
-        autoInstall: options.autoInstallJava !== false,
-      });
+			const requirement = await kind.javaRequirement(
+				server.minecraftVersion,
+				server.loaderVersion,
+			);
+			const java = await resolveJava(requirement, server.java, paths, {
+				autoInstall: options.autoInstallJava !== false,
+			});
 
-      const context: LaunchContext = {
-        server,
-        spec: kind.launchSpec(server.path),
-        javaPath: java.installation.javaPath,
-        jvmArgs: heapArgs(server.memory),
-      };
+			const context: LaunchContext = {
+				server,
+				spec: kind.launchSpec(server.path),
+				javaPath: java.installation.javaPath,
+				jvmArgs: heapArgs(server.memory),
+			};
 
-      const session = await runtime.start(context);
-      logger.info(
-        { id, pid: session.pid, java: java.installation.major },
-        "started server",
-      );
-      await publish(bus, EventType.ServerStateChanged, { id, state: "running" });
-      return session;
-    });
-  }
+			const session = await runtime.start(context);
+			logger.info(
+				{ id, pid: session.pid, java: java.installation.major },
+				"started server",
+			);
+			await publish(bus, EventType.ServerStateChanged, {
+				id,
+				state: "running",
+			});
+			return session;
+		});
+	}
 
-  /**
-   * Stop a server. A stop on an already-stopped server is a **no-op, not an
-   * error** — `mctl stop` in a teardown script must be safe to run twice.
-   */
-  async stop(id: string, options: StopOptions = {}): Promise<void> {
-    const { providers, bus } = this.#deps;
-    const server = await this.#require(id);
-    if (server.state !== "running") {
-      logger.debug({ id }, "stop requested for a server that is not running");
-      return;
-    }
-    // The runtime that *started* it owns the stop, which is why this reads
-    // `server.runtime` from `mctl.json` rather than assuming the default.
-    await providers.runtime(server.runtime).stop(server, options);
-    logger.info({ id }, "stopped server");
-    await publish(bus, EventType.ServerStateChanged, { id, state: "stopped" });
-  }
+	/**
+	 * Stop a server. A stop on an already-stopped server is a **no-op, not an
+	 * error** — `mctl stop` in a teardown script must be safe to run twice.
+	 */
+	async stop(id: string, options: StopOptions = {}): Promise<void> {
+		const { providers, bus } = this.#deps;
+		const server = await this.#require(id);
+		if (server.state !== "running") {
+			logger.debug({ id }, "stop requested for a server that is not running");
+			return;
+		}
+		// The runtime that *started* it owns the stop, which is why this reads
+		// `server.runtime` from `mctl.json` rather than assuming the default.
+		await providers.runtime(server.runtime).stop(server, options);
+		logger.info({ id }, "stopped server");
+		await publish(bus, EventType.ServerStateChanged, { id, state: "stopped" });
+	}
 
-  /** Stop then start, re-resolving everything in between. */
-  async restart(id: string, options: StartOptions & StopOptions = {}): Promise<RuntimeSession> {
-    await this.stop(id, options);
-    return this.start(id, options);
-  }
+	/** Stop then start, re-resolving everything in between. */
+	async restart(
+		id: string,
+		options: StartOptions & StopOptions = {},
+	): Promise<RuntimeSession> {
+		await this.stop(id, options);
+		return this.start(id, options);
+	}
 
-  /** Stream a server's console output; see {@link LogOptions}. */
-  async logs(id: string, options: LogOptions = {}): Promise<AsyncIterable<string>> {
-    const server = await this.#require(id);
-    return this.#deps.providers.runtime(server.runtime).logs(server, options);
-  }
+	/** Stream a server's console output; see {@link LogOptions}. */
+	async logs(
+		id: string,
+		options: LogOptions = {},
+	): Promise<AsyncIterable<string>> {
+		const server = await this.#require(id);
+		return this.#deps.providers.runtime(server.runtime).logs(server, options);
+	}
 
-  /**
-   * Send one line to a server's console.
-   * @throws {ServerOperationError} when it is not running.
-   */
-  async exec(id: string, command: string): Promise<void> {
-    const server = await this.#require(id);
-    if (server.state !== "running") {
-      throw new ServerOperationError(id, `server "${id}" is not running`);
-    }
-    await this.#deps.providers.runtime(server.runtime).exec(server, command);
-  }
+	/**
+	 * Send one line to a server's console.
+	 * @throws {ServerOperationError} when it is not running.
+	 */
+	async exec(id: string, command: string): Promise<void> {
+		const server = await this.#require(id);
+		if (server.state !== "running") {
+			throw new ServerOperationError(id, `server "${id}" is not running`);
+		}
+		await this.#deps.providers.runtime(server.runtime).exec(server, command);
+	}
 
-  /** Live-probed state of one server. */
-  async status(id: string): Promise<ServerState> {
-    const server = await this.#require(id);
-    return this.#deps.providers.runtime(server.runtime).status(server);
-  }
+	/** Live-probed state of one server. */
+	async status(id: string): Promise<ServerState> {
+		const server = await this.#require(id);
+		return this.#deps.providers.runtime(server.runtime).status(server);
+	}
 
-  /** Load a server, rejecting missing and unavailable ones with a clear message. */
-  async #require(id: string): Promise<Server> {
-    const server = await getServer(id, this.#deps.paths.serversDir);
-    if (!server) throw new ServerOperationError(id, `no such server: ${id}`);
-    if (!server.available) {
-      throw new ServerOperationError(
-        id,
-        `server "${id}" is unavailable (${server.path} is missing)`,
-      );
-    }
-    return server;
-  }
+	/** Load a server, rejecting missing and unavailable ones with a clear message. */
+	async #require(id: string): Promise<Server> {
+		const server = await getServer(id, this.#deps.paths.serversDir);
+		if (!server) throw new ServerOperationError(id, `no such server: ${id}`);
+		if (!server.available) {
+			throw new ServerOperationError(
+				id,
+				`server "${id}" is unavailable (${server.path} is missing)`,
+			);
+		}
+		return server;
+	}
 }

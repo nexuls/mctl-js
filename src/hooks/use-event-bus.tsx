@@ -14,21 +14,22 @@ const EventBusContext = createContext<EventBus | undefined>(undefined);
 
 /** Props for {@link EventBusProvider}. */
 interface EventBusProviderProps {
-  /** The bus created by `startEventSystem()` in `renderApp()`. */
-  bus: EventBus;
-  children: ReactNode;
+	/** The bus created by `startEventSystem()` in `renderApp()`. */
+	bus: EventBus;
+	children: ReactNode;
 }
 
 /** Provide the shared event bus to the tree. */
 export function EventBusProvider({ bus, children }: EventBusProviderProps) {
-  return (
-    <EventBusContext.Provider value={bus}>{children}</EventBusContext.Provider>
-  );
+	return (
+		<EventBusContext.Provider value={bus}>{children}</EventBusContext.Provider>
+	);
 }
 
 /** Access the shared event bus. Throws if used outside an {@link EventBusProvider}. */
 export function useEventBus(): EventBus {
-  const ctx = useContext(EventBusContext);
-  if (!ctx) throw new Error("useEventBus must be used within an EventBusProvider");
-  return ctx;
+	const ctx = useContext(EventBusContext);
+	if (!ctx)
+		throw new Error("useEventBus must be used within an EventBusProvider");
+	return ctx;
 }

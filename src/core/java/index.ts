@@ -5,28 +5,28 @@
  */
 
 export {
-  detectJavaInstallations,
-  clearJavaProbeCache,
-  majorOf,
-  probeJava,
+	detectJavaInstallations,
+	clearJavaProbeCache,
+	majorOf,
+	probeJava,
 } from "./detect.ts";
 export {
-  installTemurin,
-  managedJavaHome,
-  resolveTemurin,
-  JavaExtractError,
-  JavaNotAvailableError,
-  type AdoptiumRelease,
-  type InstallJavaOptions,
+	installTemurin,
+	managedJavaHome,
+	resolveTemurin,
+	JavaExtractError,
+	JavaNotAvailableError,
+	type AdoptiumRelease,
+	type InstallJavaOptions,
 } from "./adoptium.ts";
 export {
-  chooseInstalled,
-  describe,
-  installJava,
-  listJava,
-  preferredMajor,
-  resolveJava,
-  JavaNotResolvedError,
-  type JavaPaths,
-  type ResolveJavaOptions,
+	chooseInstalled,
+	describe,
+	installJava,
+	listJava,
+	preferredMajor,
+	resolveJava,
+	JavaNotResolvedError,
+	type JavaPaths,
+	type ResolveJavaOptions,
 } from "./java-manager.ts";

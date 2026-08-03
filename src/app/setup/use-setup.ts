@@ -15,10 +15,10 @@
 
 import { useCallback, useState } from "react";
 import {
-  ensureDirTree,
-  resolveRootPaths,
-  writeConfig,
-  writeSecrets,
+	ensureDirTree,
+	resolveRootPaths,
+	writeConfig,
+	writeSecrets,
 } from "../../core/config/index.ts";
 import { configFile } from "../../lib/paths.ts";
 import { CONFIG_VERSION, type Config } from "../../types/config.ts";
@@ -26,14 +26,14 @@ import type { SetupDraft } from "./types.ts";
 
 /** What {@link commitSetup} produced — the paths a caller wants to surface next. */
 export interface SetupResult {
-  /** The written config file path. */
-  configFile: string;
-  /** The chosen data root. */
-  root: string;
-  /** Resolved servers directory (override or `root/servers`). */
-  serversDir: string;
-  /** Resolved backups directory (override or `root/backups`). */
-  backupsDir: string;
+	/** The written config file path. */
+	configFile: string;
+	/** The chosen data root. */
+	root: string;
+	/** Resolved servers directory (override or `root/servers`). */
+	serversDir: string;
+	/** Resolved backups directory (override or `root/backups`). */
+	backupsDir: string;
 }
 
 /**
@@ -43,30 +43,30 @@ export interface SetupResult {
  * string fields collapse to `undefined` when empty so the schema default applies.
  */
 export function draftToConfig(draft: SetupDraft, themeId: string): unknown {
-  return {
-    configVersion: CONFIG_VERSION,
-    root: draft.root,
-    servers_dir:
-      draft.overrideServers && draft.serversDir ? draft.serversDir : undefined,
-    backups_dir:
-      draft.overrideBackups && draft.backupsDir ? draft.backupsDir : undefined,
-    theme: themeId,
-    defaults: {
-      minecraftVersion: draft.minecraftVersion || undefined,
-      kind: draft.kind,
-      memory: draft.memory,
-      runtime: draft.runtime,
-      eula: draft.eula,
-    },
-    backup: {
-      enabled: draft.backupEnabled,
-      provider: draft.backupProvider,
-      compression: draft.compression,
-    },
-    network: {
-      defaultProfile: draft.network,
-    },
-  };
+	return {
+		configVersion: CONFIG_VERSION,
+		root: draft.root,
+		servers_dir:
+			draft.overrideServers && draft.serversDir ? draft.serversDir : undefined,
+		backups_dir:
+			draft.overrideBackups && draft.backupsDir ? draft.backupsDir : undefined,
+		theme: themeId,
+		defaults: {
+			minecraftVersion: draft.minecraftVersion || undefined,
+			kind: draft.kind,
+			memory: draft.memory,
+			runtime: draft.runtime,
+			eula: draft.eula,
+		},
+		backup: {
+			enabled: draft.backupEnabled,
+			provider: draft.backupProvider,
+			compression: draft.compression,
+		},
+		network: {
+			defaultProfile: draft.network,
+		},
+	};
 }
 
 /**
@@ -76,29 +76,29 @@ export function draftToConfig(draft: SetupDraft, themeId: string): unknown {
  *   failure — the caller decides how to surface it.
  */
 export async function commitSetup(
-  draft: SetupDraft,
-  themeId: string,
+	draft: SetupDraft,
+	themeId: string,
 ): Promise<SetupResult> {
-  const config: Config = await writeConfig(draftToConfig(draft, themeId));
-  await writeSecrets({});
-  await ensureDirTree(config);
-  const paths = resolveRootPaths(config);
-  return {
-    configFile: configFile(),
-    root: config.root,
-    serversDir: paths.serversDir,
-    backupsDir: paths.backupsDir,
-  };
+	const config: Config = await writeConfig(draftToConfig(draft, themeId));
+	await writeSecrets({});
+	await ensureDirTree(config);
+	const paths = resolveRootPaths(config);
+	return {
+		configFile: configFile(),
+		root: config.root,
+		serversDir: paths.serversDir,
+		backupsDir: paths.backupsDir,
+	};
 }
 
 /** The state and action returned by {@link useSetup}. */
 export interface UseSetup {
-  /** Commit the draft; resolves to the result, or `null` if it failed (see `error`). */
-  commit: (draft: SetupDraft, themeId: string) => Promise<SetupResult | null>;
-  /** True while a commit is in flight — disable the confirm control. */
-  committing: boolean;
-  /** The last commit error message, or `null`. Cleared when a new commit starts. */
-  error: string | null;
+	/** Commit the draft; resolves to the result, or `null` if it failed (see `error`). */
+	commit: (draft: SetupDraft, themeId: string) => Promise<SetupResult | null>;
+	/** True while a commit is in flight — disable the confirm control. */
+	committing: boolean;
+	/** The last commit error message, or `null`. Cleared when a new commit starts. */
+	error: string | null;
 }
 
 /**
@@ -107,24 +107,21 @@ export interface UseSetup {
  * throwing out of the render tree.
  */
 export function useSetup(): UseSetup {
-  const [committing, setCommitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+	const [committing, setCommitting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
-  const commit = useCallback(
-    async (draft: SetupDraft, themeId: string) => {
-      setCommitting(true);
-      setError(null);
-      try {
-        return await commitSetup(draft, themeId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        return null;
-      } finally {
-        setCommitting(false);
-      }
-    },
-    [],
-  );
+	const commit = useCallback(async (draft: SetupDraft, themeId: string) => {
+		setCommitting(true);
+		setError(null);
+		try {
+			return await commitSetup(draft, themeId);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+			return null;
+		} finally {
+			setCommitting(false);
+		}
+	}, []);
 
-  return { commit, committing, error };
+	return { commit, committing, error };
 }

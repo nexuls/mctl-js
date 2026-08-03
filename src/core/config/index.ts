@@ -18,20 +18,20 @@
 
 import { stat } from "node:fs/promises";
 import {
-  configFile,
-  secretsFile,
-  configDir,
-  apiCacheDir,
-  runtimeDir,
-  logsDir,
-  rootPaths,
-  type RootPaths,
+	configFile,
+	secretsFile,
+	configDir,
+	apiCacheDir,
+	runtimeDir,
+	logsDir,
+	rootPaths,
+	type RootPaths,
 } from "../../lib/paths.ts";
 import {
-  pathExists,
-  readJsonIfExists,
-  writeJsonAtomic,
-  ensureDir,
+	pathExists,
+	readJsonIfExists,
+	writeJsonAtomic,
+	ensureDir,
 } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { Config, Secrets } from "../../types/config.ts";
@@ -39,27 +39,31 @@ import { Config, Secrets } from "../../types/config.ts";
 const logger = log("config");
 
 /** `MCTL_*` env vars that are settings, not secrets — excluded from overrides. */
-const RESERVED_ENV = new Set(["MCTL_LOG_LEVEL", "MCTL_ICONS", "MCTL_NERD_FONT"]);
+const RESERVED_ENV = new Set([
+	"MCTL_LOG_LEVEL",
+	"MCTL_ICONS",
+	"MCTL_NERD_FONT",
+]);
 
 /** Thrown when a config-dependent action runs before first-run setup exists. */
 export class ConfigNotFoundError extends Error {
-  constructor() {
-    super(
-      `No config found at ${configFile()}. Run \`mctl init\` (or the setup wizard) first.`,
-    );
-    this.name = "ConfigNotFoundError";
-  }
+	constructor() {
+		super(
+			`No config found at ${configFile()}. Run \`mctl init\` (or the setup wizard) first.`,
+		);
+		this.name = "ConfigNotFoundError";
+	}
 }
 
 /** Thrown when a config/secrets file exists but fails schema validation. */
 export class ConfigValidationError extends Error {
-  constructor(
-    readonly file: string,
-    readonly issues: string,
-  ) {
-    super(`Invalid config at ${file}:\n${issues}`);
-    this.name = "ConfigValidationError";
-  }
+	constructor(
+		readonly file: string,
+		readonly issues: string,
+	) {
+		super(`Invalid config at ${file}:\n${issues}`);
+		this.name = "ConfigValidationError";
+	}
 }
 
 /**
@@ -67,7 +71,7 @@ export class ConfigValidationError extends Error {
  * absence is the sole first-run trigger (plan.md § First-Run Setup Wizard).
  */
 export async function configExists(): Promise<boolean> {
-  return pathExists(configFile());
+	return pathExists(configFile());
 }
 
 /**
@@ -76,13 +80,13 @@ export async function configExists(): Promise<boolean> {
  * @throws {ConfigValidationError} when present but malformed.
  */
 export async function loadConfig(): Promise<Config> {
-  const raw = await readJsonIfExists(configFile());
-  if (raw === undefined) throw new ConfigNotFoundError();
-  const parsed = Config.safeParse(raw);
-  if (!parsed.success) {
-    throw new ConfigValidationError(configFile(), formatIssues(parsed.error));
-  }
-  return parsed.data;
+	const raw = await readJsonIfExists(configFile());
+	if (raw === undefined) throw new ConfigNotFoundError();
+	const parsed = Config.safeParse(raw);
+	if (!parsed.success) {
+		throw new ConfigValidationError(configFile(), formatIssues(parsed.error));
+	}
+	return parsed.data;
 }
 
 /**
@@ -94,18 +98,18 @@ export async function loadConfig(): Promise<Config> {
  * @throws {ConfigValidationError} when the file exists but is not `{string: string}`.
  */
 export async function loadSecrets(): Promise<Secrets> {
-  const raw = (await readJsonIfExists(secretsFile())) ?? {};
-  const parsed = Secrets.safeParse(raw);
-  if (!parsed.success) {
-    throw new ConfigValidationError(secretsFile(), formatIssues(parsed.error));
-  }
-  const merged: Secrets = { ...parsed.data };
-  for (const [name, value] of Object.entries(process.env)) {
-    if (value === undefined) continue;
-    if (!name.startsWith("MCTL_") || RESERVED_ENV.has(name)) continue;
-    merged[name.slice("MCTL_".length)] = value;
-  }
-  return merged;
+	const raw = (await readJsonIfExists(secretsFile())) ?? {};
+	const parsed = Secrets.safeParse(raw);
+	if (!parsed.success) {
+		throw new ConfigValidationError(secretsFile(), formatIssues(parsed.error));
+	}
+	const merged: Secrets = { ...parsed.data };
+	for (const [name, value] of Object.entries(process.env)) {
+		if (value === undefined) continue;
+		if (!name.startsWith("MCTL_") || RESERVED_ENV.has(name)) continue;
+		merged[name.slice("MCTL_".length)] = value;
+	}
+	return merged;
 }
 
 /**
@@ -113,13 +117,13 @@ export async function loadSecrets(): Promise<Secrets> {
  * defaults, so a partial object from the wizard becomes a complete file.
  */
 export async function writeConfig(config: unknown): Promise<Config> {
-  const parsed = Config.safeParse(config);
-  if (!parsed.success) {
-    throw new ConfigValidationError(configFile(), formatIssues(parsed.error));
-  }
-  await writeJsonAtomic(configFile(), parsed.data);
-  logger.info({ file: configFile() }, "wrote config");
-  return parsed.data;
+	const parsed = Config.safeParse(config);
+	if (!parsed.success) {
+		throw new ConfigValidationError(configFile(), formatIssues(parsed.error));
+	}
+	await writeJsonAtomic(configFile(), parsed.data);
+	logger.info({ file: configFile() }, "wrote config");
+	return parsed.data;
 }
 
 /**
@@ -128,18 +132,18 @@ export async function writeConfig(config: unknown): Promise<Config> {
  * loudly rather than trust the write. Values are never logged.
  */
 export async function writeSecrets(secrets: Secrets): Promise<void> {
-  const parsed = Secrets.safeParse(secrets);
-  if (!parsed.success) {
-    throw new ConfigValidationError(secretsFile(), formatIssues(parsed.error));
-  }
-  await writeJsonAtomic(secretsFile(), parsed.data, { mode: 0o600 });
-  const mode = (await stat(secretsFile())).mode & 0o777;
-  if (mode !== 0o600) {
-    throw new Error(
-      `secrets.json has mode ${mode.toString(8)}, expected 600 — refusing to continue`,
-    );
-  }
-  logger.info({ file: secretsFile() }, "wrote secrets (0600, values redacted)");
+	const parsed = Secrets.safeParse(secrets);
+	if (!parsed.success) {
+		throw new ConfigValidationError(secretsFile(), formatIssues(parsed.error));
+	}
+	await writeJsonAtomic(secretsFile(), parsed.data, { mode: 0o600 });
+	const mode = (await stat(secretsFile())).mode & 0o777;
+	if (mode !== 0o600) {
+		throw new Error(
+			`secrets.json has mode ${mode.toString(8)}, expected 600 — refusing to continue`,
+		);
+	}
+	logger.info({ file: secretsFile() }, "wrote secrets (0600, values redacted)");
 }
 
 /**
@@ -148,10 +152,10 @@ export async function writeSecrets(secrets: Secrets): Promise<void> {
  * {@link rootPaths} so callers don't re-thread the override fields.
  */
 export function resolveRootPaths(config: Config): RootPaths {
-  return rootPaths(config.root, {
-    serversDir: config.servers_dir,
-    backupsDir: config.backups_dir,
-  });
+	return rootPaths(config.root, {
+		serversDir: config.servers_dir,
+		backupsDir: config.backups_dir,
+	});
 }
 
 /**
@@ -160,23 +164,23 @@ export function resolveRootPaths(config: Config): RootPaths {
  * launch, not just first run. Does **not** write any files.
  */
 export async function ensureDirTree(config: Config): Promise<void> {
-  const paths = resolveRootPaths(config);
-  await Promise.all([
-    ensureDir(configDir()),
-    ensureDir(apiCacheDir()),
-    ensureDir(runtimeDir()),
-    ensureDir(logsDir()),
-    ensureDir(paths.serversDir),
-    ensureDir(paths.backupsDir),
-    ensureDir(paths.javaDir),
-    ensureDir(paths.stagingDir), // creates downloadsDir as its parent
-  ]);
-  logger.debug({ root: paths.root }, "ensured directory tree");
+	const paths = resolveRootPaths(config);
+	await Promise.all([
+		ensureDir(configDir()),
+		ensureDir(apiCacheDir()),
+		ensureDir(runtimeDir()),
+		ensureDir(logsDir()),
+		ensureDir(paths.serversDir),
+		ensureDir(paths.backupsDir),
+		ensureDir(paths.javaDir),
+		ensureDir(paths.stagingDir), // creates downloadsDir as its parent
+	]);
+	logger.debug({ root: paths.root }, "ensured directory tree");
 }
 
 /** Flatten a ZodError into a readable multi-line string for error messages. */
 function formatIssues(error: import("zod").ZodError): string {
-  return error.issues
-    .map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message}`)
-    .join("\n");
+	return error.issues
+		.map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message}`)
+		.join("\n");
 }

@@ -25,20 +25,20 @@ import { logsDir } from "./paths.ts";
  * nothing; a leaked token is a real incident.
  */
 const REDACT_PATHS = [
-  "token",
-  "*.token",
-  "authtoken",
-  "*.authtoken",
-  "secret",
-  "*.secret",
-  "password",
-  "*.password",
-  "apiKey",
-  "*.apiKey",
-  "accessKey",
-  "*.accessKey",
-  "secretKey",
-  "*.secretKey",
+	"token",
+	"*.token",
+	"authtoken",
+	"*.authtoken",
+	"secret",
+	"*.secret",
+	"password",
+	"*.password",
+	"apiKey",
+	"*.apiKey",
+	"accessKey",
+	"*.accessKey",
+	"secretKey",
+	"*.secretKey",
 ];
 
 let root: Logger | undefined;
@@ -49,23 +49,23 @@ let root: Logger | undefined;
  * synchronously here so the destination is always writable.
  */
 export function logger(): Logger {
-  if (root) return root;
-  const dir = logsDir();
-  mkdirSync(dir, { recursive: true });
-  root = pino(
-    {
-      level: process.env.MCTL_LOG_LEVEL ?? "info",
-      redact: { paths: REDACT_PATHS, censor: "[redacted]" },
-    },
-    // `append: true` (default) — one growing log; rotation is a later concern.
-    // `sync: true`: log volume is tiny and this is a plain file (never the render
-    // path), and a *synchronous* destination avoids the async sonic-boom teardown
-    // race where a short-lived CLI command (`process.exit` after a fast failure)
-    // exits before the async stream's fd has opened — pino's on-exit flush then
-    // throws "sonic boom is not ready yet". Sync writes sidestep that entirely.
-    pino.destination({ dest: join(dir, "mctl.log"), sync: true }),
-  );
-  return root;
+	if (root) return root;
+	const dir = logsDir();
+	mkdirSync(dir, { recursive: true });
+	root = pino(
+		{
+			level: process.env.MCTL_LOG_LEVEL ?? "info",
+			redact: { paths: REDACT_PATHS, censor: "[redacted]" },
+		},
+		// `append: true` (default) — one growing log; rotation is a later concern.
+		// `sync: true`: log volume is tiny and this is a plain file (never the render
+		// path), and a *synchronous* destination avoids the async sonic-boom teardown
+		// race where a short-lived CLI command (`process.exit` after a fast failure)
+		// exits before the async stream's fd has opened — pino's on-exit flush then
+		// throws "sonic boom is not ready yet". Sync writes sidestep that entirely.
+		pino.destination({ dest: join(dir, "mctl.log"), sync: true }),
+	);
+	return root;
 }
 
 /**
@@ -74,5 +74,5 @@ export function logger(): Logger {
  * root logger so lines are attributable to a module.
  */
 export function log(mod: string): Logger {
-  return logger().child({ mod });
+	return logger().child({ mod });
 }

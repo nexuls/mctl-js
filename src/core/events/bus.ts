@@ -28,27 +28,27 @@ const CHANNEL = "event";
  * needs to react to state changes.
  */
 export class EventBus {
-  private readonly ee = new EventEmitter();
+	private readonly ee = new EventEmitter();
 
-  /**
-   * Emit an event to all local subscribers. Does **not** write to `events.jsonl`
-   * — use `publish()` (`log.ts`) for a state change other instances must see.
-   */
-  emit(event: MctlEvent): void {
-    this.ee.emit(CHANNEL, event);
-  }
+	/**
+	 * Emit an event to all local subscribers. Does **not** write to `events.jsonl`
+	 * — use `publish()` (`log.ts`) for a state change other instances must see.
+	 */
+	emit(event: MctlEvent): void {
+		this.ee.emit(CHANNEL, event);
+	}
 
-  /**
-   * Subscribe to every event. Returns an unsubscribe function; call it on
-   * teardown (React effect cleanup, CLI command exit) to avoid leaks.
-   */
-  subscribe(listener: EventListener): () => void {
-    this.ee.on(CHANNEL, listener);
-    return () => this.ee.off(CHANNEL, listener);
-  }
+	/**
+	 * Subscribe to every event. Returns an unsubscribe function; call it on
+	 * teardown (React effect cleanup, CLI command exit) to avoid leaks.
+	 */
+	subscribe(listener: EventListener): () => void {
+		this.ee.on(CHANNEL, listener);
+		return () => this.ee.off(CHANNEL, listener);
+	}
 
-  /** Drop all subscribers. Called during event-system teardown. */
-  clear(): void {
-    this.ee.removeAllListeners(CHANNEL);
-  }
+	/** Drop all subscribers. Called during event-system teardown. */
+	clear(): void {
+		this.ee.removeAllListeners(CHANNEL);
+	}
 }

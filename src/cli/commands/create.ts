@@ -44,65 +44,77 @@ Flags:
  * @returns process exit code.
  */
 export async function runCreate(argv: string[]): Promise<number> {
-  if (argv.includes("-h") || argv.includes("--help")) {
-    console.log(HELP);
-    return 0;
-  }
+	if (argv.includes("-h") || argv.includes("--help")) {
+		console.log(HELP);
+		return 0;
+	}
 
-  try {
-    const args = parseArgs(argv, {
-      valued: ["kind", "mc", "loader", "memory", "runtime", "network", "path", "id", "java"],
-      boolean: ["eula", "json", "java"],
-    });
-    const name = args.positionals[0];
-    if (name === undefined) throw new ArgError("create needs a server name");
-    if (args.positionals.length > 1) {
-      throw new ArgError(
-        `unexpected argument "${args.positionals[1]}" (quote names containing spaces)`,
-      );
-    }
+	try {
+		const args = parseArgs(argv, {
+			valued: [
+				"kind",
+				"mc",
+				"loader",
+				"memory",
+				"runtime",
+				"network",
+				"path",
+				"id",
+				"java",
+			],
+			boolean: ["eula", "json", "java"],
+		});
+		const name = args.positionals[0];
+		if (name === undefined) throw new ArgError("create needs a server name");
+		if (args.positionals.length > 1) {
+			throw new ArgError(
+				`unexpected argument "${args.positionals[1]}" (quote names containing spaces)`,
+			);
+		}
 
-    const context = await cliContext();
-    const json = wantsJson(argv);
-    // `--java 21` pins; `--no-java` skips. They are the same flag name because
-    // they are the same decision: "do not resolve Java automatically". The
-    // negation is checked first — `--no-java` stores the string "false", which
-    // is not a version number and must not reach `intFlag`.
-    const skipJava = boolFlag(args, "java") === false;
-    const javaPin = skipJava ? undefined : intFlag(args, "java");
+		const context = await cliContext();
+		const json = wantsJson(argv);
+		// `--java 21` pins; `--no-java` skips. They are the same flag name because
+		// they are the same decision: "do not resolve Java automatically". The
+		// negation is checked first — `--no-java` stores the string "false", which
+		// is not a version number and must not reach `intFlag`.
+		const skipJava = boolFlag(args, "java") === false;
+		const javaPin = skipJava ? undefined : intFlag(args, "java");
 
-    const started = await context.servers.createServer({
-      name,
-      id: stringFlag(args, "id"),
-      kind: stringFlag(args, "kind") as ServerKind | undefined,
-      minecraftVersion: stringFlag(args, "mc"),
-      loaderVersion: stringFlag(args, "loader"),
-      memory: stringFlag(args, "memory"),
-      runtime: stringFlag(args, "runtime") as RuntimeKind | undefined,
-      network: stringFlag(args, "network"),
-      path: stringFlag(args, "path"),
-      eula: boolFlag(args, "eula"),
-      javaPin,
-      skipJava,
-    });
+		const started = await context.servers.createServer({
+			name,
+			id: stringFlag(args, "id"),
+			kind: stringFlag(args, "kind") as ServerKind | undefined,
+			minecraftVersion: stringFlag(args, "mc"),
+			loaderVersion: stringFlag(args, "loader"),
+			memory: stringFlag(args, "memory"),
+			runtime: stringFlag(args, "runtime") as RuntimeKind | undefined,
+			network: stringFlag(args, "network"),
+			path: stringFlag(args, "path"),
+			eula: boolFlag(args, "eula"),
+			javaPin,
+			skipJava,
+		});
 
-    const stopProgress = json ? undefined : followProgress(context.bus, started.job.id);
-    try {
-      const server = await started.result;
-      stopProgress?.();
-      console.log(
-        json
-          ? toJson(server)
-          : `Created ${server.id} (${server.kind} ${server.minecraftVersion}) at ${server.path}`,
-      );
-      return 0;
-    } catch (err) {
-      stopProgress?.();
-      throw err;
-    }
-  } catch (err) {
-    return reportError(err);
-  }
+		const stopProgress = json
+			? undefined
+			: followProgress(context.bus, started.job.id);
+		try {
+			const server = await started.result;
+			stopProgress?.();
+			console.log(
+				json
+					? toJson(server)
+					: `Created ${server.id} (${server.kind} ${server.minecraftVersion}) at ${server.path}`,
+			);
+			return 0;
+		} catch (err) {
+			stopProgress?.();
+			throw err;
+		}
+	} catch (err) {
+		return reportError(err);
+	}
 }
 
 /**
@@ -110,24 +122,30 @@ export async function runCreate(argv: string[]): Promise<number> {
  * @returns a function that stops rendering and clears the line.
  */
 function followProgress(
-  bus: { subscribe: (listener: (event: { type: string; payload?: unknown }) => void) => () => void },
-  jobId: string,
+	bus: {
+		subscribe: (
+			listener: (event: { type: string; payload?: unknown }) => void,
+		) => () => void;
+	},
+	jobId: string,
 ): () => void {
-  if (!process.stdout.isTTY) return () => {};
+	if (!process.stdout.isTTY) return () => {};
 
-  const unsubscribe = bus.subscribe((event) => {
-    if (event.type !== EventType.JobProgress) return;
-    const job = event.payload as Job;
-    if (job.id !== jobId) return;
-    const percent =
-      job.fraction === undefined ? "" : ` ${Math.round(job.fraction * 100)}%`;
-    const detail = job.message ? ` — ${job.message}` : "";
-    // \r rewrites in place; the trailing spaces erase a previously longer line.
-    process.stdout.write(`\r${job.step ?? job.title}${percent}${detail}          `);
-  });
+	const unsubscribe = bus.subscribe((event) => {
+		if (event.type !== EventType.JobProgress) return;
+		const job = event.payload as Job;
+		if (job.id !== jobId) return;
+		const percent =
+			job.fraction === undefined ? "" : ` ${Math.round(job.fraction * 100)}%`;
+		const detail = job.message ? ` — ${job.message}` : "";
+		// \r rewrites in place; the trailing spaces erase a previously longer line.
+		process.stdout.write(
+			`\r${job.step ?? job.title}${percent}${detail}          `,
+		);
+	});
 
-  return () => {
-    unsubscribe();
-    process.stdout.write("\r\x1b[2K"); // carriage return + erase whole line
-  };
+	return () => {
+		unsubscribe();
+		process.stdout.write("\r\x1b[2K"); // carriage return + erase whole line
+	};
 }

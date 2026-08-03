@@ -33,34 +33,34 @@ const FALLBACK_SET: IconSet = resolveIconSet("auto", process.env);
 
 /** Value exposed by {@link useIcons}. */
 export interface IconContextValue {
-  /** The glyphs to draw with: `icons.icons.success`, … (see {@link icons}). */
-  icons: IconMap;
-  /** The set those glyphs came from, for a picker's "resolved to …" caption. */
-  set: IconSet;
-  /** The configured mode. `"auto"` unless the user pinned a set. */
-  mode: IconMode;
-  /** Switch the mode. Persisted by the provider's `onModeChange`. */
-  setMode: (mode: IconMode) => void;
-  /** Animation frames for a spinner in the active set. Length varies by set. */
-  spinner: readonly string[];
+	/** The glyphs to draw with: `icons.icons.success`, … (see {@link icons}). */
+	icons: IconMap;
+	/** The set those glyphs came from, for a picker's "resolved to …" caption. */
+	set: IconSet;
+	/** The configured mode. `"auto"` unless the user pinned a set. */
+	mode: IconMode;
+	/** Switch the mode. Persisted by the provider's `onModeChange`. */
+	setMode: (mode: IconMode) => void;
+	/** Animation frames for a spinner in the active set. Length varies by set. */
+	spinner: readonly string[];
 }
 
 const IconContext = createContext<IconContextValue | null>(null);
 
 export interface IconProviderProps {
-  /** Initial mode, typically `config.icons`. Defaults to `"auto"`. */
-  initialMode?: IconMode;
-  /** Notified when the mode changes, e.g. to persist to `config.json`. */
-  onModeChange?: (mode: IconMode) => void;
-  /**
-   * Bridge for mode changes made **outside** this provider — another `mctl`
-   * instance, or a hand-edit of `config.json`. Called once on mount with an
-   * `apply` callback; return an unsubscribe. **Must be referentially stable** —
-   * it is an effect dependency. See `ThemeProviderProps.subscribeThemeId` for
-   * the same pattern and why it is a prop rather than a bus subscription.
-   */
-  subscribeMode?: (apply: (mode: IconMode) => void) => () => void;
-  children: React.ReactNode;
+	/** Initial mode, typically `config.icons`. Defaults to `"auto"`. */
+	initialMode?: IconMode;
+	/** Notified when the mode changes, e.g. to persist to `config.json`. */
+	onModeChange?: (mode: IconMode) => void;
+	/**
+	 * Bridge for mode changes made **outside** this provider — another `mctl`
+	 * instance, or a hand-edit of `config.json`. Called once on mount with an
+	 * `apply` callback; return an unsubscribe. **Must be referentially stable** —
+	 * it is an effect dependency. See `ThemeProviderProps.subscribeThemeId` for
+	 * the same pattern and why it is a prop rather than a bus subscription.
+	 */
+	subscribeMode?: (apply: (mode: IconMode) => void) => () => void;
+	children: React.ReactNode;
 }
 
 /**
@@ -69,42 +69,42 @@ export interface IconProviderProps {
  * `core/icons` — the React tree never inspects the environment itself.
  */
 export function IconProvider({
-  initialMode = "auto",
-  onModeChange,
-  subscribeMode,
-  children,
+	initialMode = "auto",
+	onModeChange,
+	subscribeMode,
+	children,
 }: IconProviderProps) {
-  const [mode, setModeState] = useState<IconMode>(initialMode);
+	const [mode, setModeState] = useState<IconMode>(initialMode);
 
-  // Follow the persisted mode when it changes underneath us. Local state only —
-  // `onModeChange` is deliberately NOT fired, since the value came *from* the
-  // persisted config and re-persisting it would be a write loop between
-  // instances (the exact bug the theme bridge had to be fixed for).
-  useEffect(() => {
-    if (!subscribeMode) return;
-    return subscribeMode((next) => setModeState(next));
-  }, [subscribeMode]);
+	// Follow the persisted mode when it changes underneath us. Local state only —
+	// `onModeChange` is deliberately NOT fired, since the value came *from* the
+	// persisted config and re-persisting it would be a write loop between
+	// instances (the exact bug the theme bridge had to be fixed for).
+	useEffect(() => {
+		if (!subscribeMode) return;
+		return subscribeMode((next) => setModeState(next));
+	}, [subscribeMode]);
 
-  // `process.env` is read on every resolve rather than captured once, so an
-  // `MCTL_ICONS` override set for the process is honoured no matter when the
-  // mode changes.
-  const set = useMemo<IconSet>(() => resolveIconSet(mode, process.env), [mode]);
+	// `process.env` is read on every resolve rather than captured once, so an
+	// `MCTL_ICONS` override set for the process is honoured no matter when the
+	// mode changes.
+	const set = useMemo<IconSet>(() => resolveIconSet(mode, process.env), [mode]);
 
-  const value = useMemo<IconContextValue>(
-    () => ({
-      icons: iconsFor(set),
-      spinner: spinnerFor(set),
-      set,
-      mode,
-      setMode: (next: IconMode) => {
-        setModeState(next);
-        onModeChange?.(next);
-      },
-    }),
-    [set, mode, onModeChange],
-  );
+	const value = useMemo<IconContextValue>(
+		() => ({
+			icons: iconsFor(set),
+			spinner: spinnerFor(set),
+			set,
+			mode,
+			setMode: (next: IconMode) => {
+				setModeState(next);
+				onModeChange?.(next);
+			},
+		}),
+		[set, mode, onModeChange],
+	);
 
-  return <IconContext value={value}>{children}</IconContext>;
+	return <IconContext value={value}>{children}</IconContext>;
 }
 
 /**
@@ -115,18 +115,18 @@ export function IconProvider({
  * in a test and still draw sensible glyphs.
  */
 export function useIcons(): IconContextValue {
-  const ctx = useContext(IconContext);
-  return ctx ?? FALLBACK;
+	const ctx = useContext(IconContext);
+	return ctx ?? FALLBACK;
 }
 
 /** The context value used when no provider is mounted. Built once. */
 const FALLBACK: IconContextValue = Object.freeze({
-  icons: iconsFor(FALLBACK_SET),
-  spinner: spinnerFor(FALLBACK_SET),
-  set: FALLBACK_SET,
-  mode: "auto" as IconMode,
-  // No provider means nothing owns the mode; a caller that wants to change it
-  // must mount one. Silently ignoring is right here — throwing would punish a
-  // component for a wiring choice made far above it.
-  setMode: () => {},
+	icons: iconsFor(FALLBACK_SET),
+	spinner: spinnerFor(FALLBACK_SET),
+	set: FALLBACK_SET,
+	mode: "auto" as IconMode,
+	// No provider means nothing owns the mode; a caller that wants to change it
+	// must mount one. Silently ignoring is right here — throwing would punish a
+	// component for a wiring choice made far above it.
+	setMode: () => {},
 });

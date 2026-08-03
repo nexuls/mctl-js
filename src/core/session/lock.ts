@@ -26,26 +26,26 @@ const logger = log("lock");
 
 /** Thrown when another live instance already holds a server's lock. */
 export class ResourceBusyError extends Error {
-  constructor(
-    readonly id: string,
-    readonly ownerPid: number | undefined,
-  ) {
-    super(
-      `another mctl instance is already operating on "${id}"` +
-        (ownerPid ? ` (pid ${ownerPid})` : ""),
-    );
-    this.name = "ResourceBusyError";
-  }
+	constructor(
+		readonly id: string,
+		readonly ownerPid: number | undefined,
+	) {
+		super(
+			`another mctl instance is already operating on "${id}"` +
+				(ownerPid ? ` (pid ${ownerPid})` : ""),
+		);
+		this.name = "ResourceBusyError";
+	}
 }
 
 /** Whether a pid is alive; same signal-0 rule as `session-manager.ts`. */
 function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (err) {
+		return (err as NodeJS.ErrnoException).code === "EPERM";
+	}
 }
 
 /**
@@ -58,49 +58,49 @@ function isPidAlive(pid: number): boolean {
  * @throws {ResourceBusyError} when a live instance holds the lock.
  */
 export async function withServerLock<T>(
-  id: string,
-  work: () => Promise<T>,
+	id: string,
+	work: () => Promise<T>,
 ): Promise<T> {
-  const file = runtimeLockFile(id);
-  await ensureDir(runtimeDir());
+	const file = runtimeLockFile(id);
+	await ensureDir(runtimeDir());
 
-  try {
-    // "wx" = create exclusively; fails atomically if the file exists.
-    const handle = await open(file, "wx");
-    await handle.writeFile(JSON.stringify({ pid: process.pid }));
-    await handle.close();
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-    const owner = ownerPidOf(await readTextIfExists(file));
-    if (owner !== undefined && isPidAlive(owner)) {
-      throw new ResourceBusyError(id, owner);
-    }
-    // Stale: the recorded owner is gone (or unreadable). Take it over.
-    logger.info({ id, owner }, "reclaiming stale lock");
-    await unlink(file).catch(() => {});
-    return withServerLock(id, work);
-  }
+	try {
+		// "wx" = create exclusively; fails atomically if the file exists.
+		const handle = await open(file, "wx");
+		await handle.writeFile(JSON.stringify({ pid: process.pid }));
+		await handle.close();
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+		const owner = ownerPidOf(await readTextIfExists(file));
+		if (owner !== undefined && isPidAlive(owner)) {
+			throw new ResourceBusyError(id, owner);
+		}
+		// Stale: the recorded owner is gone (or unreadable). Take it over.
+		logger.info({ id, owner }, "reclaiming stale lock");
+		await unlink(file).catch(() => {});
+		return withServerLock(id, work);
+	}
 
-  try {
-    return await work();
-  } finally {
-    await unlink(file).catch(() => {
-      // Another instance may have reaped it as stale if we were slow; either way
-      // there is nothing useful to do at this point.
-    });
-  }
+	try {
+		return await work();
+	} finally {
+		await unlink(file).catch(() => {
+			// Another instance may have reaped it as stale if we were slow; either way
+			// there is nothing useful to do at this point.
+		});
+	}
 }
 
 /** Read the owner pid out of a lock file's body (`{"pid":N}` or a bare number). */
 function ownerPidOf(text: string | undefined): number | undefined {
-  if (text === undefined) return undefined;
-  const trimmed = text.trim();
-  try {
-    const parsed = JSON.parse(trimmed) as { pid?: number };
-    if (typeof parsed.pid === "number") return parsed.pid;
-  } catch {
-    // Not JSON; fall through to a bare integer.
-  }
-  const n = Number.parseInt(trimmed, 10);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
+	if (text === undefined) return undefined;
+	const trimmed = text.trim();
+	try {
+		const parsed = JSON.parse(trimmed) as { pid?: number };
+		if (typeof parsed.pid === "number") return parsed.pid;
+	} catch {
+		// Not JSON; fall through to a bare integer.
+	}
+	const n = Number.parseInt(trimmed, 10);
+	return Number.isInteger(n) && n > 0 ? n : undefined;
 }

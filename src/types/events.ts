@@ -29,44 +29,46 @@ import { z } from "zod";
  * subsystems (jobs, install, network, backup) in later phases.
  */
 export const EventType = {
-  /** `config.json` changed (written or edited on disk). */
-  ConfigChanged: "ConfigChanged",
-  /** `servers.json` changed — a server was registered, removed, or re-pointed. */
-  RegistryChanged: "RegistryChanged",
-  /** A server's run state changed (started/stopped). Payload: `{ id, state }`. */
-  ServerStateChanged: "ServerStateChanged",
-  /** A registered server's path went missing (drive unmounted). Payload: `{ id }`. */
-  ServerUnavailable: "ServerUnavailable",
+	/** `config.json` changed (written or edited on disk). */
+	ConfigChanged: "ConfigChanged",
+	/** `servers.json` changed — a server was registered, removed, or re-pointed. */
+	RegistryChanged: "RegistryChanged",
+	/** A server's run state changed (started/stopped). Payload: `{ id, state }`. */
+	ServerStateChanged: "ServerStateChanged",
+	/** A registered server's path went missing (drive unmounted). Payload: `{ id }`. */
+	ServerUnavailable: "ServerUnavailable",
 
-  // ── Phase 2 ────────────────────────────────────────────────────────────────
-  /**
-   * A server was created and registered. Payload: `{ id, kind,
-   * minecraftVersion, path }`.
-   */
-  ServerCreated: "ServerCreated",
-  /** A server was removed from the registry. Payload: `{ id, deletedFiles }`. */
-  ServerDeleted: "ServerDeleted",
-  /** A server's `mctl.json` was edited. Payload: `{ id, fields }` (names only). */
-  ServerEdited: "ServerEdited",
-  /**
-   * Progress of a running job. **Local bus only** — never written to
-   * `events.jsonl`, because it fires many times a second and would rotate the
-   * shared log away. Payload: the `Job` snapshot.
-   */
-  JobProgress: "JobProgress",
-  /**
-   * A job reached a terminal state. This one *is* published cross-instance —
-   * it is the "something finished, re-read the disk" signal. Payload:
-   * `{ id, kind, serverId, state, error }`.
-   */
-  JobFinished: "JobFinished",
-  /** A JDK was installed by MCTL. Payload: `{ major, version, home }`. */
-  JavaInstalled: "JavaInstalled",
+	// ── Phase 2 ────────────────────────────────────────────────────────────────
+	/**
+	 * A server was created and registered. Payload: `{ id, kind,
+	 * minecraftVersion, path }`.
+	 */
+	ServerCreated: "ServerCreated",
+	/** A server was removed from the registry. Payload: `{ id, deletedFiles }`. */
+	ServerDeleted: "ServerDeleted",
+	/** A server's `mctl.json` was edited. Payload: `{ id, fields }` (names only). */
+	ServerEdited: "ServerEdited",
+	/**
+	 * Progress of a running job. **Local bus only** — never written to
+	 * `events.jsonl`, because it fires many times a second and would rotate the
+	 * shared log away. Payload: the `Job` snapshot.
+	 */
+	JobProgress: "JobProgress",
+	/**
+	 * A job reached a terminal state. This one *is* published cross-instance —
+	 * it is the "something finished, re-read the disk" signal. Payload:
+	 * `{ id, kind, serverId, state, error }`.
+	 */
+	JobFinished: "JobFinished",
+	/** A JDK was installed by MCTL. Payload: `{ major, version, home }`. */
+	JavaInstalled: "JavaInstalled",
 
-  // Later phases: InstallStepChanged, TunnelUp/Down, DownloadCompleted,
-  // PlayerJoined/Left, BackupFinished.
+	// Later phases: InstallStepChanged, TunnelUp/Down, DownloadCompleted,
+	// PlayerJoined/Left, BackupFinished.
 } as const;
-export type EventType = (typeof EventType)[keyof typeof EventType] | (string & {});
+export type EventType =
+	| (typeof EventType)[keyof typeof EventType]
+	| (string & {});
 
 /**
  * The event envelope — one line of `events.jsonl` and the unit the in-process
@@ -74,17 +76,17 @@ export type EventType = (typeof EventType)[keyof typeof EventType] | (string & {
  * (AGENTS.md § Secrets); `payload` must never contain a token.
  */
 export const MctlEvent = z.object({
-  /** Envelope version, for forward migration of the log format itself. */
-  v: z.number().int().positive().default(1),
-  /** Unique event id (used to dedupe if a tail re-reads a line). */
-  id: z.string().min(1),
-  /** ISO-8601 emit time. */
-  ts: z.string(),
-  /** Id of the instance that emitted this — a tail skips lines where this is self. */
-  instance: z.string().min(1),
-  /** Event type; see {@link EventType}. Open string for forward-compat. */
-  type: z.string().min(1),
-  /** Type-specific data. Consumers validate their own payload shape. */
-  payload: z.unknown().optional(),
+	/** Envelope version, for forward migration of the log format itself. */
+	v: z.number().int().positive().default(1),
+	/** Unique event id (used to dedupe if a tail re-reads a line). */
+	id: z.string().min(1),
+	/** ISO-8601 emit time. */
+	ts: z.string(),
+	/** Id of the instance that emitted this — a tail skips lines where this is self. */
+	instance: z.string().min(1),
+	/** Event type; see {@link EventType}. Open string for forward-compat. */
+	type: z.string().min(1),
+	/** Type-specific data. Consumers validate their own payload shape. */
+	payload: z.unknown().optional(),
 });
 export type MctlEvent = z.infer<typeof MctlEvent>;

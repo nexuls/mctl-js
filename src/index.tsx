@@ -12,9 +12,9 @@
 const argv = process.argv.slice(2);
 
 if (argv.length === 0) {
-  const { renderApp } = await import("./app/App.tsx");
-  await renderApp();
+	const { renderApp } = await import("./app/App.tsx");
+	await renderApp();
 } else {
-  const { runCli } = await import("./cli/router.ts");
-  process.exit(await runCli(argv));
+	const { runCli } = await import("./cli/router.ts");
+	process.exit(await runCli(argv));
 }

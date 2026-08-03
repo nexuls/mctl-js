@@ -20,28 +20,28 @@
  */
 
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactNode,
 } from "react";
 
 /** The capture API shared through context. */
 interface InputCapture {
-  /** Take a capture; call the returned function to release it. */
-  acquire: () => () => void;
-  /**
-   * Whether any capture is currently held, read at call time. A getter (not a
-   * boolean) because keyboard handlers close over their render's values — the
-   * shell must see the *current* state, not the one from when it subscribed.
-   */
-  isCaptured: () => boolean;
-  /** Reactive mirror of {@link isCaptured}, for rendering (e.g. the hint strip). */
-  captured: boolean;
+	/** Take a capture; call the returned function to release it. */
+	acquire: () => () => void;
+	/**
+	 * Whether any capture is currently held, read at call time. A getter (not a
+	 * boolean) because keyboard handlers close over their render's values — the
+	 * shell must see the *current* state, not the one from when it subscribed.
+	 */
+	isCaptured: () => boolean;
+	/** Reactive mirror of {@link isCaptured}, for rendering (e.g. the hint strip). */
+	captured: boolean;
 }
 
 const InputCaptureContext = createContext<InputCapture | undefined>(undefined);
@@ -51,45 +51,45 @@ const InputCaptureContext = createContext<InputCapture | undefined>(undefined);
  * reads the guard) and the pages (which set it).
  */
 export function InputCaptureProvider({ children }: { children: ReactNode }) {
-  const [captured, setCaptured] = useState(false);
-  // The count is a ref so `acquire`/release never depend on render timing, and
-  // `isCaptured` reports the truth even between renders.
-  const count = useRef(0);
+	const [captured, setCaptured] = useState(false);
+	// The count is a ref so `acquire`/release never depend on render timing, and
+	// `isCaptured` reports the truth even between renders.
+	const count = useRef(0);
 
-  const acquire = useCallback(() => {
-    count.current += 1;
-    if (count.current === 1) setCaptured(true);
-    let released = false;
-    return () => {
-      if (released) return; // a double release must not unbalance the count
-      released = true;
-      count.current = Math.max(0, count.current - 1);
-      if (count.current === 0) setCaptured(false);
-    };
-  }, []);
+	const acquire = useCallback(() => {
+		count.current += 1;
+		if (count.current === 1) setCaptured(true);
+		let released = false;
+		return () => {
+			if (released) return; // a double release must not unbalance the count
+			released = true;
+			count.current = Math.max(0, count.current - 1);
+			if (count.current === 0) setCaptured(false);
+		};
+	}, []);
 
-  const value = useMemo<InputCapture>(
-    () => ({ acquire, isCaptured: () => count.current > 0, captured }),
-    [acquire, captured],
-  );
+	const value = useMemo<InputCapture>(
+		() => ({ acquire, isCaptured: () => count.current > 0, captured }),
+		[acquire, captured],
+	);
 
-  return (
-    <InputCaptureContext.Provider value={value}>
-      {children}
-    </InputCaptureContext.Provider>
-  );
+	return (
+		<InputCaptureContext.Provider value={value}>
+			{children}
+		</InputCaptureContext.Provider>
+	);
 }
 
 /** The context, or a no-op capture when no provider is mounted (e.g. the wizard). */
 function useCapture(): InputCapture {
-  const ctx = useContext(InputCaptureContext);
-  return (
-    ctx ?? {
-      acquire: () => () => {},
-      isCaptured: () => false,
-      captured: false,
-    }
-  );
+	const ctx = useContext(InputCaptureContext);
+	return (
+		ctx ?? {
+			acquire: () => () => {},
+			isCaptured: () => false,
+			captured: false,
+		}
+	);
 }
 
 /**
@@ -98,11 +98,11 @@ function useCapture(): InputCapture {
  * never strand the shell's shortcuts.
  */
 export function useCaptureKeys(active: boolean): void {
-  const { acquire } = useCapture();
-  useEffect(() => {
-    if (!active) return;
-    return acquire();
-  }, [active, acquire]);
+	const { acquire } = useCapture();
+	useEffect(() => {
+		if (!active) return;
+		return acquire();
+	}, [active, acquire]);
 }
 
 /**
@@ -110,10 +110,10 @@ export function useCaptureKeys(active: boolean): void {
  * *inside* a key handler; see {@link InputCapture.isCaptured} for why.
  */
 export function useKeysCaptured(): () => boolean {
-  return useCapture().isCaptured;
+	return useCapture().isCaptured;
 }
 
 /** Reactive capture flag, for chrome that should look different while typing. */
 export function useIsCapturing(): boolean {
-  return useCapture().captured;
+	return useCapture().captured;
 }

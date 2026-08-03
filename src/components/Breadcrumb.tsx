@@ -12,21 +12,21 @@ import { useTheme } from "../hooks/use-theme.tsx";
 
 /** One segment of the trail. */
 export interface Crumb {
-  /** The segment text. */
-  label: string;
-  /**
-   * Invoked when this crumb is clicked. Omit for a non-navigable crumb (the
-   * current page's own last crumb is typically inert).
-   */
-  onClick?: () => void;
+	/** The segment text. */
+	label: string;
+	/**
+	 * Invoked when this crumb is clicked. Omit for a non-navigable crumb (the
+	 * current page's own last crumb is typically inert).
+	 */
+	onClick?: () => void;
 }
 
 /** Props for {@link Breadcrumb}. */
 export interface BreadcrumbProps {
-  /** Segments from root (first) to current (last). */
-  items: Crumb[];
-  /** Separator glyph between crumbs. Defaults to `"›"`. */
-  separator?: string;
+	/** Segments from root (first) to current (last). */
+	items: Crumb[];
+	/** Separator glyph between crumbs. Defaults to `"›"`. */
+	separator?: string;
 }
 
 /**
@@ -35,31 +35,31 @@ export interface BreadcrumbProps {
  * location. Separators are always muted.
  */
 export function Breadcrumb({ items, separator = "›" }: BreadcrumbProps) {
-  const { colors } = useTheme();
-  return (
-    <box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-      {items.map((crumb, i) => {
-        const isLast = i === items.length - 1;
-        return (
-          <box
-            key={i}
-            flexDirection="row"
-            gap={1}
-            alignItems="center"
-            flexShrink={0}
-          >
-            <box onMouseDown={crumb.onClick} flexShrink={0}>
-              <text
-                fg={isLast ? colors.primary : colors.muted}
-                attributes={isLast ? TextAttributes.BOLD : undefined}
-              >
-                {crumb.label}
-              </text>
-            </box>
-            {isLast ? null : <text fg={colors.muted}>{separator}</text>}
-          </box>
-        );
-      })}
-    </box>
-  );
+	const { colors } = useTheme();
+	return (
+		<box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
+			{items.map((crumb, i) => {
+				const isLast = i === items.length - 1;
+				return (
+					<box
+						key={i}
+						flexDirection="row"
+						gap={1}
+						alignItems="center"
+						flexShrink={0}
+					>
+						<box onMouseDown={crumb.onClick} flexShrink={0}>
+							<text
+								fg={isLast ? colors.primary : colors.muted}
+								attributes={isLast ? TextAttributes.BOLD : undefined}
+							>
+								{crumb.label}
+							</text>
+						</box>
+						{isLast ? null : <text fg={colors.muted}>{separator}</text>}
+					</box>
+				);
+			})}
+		</box>
+	);
 }

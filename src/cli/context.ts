@@ -24,7 +24,7 @@ import { ArgError } from "./args.ts";
  * @throws {ConfigNotFoundError} when there is no config yet.
  */
 export async function cliContext(): Promise<MctlContext> {
-  return createContext(createProviderRegistry());
+	return createContext(createProviderRegistry());
 }
 
 /**
@@ -38,16 +38,16 @@ export async function cliContext(): Promise<MctlContext> {
  * there is nothing to translate.
  */
 export function reportError(err: unknown): number {
-  if (err instanceof ConfigNotFoundError) {
-    console.error(
-      "mctl: no config yet. Run `mctl init` (or launch `mctl` for the setup wizard).",
-    );
-    return 1;
-  }
-  if (err instanceof ArgError) {
-    console.error(`mctl: ${err.message}`);
-    return 2; // usage error, distinct from an operation that legitimately failed
-  }
-  console.error(`mctl: ${err instanceof Error ? err.message : String(err)}`);
-  return 1;
+	if (err instanceof ConfigNotFoundError) {
+		console.error(
+			"mctl: no config yet. Run `mctl init` (or launch `mctl` for the setup wizard).",
+		);
+		return 1;
+	}
+	if (err instanceof ArgError) {
+		console.error(`mctl: ${err.message}`);
+		return 2; // usage error, distinct from an operation that legitimately failed
+	}
+	console.error(`mctl: ${err instanceof Error ? err.message : String(err)}`);
+	return 1;
 }

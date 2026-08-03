@@ -163,7 +163,9 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 			scrollbarOptions={{ visible: false }}
 		>
 			<box flexDirection="row" flexShrink={0} height={1} paddingX={1}>
-				<text flexShrink={0} fg={colors.primary}>{BRAND}</text>
+				<text flexShrink={0} fg={colors.primary}>
+					{BRAND}
+				</text>
 				{NAV.map((item) => (
 					<NavTab
 						key={item.id}

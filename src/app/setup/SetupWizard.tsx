@@ -151,8 +151,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 						mctl
 					</text>
 					<text fg={colors.muted}>
-						{icons.separator} first-run setup {icons.separator} step {step + 1} of{" "}
-						{STEP_TITLES.length}
+						{icons.separator} first-run setup {icons.separator} step {step + 1}{" "}
+						of {STEP_TITLES.length}
 					</text>
 				</box>
 

@@ -32,10 +32,10 @@ const logger = log("discover");
  * @param serversDir `config.servers_dir`, scanned for drop-in servers.
  */
 export async function listServers(serversDir?: string): Promise<Server[]> {
-  const entries = await loadRegistry(serversDir);
-  return Promise.all(
-    entries.map((entry) => buildServer(entry.id, entry.path, entry.available)),
-  );
+	const entries = await loadRegistry(serversDir);
+	return Promise.all(
+		entries.map((entry) => buildServer(entry.id, entry.path, entry.available)),
+	);
 }
 
 /**
@@ -46,13 +46,13 @@ export async function listServers(serversDir?: string): Promise<Server[]> {
  * @param serversDir `config.servers_dir`, so a drop-in-only server still resolves.
  */
 export async function getServer(
-  id: string,
-  serversDir?: string,
+	id: string,
+	serversDir?: string,
 ): Promise<Server | undefined> {
-  const entries = await loadRegistry(serversDir);
-  const entry = entries.find((e) => e.id === id);
-  if (!entry) return undefined;
-  return buildServer(entry.id, entry.path, entry.available);
+	const entries = await loadRegistry(serversDir);
+	const entry = entries.find((e) => e.id === id);
+	if (!entry) return undefined;
+	return buildServer(entry.id, entry.path, entry.available);
 }
 
 /**
@@ -62,47 +62,50 @@ export async function getServer(
  * (never throws) — one bad server must not break the whole listing.
  */
 async function buildServer(
-  id: string,
-  path: string,
-  available: boolean,
+	id: string,
+	path: string,
+	available: boolean,
 ): Promise<Server> {
-  if (!available) return unavailableServer(id, path);
+	if (!available) return unavailableServer(id, path);
 
-  let raw: unknown;
-  try {
-    raw = await readJsonIfExists(mctlJsonPath(path));
-  } catch (err) {
-    logger.warn({ id, err: String(err) }, "unreadable mctl.json; marking unavailable");
-    return unavailableServer(id, path);
-  }
-  const parsed = MctlJson.safeParse(raw);
-  if (!parsed.success) {
-    logger.warn(
-      { id, issues: parsed.error.message },
-      "invalid mctl.json; marking unavailable",
-    );
-    return unavailableServer(id, path);
-  }
-  const cfg = parsed.data;
+	let raw: unknown;
+	try {
+		raw = await readJsonIfExists(mctlJsonPath(path));
+	} catch (err) {
+		logger.warn(
+			{ id, err: String(err) },
+			"unreadable mctl.json; marking unavailable",
+		);
+		return unavailableServer(id, path);
+	}
+	const parsed = MctlJson.safeParse(raw);
+	if (!parsed.success) {
+		logger.warn(
+			{ id, issues: parsed.error.message },
+			"invalid mctl.json; marking unavailable",
+		);
+		return unavailableServer(id, path);
+	}
+	const cfg = parsed.data;
 
-  // Live-probe run state — never stored, always re-derived (statelessness).
-  const { state, session } = await probe(id);
+	// Live-probe run state — never stored, always re-derived (statelessness).
+	const { state, session } = await probe(id);
 
-  return {
-    id,
-    name: cfg.name,
-    kind: cfg.kind,
-    minecraftVersion: cfg.minecraftVersion,
-    loaderVersion: cfg.loaderVersion,
-    java: cfg.java,
-    memory: cfg.memory,
-    runtime: cfg.runtime,
-    network: cfg.network,
-    path,
-    state,
-    available: true,
-    session,
-  };
+	return {
+		id,
+		name: cfg.name,
+		kind: cfg.kind,
+		minecraftVersion: cfg.minecraftVersion,
+		loaderVersion: cfg.loaderVersion,
+		java: cfg.java,
+		memory: cfg.memory,
+		runtime: cfg.runtime,
+		network: cfg.network,
+		path,
+		state,
+		available: true,
+		session,
+	};
 }
 
 /**
@@ -111,16 +114,16 @@ async function buildServer(
  * shows the id and path and can offer to re-point or forget it.
  */
 function unavailableServer(id: string, path: string): Server {
-  return {
-    id,
-    name: id,
-    kind: "—",
-    minecraftVersion: "—",
-    memory: "—",
-    runtime: "—",
-    network: "—",
-    path,
-    state: "unavailable",
-    available: false,
-  };
+	return {
+		id,
+		name: id,
+		kind: "—",
+		minecraftVersion: "—",
+		memory: "—",
+		runtime: "—",
+		network: "—",
+		path,
+		state: "unavailable",
+		available: false,
+	};
 }

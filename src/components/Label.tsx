@@ -13,15 +13,15 @@ import { useTheme } from "../hooks/use-theme.tsx";
 
 /** Props for {@link Label}. */
 export interface LabelProps {
-  /** The label text. */
-  children: string;
-  /**
-   * Draw in the accent colour to signal focus/importance. Defaults to the muted
-   * role so labels stay quiet next to the values they describe.
-   */
-  emphasis?: boolean;
-  /** Append a dim `*` marker to signal a required field. */
-  required?: boolean;
+	/** The label text. */
+	children: string;
+	/**
+	 * Draw in the accent colour to signal focus/importance. Defaults to the muted
+	 * role so labels stay quiet next to the values they describe.
+	 */
+	emphasis?: boolean;
+	/** Append a dim `*` marker to signal a required field. */
+	required?: boolean;
 }
 
 /**
@@ -29,15 +29,19 @@ export interface LabelProps {
  * (e.g. the field it labels is focused). A `required` marker is drawn in the
  * warning role so it reads as "needs attention" rather than "error".
  */
-export function Label({ children, emphasis = false, required = false }: LabelProps) {
-  const { colors } = useTheme();
-  return (
-    <text
-      fg={emphasis ? colors.primary : colors.muted}
-      attributes={emphasis ? TextAttributes.BOLD : TextAttributes.DIM}
-    >
-      {children}
-      {required ? <span fg={colors.warning}> *</span> : null}
-    </text>
-  );
+export function Label({
+	children,
+	emphasis = false,
+	required = false,
+}: LabelProps) {
+	const { colors } = useTheme();
+	return (
+		<text
+			fg={emphasis ? colors.primary : colors.muted}
+			attributes={emphasis ? TextAttributes.BOLD : TextAttributes.DIM}
+		>
+			{children}
+			{required ? <span fg={colors.warning}> *</span> : null}
+		</text>
+	);
 }

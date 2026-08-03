@@ -25,13 +25,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ensureDirTree, writeConfig } from "../../core/config/index.ts";
 import { rootPaths } from "../../lib/paths.ts";
 import type {
-  BackupProvider,
-  CompressionKind,
-  Config,
-  IconMode,
-  NetworkProvider,
-  RuntimeKind,
-  ServerKind,
+	BackupProvider,
+	CompressionKind,
+	Config,
+	IconMode,
+	NetworkProvider,
+	RuntimeKind,
+	ServerKind,
 } from "../../types/config.ts";
 import { useConfig } from "../../hooks/use-config.ts";
 
@@ -45,35 +45,35 @@ import { useConfig } from "../../hooks/use-config.ts";
  * run and is permanent (plan.md § First-Run Setup Wizard).
  */
 export interface SettingsDraft {
-  /** Whether `serversDir` overrides the default `root/servers`. */
-  overrideServers: boolean;
-  /** Custom servers directory; only meaningful when `overrideServers` is true. */
-  serversDir: string;
-  /** Whether `backupsDir` overrides the default `root/backups`. */
-  overrideBackups: boolean;
-  /** Custom backups directory; only meaningful when `overrideBackups` is true. */
-  backupsDir: string;
+	/** Whether `serversDir` overrides the default `root/servers`. */
+	overrideServers: boolean;
+	/** Custom servers directory; only meaningful when `overrideServers` is true. */
+	serversDir: string;
+	/** Whether `backupsDir` overrides the default `root/backups`. */
+	overrideBackups: boolean;
+	/** Custom backups directory; only meaningful when `overrideBackups` is true. */
+	backupsDir: string;
 
-  /** Default Minecraft version for new servers; "" ⇒ resolve latest at create time. */
-  minecraftVersion: string;
-  /** Default server kind. */
-  kind: ServerKind;
-  /** Default JVM heap, e.g. "2G". */
-  memory: string;
-  /** Default runtime provider. */
-  runtime: RuntimeKind;
-  /** Whether MCTL auto-accepts the Minecraft EULA on create. */
-  eula: boolean;
+	/** Default Minecraft version for new servers; "" ⇒ resolve latest at create time. */
+	minecraftVersion: string;
+	/** Default server kind. */
+	kind: ServerKind;
+	/** Default JVM heap, e.g. "2G". */
+	memory: string;
+	/** Default runtime provider. */
+	runtime: RuntimeKind;
+	/** Whether MCTL auto-accepts the Minecraft EULA on create. */
+	eula: boolean;
 
-  /** Whether scheduled/automatic backups are enabled. */
-  backupEnabled: boolean;
-  /** Backup provider id. */
-  backupProvider: BackupProvider;
-  /** Archive compression format. */
-  compression: CompressionKind;
+	/** Whether scheduled/automatic backups are enabled. */
+	backupEnabled: boolean;
+	/** Backup provider id. */
+	backupProvider: BackupProvider;
+	/** Archive compression format. */
+	compression: CompressionKind;
 
-  /** Default network profile for new servers. */
-  network: NetworkProvider;
+	/** Default network profile for new servers. */
+	network: NetworkProvider;
 }
 
 /**
@@ -84,22 +84,22 @@ export interface SettingsDraft {
  * on starts from a sensible path instead of an empty box.
  */
 export function configToDraft(config: Config): SettingsDraft {
-  const defaults = rootPaths(config.root);
-  return {
-    overrideServers: config.servers_dir !== undefined,
-    serversDir: config.servers_dir ?? defaults.serversDir,
-    overrideBackups: config.backups_dir !== undefined,
-    backupsDir: config.backups_dir ?? defaults.backupsDir,
-    minecraftVersion: config.defaults.minecraftVersion ?? "",
-    kind: config.defaults.kind,
-    memory: config.defaults.memory,
-    runtime: config.defaults.runtime,
-    eula: config.defaults.eula,
-    backupEnabled: config.backup.enabled,
-    backupProvider: config.backup.provider,
-    compression: config.backup.compression,
-    network: config.network.defaultProfile,
-  };
+	const defaults = rootPaths(config.root);
+	return {
+		overrideServers: config.servers_dir !== undefined,
+		serversDir: config.servers_dir ?? defaults.serversDir,
+		overrideBackups: config.backups_dir !== undefined,
+		backupsDir: config.backups_dir ?? defaults.backupsDir,
+		minecraftVersion: config.defaults.minecraftVersion ?? "",
+		kind: config.defaults.kind,
+		memory: config.defaults.memory,
+		runtime: config.defaults.runtime,
+		eula: config.defaults.eula,
+		backupEnabled: config.backup.enabled,
+		backupProvider: config.backup.provider,
+		compression: config.backup.compression,
+		network: config.network.defaultProfile,
+	};
 }
 
 /**
@@ -118,33 +118,33 @@ export function configToDraft(config: Config): SettingsDraft {
  *   that window would write the *previous* mode back.
  */
 export function draftToConfig(
-  config: Config,
-  draft: SettingsDraft,
-  themeId: string,
-  iconMode: IconMode,
+	config: Config,
+	draft: SettingsDraft,
+	themeId: string,
+	iconMode: IconMode,
 ): unknown {
-  return {
-    ...config,
-    theme: themeId,
-    icons: iconMode,
-    servers_dir: draft.overrideServers ? draft.serversDir.trim() : undefined,
-    backups_dir: draft.overrideBackups ? draft.backupsDir.trim() : undefined,
-    defaults: {
-      ...config.defaults,
-      minecraftVersion: draft.minecraftVersion.trim() || undefined,
-      kind: draft.kind,
-      memory: draft.memory.trim(),
-      runtime: draft.runtime,
-      eula: draft.eula,
-    },
-    backup: {
-      ...config.backup,
-      enabled: draft.backupEnabled,
-      provider: draft.backupProvider,
-      compression: draft.compression,
-    },
-    network: { ...config.network, defaultProfile: draft.network },
-  };
+	return {
+		...config,
+		theme: themeId,
+		icons: iconMode,
+		servers_dir: draft.overrideServers ? draft.serversDir.trim() : undefined,
+		backups_dir: draft.overrideBackups ? draft.backupsDir.trim() : undefined,
+		defaults: {
+			...config.defaults,
+			minecraftVersion: draft.minecraftVersion.trim() || undefined,
+			kind: draft.kind,
+			memory: draft.memory.trim(),
+			runtime: draft.runtime,
+			eula: draft.eula,
+		},
+		backup: {
+			...config.backup,
+			enabled: draft.backupEnabled,
+			provider: draft.backupProvider,
+			compression: draft.compression,
+		},
+		network: { ...config.network, defaultProfile: draft.network },
+	};
 }
 
 /**
@@ -155,48 +155,48 @@ export function draftToConfig(
  * @returns a map of draft key → message, empty when the draft is valid.
  */
 export function validateDraft(
-  draft: SettingsDraft,
+	draft: SettingsDraft,
 ): Partial<Record<keyof SettingsDraft, string>> {
-  const issues: Partial<Record<keyof SettingsDraft, string>> = {};
-  if (draft.overrideServers && !isAbsolute(draft.serversDir.trim())) {
-    issues.serversDir = "must be an absolute path";
-  }
-  if (draft.overrideBackups && !isAbsolute(draft.backupsDir.trim())) {
-    issues.backupsDir = "must be an absolute path";
-  }
-  if (draft.memory.trim() === "") issues.memory = "required";
-  return issues;
+	const issues: Partial<Record<keyof SettingsDraft, string>> = {};
+	if (draft.overrideServers && !isAbsolute(draft.serversDir.trim())) {
+		issues.serversDir = "must be an absolute path";
+	}
+	if (draft.overrideBackups && !isAbsolute(draft.backupsDir.trim())) {
+		issues.backupsDir = "must be an absolute path";
+	}
+	if (draft.memory.trim() === "") issues.memory = "required";
+	return issues;
 }
 
 /** What {@link useSettings} hands the page. */
 export interface UseSettings {
-  /** The edit buffer, or `undefined` until the config has loaded. */
-  draft: SettingsDraft | undefined;
-  /** The config as loaded from disk (for read-only rows like `root`). */
-  config: Config | undefined;
-  /** True until the first config read resolves. */
-  loading: boolean;
-  /** A config *load* failure message, if any. */
-  loadError?: string;
-  /** Apply a partial edit to the draft. */
-  set: (patch: Partial<SettingsDraft>) => void;
-  /** Whether the draft differs from what is on disk. */
-  dirty: boolean;
-  /** Per-field validation messages; empty when the draft is valid. */
-  issues: Partial<Record<keyof SettingsDraft, string>>;
-  /** Discard edits and reload the buffer from the on-disk config. */
-  revert: () => void;
-  /**
-   * Write the draft. Resolves `null` on success, or the failure message — the
-   * caller needs the message itself to report it (a toast), not just a flag.
-   */
-  save: (themeId: string, iconMode: IconMode) => Promise<string | null>;
-  /** True while a write is in flight. */
-  saving: boolean;
-  /** The last save failure message, or `null`. */
-  saveError: string | null;
-  /** True after a successful save, until the next edit. */
-  saved: boolean;
+	/** The edit buffer, or `undefined` until the config has loaded. */
+	draft: SettingsDraft | undefined;
+	/** The config as loaded from disk (for read-only rows like `root`). */
+	config: Config | undefined;
+	/** True until the first config read resolves. */
+	loading: boolean;
+	/** A config *load* failure message, if any. */
+	loadError?: string;
+	/** Apply a partial edit to the draft. */
+	set: (patch: Partial<SettingsDraft>) => void;
+	/** Whether the draft differs from what is on disk. */
+	dirty: boolean;
+	/** Per-field validation messages; empty when the draft is valid. */
+	issues: Partial<Record<keyof SettingsDraft, string>>;
+	/** Discard edits and reload the buffer from the on-disk config. */
+	revert: () => void;
+	/**
+	 * Write the draft. Resolves `null` on success, or the failure message — the
+	 * caller needs the message itself to report it (a toast), not just a flag.
+	 */
+	save: (themeId: string, iconMode: IconMode) => Promise<string | null>;
+	/** True while a write is in flight. */
+	saving: boolean;
+	/** The last save failure message, or `null`. */
+	saveError: string | null;
+	/** True after a successful save, until the next edit. */
+	saved: boolean;
 }
 
 /**
@@ -207,104 +207,104 @@ export interface UseSettings {
  * clobbered by a refresh, so in-progress edits survive background events.
  */
 export function useSettings(): UseSettings {
-  const { config, loading, error: loadError } = useConfig();
-  const [draft, setDraft] = useState<SettingsDraft>();
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+	const { config, loading, error: loadError } = useConfig();
+	const [draft, setDraft] = useState<SettingsDraft>();
+	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState<string | null>(null);
+	const [saved, setSaved] = useState(false);
 
-  const fromDisk = useMemo(
-    () => (config ? configToDraft(config) : undefined),
-    [config],
-  );
+	const fromDisk = useMemo(
+		() => (config ? configToDraft(config) : undefined),
+		[config],
+	);
 
-  // Comparing serialized drafts is enough: the draft is flat, small, and made of
-  // primitives, so this is both the dirty check and the "same as disk?" check.
-  const dirty =
-    draft !== undefined &&
-    fromDisk !== undefined &&
-    JSON.stringify(draft) !== JSON.stringify(fromDisk);
+	// Comparing serialized drafts is enough: the draft is flat, small, and made of
+	// primitives, so this is both the dirty check and the "same as disk?" check.
+	const dirty =
+		draft !== undefined &&
+		fromDisk !== undefined &&
+		JSON.stringify(draft) !== JSON.stringify(fromDisk);
 
-  // The last draft we adopted from disk. A buffer still equal to it is clean, so
-  // it can safely follow a new on-disk value; anything else is a user edit.
-  const adopted = useRef<string | undefined>(undefined);
+	// The last draft we adopted from disk. A buffer still equal to it is clean, so
+	// it can safely follow a new on-disk value; anything else is a user edit.
+	const adopted = useRef<string | undefined>(undefined);
 
-  // Adopt the on-disk values whenever the buffer is clean (first load, after a
-  // save, or after another instance changed the file). A dirty buffer is left
-  // alone — a background event must never eat in-progress edits.
-  useEffect(() => {
-    if (!fromDisk) return;
-    const serialized = JSON.stringify(fromDisk);
-    setDraft((current) => {
-      if (current !== undefined) {
-        const buffered = JSON.stringify(current);
-        // Already matches the new file (the usual case right after our own save):
-        // nothing to adopt, but re-baseline so a *later* external change is.
-        if (buffered === serialized) {
-          adopted.current = serialized;
-          return current;
-        }
-        // Differs from what we last took off disk ⇒ user edits in progress. Keep
-        // them; a background event must never eat an in-flight edit (`revert`
-        // discards them deliberately).
-        if (buffered !== adopted.current) return current;
-      }
-      adopted.current = serialized;
-      return fromDisk;
-    });
-  }, [fromDisk]);
+	// Adopt the on-disk values whenever the buffer is clean (first load, after a
+	// save, or after another instance changed the file). A dirty buffer is left
+	// alone — a background event must never eat in-progress edits.
+	useEffect(() => {
+		if (!fromDisk) return;
+		const serialized = JSON.stringify(fromDisk);
+		setDraft((current) => {
+			if (current !== undefined) {
+				const buffered = JSON.stringify(current);
+				// Already matches the new file (the usual case right after our own save):
+				// nothing to adopt, but re-baseline so a *later* external change is.
+				if (buffered === serialized) {
+					adopted.current = serialized;
+					return current;
+				}
+				// Differs from what we last took off disk ⇒ user edits in progress. Keep
+				// them; a background event must never eat an in-flight edit (`revert`
+				// discards them deliberately).
+				if (buffered !== adopted.current) return current;
+			}
+			adopted.current = serialized;
+			return fromDisk;
+		});
+	}, [fromDisk]);
 
-  const set = useCallback((patch: Partial<SettingsDraft>) => {
-    setSaved(false);
-    setSaveError(null);
-    setDraft((current) => (current ? { ...current, ...patch } : current));
-  }, []);
+	const set = useCallback((patch: Partial<SettingsDraft>) => {
+		setSaved(false);
+		setSaveError(null);
+		setDraft((current) => (current ? { ...current, ...patch } : current));
+	}, []);
 
-  const revert = useCallback(() => {
-    setSaveError(null);
-    setSaved(false);
-    if (!fromDisk) return;
-    adopted.current = JSON.stringify(fromDisk);
-    setDraft(fromDisk);
-  }, [fromDisk]);
+	const revert = useCallback(() => {
+		setSaveError(null);
+		setSaved(false);
+		if (!fromDisk) return;
+		adopted.current = JSON.stringify(fromDisk);
+		setDraft(fromDisk);
+	}, [fromDisk]);
 
-  const save = useCallback(
-    async (themeId: string, iconMode: IconMode) => {
-      if (!config || !draft) return "settings are still loading";
-      setSaving(true);
-      setSaveError(null);
-      try {
-        const written = await writeConfig(
-          draftToConfig(config, draft, themeId, iconMode),
-        );
-        // A relocated servers_dir/backups_dir must exist before anything tries to
-        // scan or write into it; ensureDirTree is idempotent for the rest.
-        await ensureDirTree(written);
-        setSaved(true);
-        return null;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setSaveError(message);
-        return message;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [config, draft],
-  );
+	const save = useCallback(
+		async (themeId: string, iconMode: IconMode) => {
+			if (!config || !draft) return "settings are still loading";
+			setSaving(true);
+			setSaveError(null);
+			try {
+				const written = await writeConfig(
+					draftToConfig(config, draft, themeId, iconMode),
+				);
+				// A relocated servers_dir/backups_dir must exist before anything tries to
+				// scan or write into it; ensureDirTree is idempotent for the rest.
+				await ensureDirTree(written);
+				setSaved(true);
+				return null;
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				setSaveError(message);
+				return message;
+			} finally {
+				setSaving(false);
+			}
+		},
+		[config, draft],
+	);
 
-  return {
-    draft,
-    config,
-    loading,
-    loadError,
-    set,
-    dirty,
-    issues: draft ? validateDraft(draft) : {},
-    revert,
-    save,
-    saving,
-    saveError,
-    saved,
-  };
+	return {
+		draft,
+		config,
+		loading,
+		loadError,
+		set,
+		dirty,
+		issues: draft ? validateDraft(draft) : {},
+		revert,
+		save,
+		saving,
+		saveError,
+		saved,
+	};
 }

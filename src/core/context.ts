@@ -28,20 +28,20 @@ import { ServerManager } from "./server/manager.ts";
 
 /** The core services a front-end needs, wired together. */
 export interface MctlContext {
-  /** Loaded, validated `config.json`. */
-  config: Config;
-  /** Data paths derived from it. */
-  paths: RootPaths;
-  /** Providers this build ships. */
-  providers: ProviderRegistry;
-  /** The process event bus. */
-  bus: EventBus;
-  /** Scheduler for long-running work (installs, JDK downloads). */
-  jobs: JobScheduler;
-  /** Create / edit / delete servers. */
-  servers: ServerManager;
-  /** Start / stop / restart / stream servers. */
-  runtime: RuntimeManager;
+	/** Loaded, validated `config.json`. */
+	config: Config;
+	/** Data paths derived from it. */
+	paths: RootPaths;
+	/** Providers this build ships. */
+	providers: ProviderRegistry;
+	/** The process event bus. */
+	bus: EventBus;
+	/** Scheduler for long-running work (installs, JDK downloads). */
+	jobs: JobScheduler;
+	/** Create / edit / delete servers. */
+	servers: ServerManager;
+	/** Start / stop / restart / stream servers. */
+	runtime: RuntimeManager;
 }
 
 /**
@@ -56,20 +56,20 @@ export interface MctlContext {
  *   steer the user to `mctl init` or the setup wizard.
  */
 export async function createContext(
-  providers: ProviderRegistry,
-  bus: EventBus = new EventBus(),
+	providers: ProviderRegistry,
+	bus: EventBus = new EventBus(),
 ): Promise<MctlContext> {
-  const config = await loadConfig();
-  const paths = resolveRootPaths(config);
-  const jobs = new JobScheduler(bus);
+	const config = await loadConfig();
+	const paths = resolveRootPaths(config);
+	const jobs = new JobScheduler(bus);
 
-  return {
-    config,
-    paths,
-    providers,
-    bus,
-    jobs,
-    servers: new ServerManager({ config, paths, providers, bus, jobs }),
-    runtime: new RuntimeManager({ config, paths, providers, bus }),
-  };
+	return {
+		config,
+		paths,
+		providers,
+		bus,
+		jobs,
+		servers: new ServerManager({ config, paths, providers, bus, jobs }),
+		runtime: new RuntimeManager({ config, paths, providers, bus }),
+	};
 }

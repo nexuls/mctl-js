@@ -91,11 +91,7 @@ export function Console() {
 				<text fg={colors.muted}>({lines.length} lines)</text>
 			</box>
 
-			<box
-				border={["top"]}
-				borderColor={colors.border}
-				borderStyle="rounded"
-			>
+			<box border={["top"]} borderColor={colors.border} borderStyle="rounded">
 				<ScrollBox
 					ref={scroll}
 					flexGrow={1}

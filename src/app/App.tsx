@@ -39,8 +39,8 @@ const logger = log("app");
 
 /** Props for {@link App}. */
 interface AppProps {
-  /** True when `config.json` is absent — route to the first-run wizard. */
-  firstRun: boolean;
+	/** True when `config.json` is absent — route to the first-run wizard. */
+	firstRun: boolean;
 }
 
 /**
@@ -49,15 +49,15 @@ interface AppProps {
  * its own keyboard; the router owns navigation, theme cycling, and quit.
  */
 function App({ firstRun }: AppProps) {
-  // Whether the first-run wizard still needs to run. Flipped false when the
-  // wizard completes, so the app transitions into the dashboard in-place without
-  // a restart.
-  const [needsSetup, setNeedsSetup] = useState(firstRun);
+	// Whether the first-run wizard still needs to run. Flipped false when the
+	// wizard completes, so the app transitions into the dashboard in-place without
+	// a restart.
+	const [needsSetup, setNeedsSetup] = useState(firstRun);
 
-  if (needsSetup) {
-    return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
-  }
-  return <AppRouter />;
+	if (needsSetup) {
+		return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
+	}
+	return <AppRouter />;
 }
 
 /**
@@ -66,116 +66,116 @@ function App({ firstRun }: AppProps) {
  * until the user quits.
  */
 export async function renderApp(): Promise<void> {
-  // Upstream OpenTUI does not clip box borders against ancestor scissor rects, so
-  // a bordered `<box>` inside a `<scrollbox>` paints its border over the chrome
-  // around the scrollbox once scrolled. Install the fix before the first render.
-  installBoxClipPatch();
+	// Upstream OpenTUI does not clip box borders against ancestor scissor rects, so
+	// a bordered `<box>` inside a `<scrollbox>` paints its border over the chrome
+	// around the scrollbox once scrolled. Install the fix before the first render.
+	installBoxClipPatch();
 
-  // Drag-selection is opt-in: OpenTUI's text renderables are `selectable` by
-  // default and start a selection on left mouse-down, which fights with our
-  // click-to-navigate UI. This flips the default off, so only elements that pass
-  // `selectable` explicitly (the console log lines) can be selected. Must run
-  // before the first render — it re-registers the component catalogue.
-  installSelectionOptIn();
+	// Drag-selection is opt-in: OpenTUI's text renderables are `selectable` by
+	// default and start a selection on left mouse-down, which fights with our
+	// click-to-navigate UI. This flips the default off, so only elements that pass
+	// `selectable` explicitly (the console log lines) can be selected. Must run
+	// before the first render — it re-registers the component catalogue.
+	installSelectionOptIn();
 
-  // A negative `width`/`height` on any element means "terminal size minus that
-  // many cells", re-resolved on every resize. Patches the shared `Renderable`
-  // prototype, so it must run before the first renderable is constructed.
-  installNegativeDimensionPatch();
+	// A negative `width`/`height` on any element means "terminal size minus that
+	// many cells", re-resolved on every resize. Patches the shared `Renderable`
+	// prototype, so it must run before the first renderable is constructed.
+	installNegativeDimensionPatch();
 
-  // Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
-  // the persisted theme id before the first paint. Front-end → core service:
-  // the React tree never touches disk itself.
-  const registry = await new ThemeRegistry().load();
-  const appearance = await loadAppearance();
+	// Load the theme catalogue (built-ins + `~/.config/mctl/themes/*.json`) and
+	// the persisted theme id before the first paint. Front-end → core service:
+	// the React tree never touches disk itself.
+	const registry = await new ThemeRegistry().load();
+	const appearance = await loadAppearance();
 
-  // Reap stale locks (crashed instances' start/install/supervisor locks) once at
-  // startup, before anything reads runtime state (architecture.md § Statelessness).
-  await reapStaleLocks();
+	// Reap stale locks (crashed instances' start/install/supervisor locks) once at
+	// startup, before anything reads runtime state (architecture.md § Statelessness).
+	await reapStaleLocks();
 
-  // Start the event system: the in-process bus, the `events.jsonl` tail, and the
-  // hard-state file watchers. The bus is injected into the tree so hooks react to
-  // local and cross-instance state changes uniformly.
-  const events = await startEventSystem();
+	// Start the event system: the in-process bus, the `events.jsonl` tail, and the
+	// hard-state file watchers. The bus is injected into the tree so hooks react to
+	// local and cross-instance state changes uniformly.
+	const events = await startEventSystem();
 
-  // First run = no config.json yet. Decided once here (front-end → core) and
-  // handed to the tree, which routes to the setup wizard rather than the
-  // dashboard until setup completes.
-  const firstRun = !(await configExists());
+	// First run = no config.json yet. Decided once here (front-end → core) and
+	// handed to the tree, which routes to the setup wizard rather than the
+	// dashboard until setup completes.
+	const firstRun = !(await configExists());
 
-  const renderer = await createCliRenderer({
-    exitOnCtrlC: true,
-    screenMode: "alternate-screen",
-    clearOnShutdown: false,
-    openConsoleOnError: true,
-    enableMouseMovement: true,
-  });
+	const renderer = await createCliRenderer({
+		exitOnCtrlC: true,
+		screenMode: "alternate-screen",
+		clearOnShutdown: false,
+		openConsoleOnError: true,
+		enableMouseMovement: true,
+	});
 
-  // Stop the event system when the renderer shuts down (Ctrl+C / quit), so
-  // watchers and the tail don't outlive the UI.
-  renderer.on("destroy", () => void events.stop());
+	// Stop the event system when the renderer shuts down (Ctrl+C / quit), so
+	// watchers and the tail don't outlive the UI.
+	renderer.on("destroy", () => void events.stop());
 
-  // Query the host palette BEFORE the first paint so the terminal-default theme
-  // renders in real colours from frame one — no flash from a placeholder theme.
-  // Null (non-TTY / slow terminal) just means the live query in the hook fills
-  // it in shortly; the empty-terminal theme covers the gap.
-  const initialPalette = await queryTerminalPalette(renderer);
+	// Query the host palette BEFORE the first paint so the terminal-default theme
+	// renders in real colours from frame one — no flash from a placeholder theme.
+	// Null (non-TTY / slow terminal) just means the live query in the hook fills
+	// it in shortly; the empty-terminal theme covers the gap.
+	const initialPalette = await queryTerminalPalette(renderer);
 
-  // Bridge `ConfigChanged` (another instance changing the theme or icon set, or
-  // a hand-edit of config.json) back into the appearance providers, which sit
-  // above the bus provider and do no I/O of their own. Built once each so their
-  // identities are stable across renders — the providers use them as effect
-  // dependencies.
-  const subscribeThemeId = configSubscriber(events.bus, (c) => c.theme);
-  const subscribeIconMode = configSubscriber(events.bus, (c) => c.icons);
+	// Bridge `ConfigChanged` (another instance changing the theme or icon set, or
+	// a hand-edit of config.json) back into the appearance providers, which sit
+	// above the bus provider and do no I/O of their own. Built once each so their
+	// identities are stable across renders — the providers use them as effect
+	// dependencies.
+	const subscribeThemeId = configSubscriber(events.bus, (c) => c.theme);
+	const subscribeIconMode = configSubscriber(events.bus, (c) => c.icons);
 
-  // The concrete providers this build ships. Built once here at the front-end
-  // edge and injected, so nothing under `core/` or `hooks/` ever imports one
-  // (AGENTS.md § 3: core knows provider *interfaces* only).
-  const providers = createProviderRegistry();
+	// The concrete providers this build ships. Built once here at the front-end
+	// edge and injected, so nothing under `core/` or `hooks/` ever imports one
+	// (AGENTS.md § 3: core knows provider *interfaces* only).
+	const providers = createProviderRegistry();
 
-  createRoot(renderer).render(
-    <ThemeProvider
-      registry={registry}
-      initialThemeId={appearance.theme}
-      initialPalette={initialPalette}
-      onThemeChange={(theme) => persistAppearance({ theme })}
-      subscribeThemeId={subscribeThemeId}
-    >
-      {/* Icons are the other half of "appearance", so the provider sits beside
+	createRoot(renderer).render(
+		<ThemeProvider
+			registry={registry}
+			initialThemeId={appearance.theme}
+			initialPalette={initialPalette}
+			onThemeChange={(theme) => persistAppearance({ theme })}
+			subscribeThemeId={subscribeThemeId}
+		>
+			{/* Icons are the other half of "appearance", so the provider sits beside
           the theme's — above everything, since the component kit itself
           (Toast, Form, Tabs, Hint) reads glyphs from it. */}
-      <IconProvider
-        initialMode={appearance.icons}
-        onModeChange={(icons) => persistAppearance({ icons })}
-        subscribeMode={subscribeIconMode}
-      >
-        <EventBusProvider bus={events.bus}>
-          {/* Above the app so both the wizard and the router's pages can hold the
+			<IconProvider
+				initialMode={appearance.icons}
+				onModeChange={(icons) => persistAppearance({ icons })}
+				subscribeMode={subscribeIconMode}
+			>
+				<EventBusProvider bus={events.bus}>
+					{/* Above the app so both the wizard and the router's pages can hold the
               capture, and so toasts (below it) can stand their action keys down
               while a text field is being typed into. */}
-          <InputCaptureProvider>
-            <ToastProvider>
-              {/* The mutating core services. Below the bus (it rebuilds on
+					<InputCaptureProvider>
+						<ToastProvider>
+							{/* The mutating core services. Below the bus (it rebuilds on
                   ConfigChanged) and below the toast layer, so a page can raise
                   a toast about a create it just started. */}
-              <MctlProvider providers={providers}>
-                <App firstRun={firstRun} />
-              </MctlProvider>
-            </ToastProvider>
-          </InputCaptureProvider>
-        </EventBusProvider>
-      </IconProvider>
-    </ThemeProvider>,
-  );
+							<MctlProvider providers={providers}>
+								<App firstRun={firstRun} />
+							</MctlProvider>
+						</ToastProvider>
+					</InputCaptureProvider>
+				</EventBusProvider>
+			</IconProvider>
+		</ThemeProvider>,
+	);
 }
 
 /** The persisted appearance preferences, read once before the first paint. */
 interface Appearance {
-  /** Active theme id (`config.theme`). */
-  theme: string;
-  /** Active icon mode (`config.icons`). */
-  icons: IconMode;
+	/** Active theme id (`config.theme`). */
+	theme: string;
+	/** Active icon mode (`config.icons`). */
+	icons: IconMode;
 }
 
 /**
@@ -185,14 +185,14 @@ interface Appearance {
  * the wizard that writes config exists.
  */
 async function loadAppearance(): Promise<Appearance> {
-  try {
-    const config = await loadConfig();
-    return { theme: config.theme, icons: config.icons };
-  } catch {
-    // ConfigNotFoundError (first run) or a malformed file: fall back rather than
-    // block the UI on a display preference.
-    return { theme: "terminal", icons: "auto" };
-  }
+	try {
+		const config = await loadConfig();
+		return { theme: config.theme, icons: config.icons };
+	} catch {
+		// ConfigNotFoundError (first run) or a malformed file: fall back rather than
+		// block the UI on a display preference.
+		return { theme: "terminal", icons: "auto" };
+	}
 }
 
 /**
@@ -205,20 +205,23 @@ async function loadAppearance(): Promise<Appearance> {
  * the result, as providers treat it as a stable effect dependency.
  */
 function configSubscriber<T>(
-  bus: EventBus,
-  select: (config: Config) => T,
+	bus: EventBus,
+	select: (config: Config) => T,
 ): (apply: (value: T) => void) => () => void {
-  return (apply) =>
-    bus.subscribe((event) => {
-      if (event.type !== EventType.ConfigChanged) return;
-      loadConfig()
-        .then((config) => apply(select(config)))
-        .catch((err) => {
-          // A transient unreadable/half-written config: keep the current
-          // appearance rather than flashing a fallback. The next change re-reads.
-          logger.debug({ err: String(err) }, "appearance not re-read on change");
-        });
-    });
+	return (apply) =>
+		bus.subscribe((event) => {
+			if (event.type !== EventType.ConfigChanged) return;
+			loadConfig()
+				.then((config) => apply(select(config)))
+				.catch((err) => {
+					// A transient unreadable/half-written config: keep the current
+					// appearance rather than flashing a fallback. The next change re-reads.
+					logger.debug(
+						{ err: String(err) },
+						"appearance not re-read on change",
+					);
+				});
+		});
 }
 
 /**
@@ -239,31 +242,31 @@ function configSubscriber<T>(
  *    queue makes that impossible.
  */
 function persistAppearance(patch: Partial<Appearance>): void {
-  pendingAppearance = { ...pendingAppearance, ...patch };
-  if (appearanceWrite) return;
-  appearanceWrite = (async () => {
-    try {
-      while (pendingAppearance !== undefined) {
-        const next = pendingAppearance;
-        pendingAppearance = undefined;
-        const config = await loadConfig();
-        const merged = { ...config, ...next };
-        // Skip a no-op write: it would fire `ConfigChanged` in every instance
-        // for nothing.
-        if (merged.theme !== config.theme || merged.icons !== config.icons) {
-          await writeConfig(merged);
-        }
-      }
-    } catch (err) {
-      pendingAppearance = undefined;
-      logger.debug(
-        { err: String(err) },
-        "appearance not persisted (no config yet)",
-      );
-    } finally {
-      appearanceWrite = undefined;
-    }
-  })();
+	pendingAppearance = { ...pendingAppearance, ...patch };
+	if (appearanceWrite) return;
+	appearanceWrite = (async () => {
+		try {
+			while (pendingAppearance !== undefined) {
+				const next = pendingAppearance;
+				pendingAppearance = undefined;
+				const config = await loadConfig();
+				const merged = { ...config, ...next };
+				// Skip a no-op write: it would fire `ConfigChanged` in every instance
+				// for nothing.
+				if (merged.theme !== config.theme || merged.icons !== config.icons) {
+					await writeConfig(merged);
+				}
+			}
+		} catch (err) {
+			pendingAppearance = undefined;
+			logger.debug(
+				{ err: String(err) },
+				"appearance not persisted (no config yet)",
+			);
+		} finally {
+			appearanceWrite = undefined;
+		}
+	})();
 }
 
 /** The appearance patch waiting to be written (see {@link persistAppearance}). */

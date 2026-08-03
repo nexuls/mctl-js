@@ -17,11 +17,11 @@
  */
 
 import {
-  createContext as createReactContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
+	createContext as createReactContext,
+	useContext,
+	useEffect,
+	useState,
+	type ReactNode,
 } from "react";
 import { createContext, type MctlContext } from "../core/context.ts";
 import type { ProviderRegistry } from "../core/registry/provider-registry.ts";
@@ -30,19 +30,19 @@ import { useEventBus } from "./use-event-bus.tsx";
 
 /** What {@link useMctl} exposes. */
 export interface MctlState {
-  /** The wired core services, or `undefined` until the first build resolves. */
-  context?: MctlContext;
-  /** A message when the context could not be built (unreadable config). */
-  error?: string;
+	/** The wired core services, or `undefined` until the first build resolves. */
+	context?: MctlContext;
+	/** A message when the context could not be built (unreadable config). */
+	error?: string;
 }
 
 const Ctx = createReactContext<MctlState | undefined>(undefined);
 
 /** Props for {@link MctlProvider}. */
 interface MctlProviderProps {
-  /** Built once in `renderApp()` by `providers/index.ts`. */
-  providers: ProviderRegistry;
-  children: ReactNode;
+	/** Built once in `renderApp()` by `providers/index.ts`. */
+	providers: ProviderRegistry;
+	children: ReactNode;
 }
 
 /**
@@ -50,35 +50,35 @@ interface MctlProviderProps {
  * `config.json` changes.
  */
 export function MctlProvider({ providers, children }: MctlProviderProps) {
-  const bus = useEventBus();
-  const [state, setState] = useState<MctlState>({});
+	const bus = useEventBus();
+	const [state, setState] = useState<MctlState>({});
 
-  useEffect(() => {
-    let mounted = true;
-    const build = async () => {
-      try {
-        const context = await createContext(providers, bus);
-        if (mounted) setState({ context });
-      } catch (err) {
-        // No config yet (the wizard is still running) is the common case here,
-        // and is not an error the user should see — the pages that need the
-        // context are not reachable until setup completes.
-        if (mounted) {
-          setState({ error: err instanceof Error ? err.message : String(err) });
-        }
-      }
-    };
-    void build();
-    const unsubscribe = bus.subscribe((event) => {
-      if (event.type === EventType.ConfigChanged) void build();
-    });
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [bus, providers]);
+	useEffect(() => {
+		let mounted = true;
+		const build = async () => {
+			try {
+				const context = await createContext(providers, bus);
+				if (mounted) setState({ context });
+			} catch (err) {
+				// No config yet (the wizard is still running) is the common case here,
+				// and is not an error the user should see — the pages that need the
+				// context are not reachable until setup completes.
+				if (mounted) {
+					setState({ error: err instanceof Error ? err.message : String(err) });
+				}
+			}
+		};
+		void build();
+		const unsubscribe = bus.subscribe((event) => {
+			if (event.type === EventType.ConfigChanged) void build();
+		});
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [bus, providers]);
 
-  return <Ctx.Provider value={state}>{children}</Ctx.Provider>;
+	return <Ctx.Provider value={state}>{children}</Ctx.Provider>;
 }
 
 /**
@@ -90,5 +90,5 @@ export function MctlProvider({ providers, children }: MctlProviderProps) {
  * is honest — during the first-run wizard there genuinely is no context.
  */
 export function useMctl(): MctlState {
-  return useContext(Ctx) ?? {};
+	return useContext(Ctx) ?? {};
 }

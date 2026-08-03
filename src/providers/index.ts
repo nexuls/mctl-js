@@ -15,7 +15,10 @@ import { ForegroundRuntime } from "./runtime/foreground.ts";
 import { PaperProvider } from "./server/paper.ts";
 import { VanillaProvider } from "./server/vanilla.ts";
 
-export { ForegroundRuntime, SessionNotOwnedError } from "./runtime/foreground.ts";
+export {
+	ForegroundRuntime,
+	SessionNotOwnedError,
+} from "./runtime/foreground.ts";
 export { PaperProvider } from "./server/paper.ts";
 export { VanillaProvider, VersionNotFoundError } from "./server/vanilla.ts";
 
@@ -30,9 +33,9 @@ export { VanillaProvider, VersionNotFoundError } from "./server/vanilla.ts";
  * wanted server type comes first.
  */
 export function createProviderRegistry(): ProviderRegistry {
-  return new ProviderRegistry()
-    .registerServer(new PaperProvider())
-    .registerServer(new VanillaProvider())
-    .registerRuntime(new ForegroundRuntime());
-  // Phase 3: Fabric, Quilt, Forge, NeoForge, Purpur, Velocity; TmuxRuntime.
+	return new ProviderRegistry()
+		.registerServer(new PaperProvider())
+		.registerServer(new VanillaProvider())
+		.registerRuntime(new ForegroundRuntime());
+	// Phase 3: Fabric, Quilt, Forge, NeoForge, Purpur, Velocity; TmuxRuntime.
 }

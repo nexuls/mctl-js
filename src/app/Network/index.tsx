@@ -6,11 +6,11 @@
 import { Placeholder } from "../shared.tsx";
 
 export function Network() {
-  return (
-    <Placeholder
-      title="Network"
-      phase="Phase 4"
-      note="Per-server profiles, tunnel status, join address, and Cloudflare DNS."
-    />
-  );
+	return (
+		<Placeholder
+			title="Network"
+			phase="Phase 4"
+			note="Per-server profiles, tunnel status, join address, and Cloudflare DNS."
+		/>
+	);
 }

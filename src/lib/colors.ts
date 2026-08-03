@@ -21,35 +21,35 @@
 
 /** Clamp `n` into the inclusive `[min, max]` range. */
 function clamp(n: number, min: number, max: number): number {
-  return n < min ? min : n > max ? max : n;
+	return n < min ? min : n > max ? max : n;
 }
 
 /** An RGB(A) colour in working form: `r`/`g`/`b` are `0–255`, `a` is `0–1`. */
 export interface Rgb {
-  r: number;
-  g: number;
-  b: number;
-  /** Alpha, `0` (transparent) to `1` (opaque). Defaults to `1` when omitted. */
-  a?: number;
+	r: number;
+	g: number;
+	b: number;
+	/** Alpha, `0` (transparent) to `1` (opaque). Defaults to `1` when omitted. */
+	a?: number;
 }
 
 /** An HSL(A) colour: `h` in degrees `0–360`, `s`/`l` as fractions `0–1`, `a` `0–1`. */
 export interface Hsl {
-  h: number;
-  s: number;
-  l: number;
-  /** Alpha, `0`–`1`. Defaults to `1` when omitted. */
-  a?: number;
+	h: number;
+	s: number;
+	l: number;
+	/** Alpha, `0`–`1`. Defaults to `1` when omitted. */
+	a?: number;
 }
 
 /** Round and clamp a channel value into a valid `0–255` byte. */
 function toByte(n: number): number {
-  return clamp(Math.round(n), 0, 255);
+	return clamp(Math.round(n), 0, 255);
 }
 
 /** Format one `0–255` byte as a two-digit lowercase hex pair. */
 function byteToHex(n: number): string {
-  return toByte(n).toString(16).padStart(2, "0");
+	return toByte(n).toString(16).padStart(2, "0");
 }
 
 /**
@@ -62,39 +62,39 @@ function byteToHex(n: number): string {
  *   validate at the boundary rather than relying on a silent fallback.
  */
 export function parseHex(hex: string): Rgb {
-  const raw = hex.startsWith("#") ? hex.slice(1) : hex;
-  if (!/^[0-9a-fA-F]+$/.test(raw)) {
-    throw new Error(`Invalid hex colour: "${hex}"`);
-  }
+	const raw = hex.startsWith("#") ? hex.slice(1) : hex;
+	if (!/^[0-9a-fA-F]+$/.test(raw)) {
+		throw new Error(`Invalid hex colour: "${hex}"`);
+	}
 
-  let r: number;
-  let g: number;
-  let b: number;
-  let a = 1;
+	let r: number;
+	let g: number;
+	let b: number;
+	let a = 1;
 
-  switch (raw.length) {
-    case 3:
-    case 4: {
-      // Shorthand: each nibble is doubled, so "f" → "ff".
-      const expanded = raw.replace(/./g, (ch) => ch + ch);
-      r = parseInt(expanded.slice(0, 2), 16);
-      g = parseInt(expanded.slice(2, 4), 16);
-      b = parseInt(expanded.slice(4, 6), 16);
-      if (raw.length === 4) a = parseInt(expanded.slice(6, 8), 16) / 255;
-      break;
-    }
-    case 6:
-    case 8:
-      r = parseInt(raw.slice(0, 2), 16);
-      g = parseInt(raw.slice(2, 4), 16);
-      b = parseInt(raw.slice(4, 6), 16);
-      if (raw.length === 8) a = parseInt(raw.slice(6, 8), 16) / 255;
-      break;
-    default:
-      throw new Error(`Invalid hex colour length: "${hex}"`);
-  }
+	switch (raw.length) {
+		case 3:
+		case 4: {
+			// Shorthand: each nibble is doubled, so "f" → "ff".
+			const expanded = raw.replace(/./g, (ch) => ch + ch);
+			r = parseInt(expanded.slice(0, 2), 16);
+			g = parseInt(expanded.slice(2, 4), 16);
+			b = parseInt(expanded.slice(4, 6), 16);
+			if (raw.length === 4) a = parseInt(expanded.slice(6, 8), 16) / 255;
+			break;
+		}
+		case 6:
+		case 8:
+			r = parseInt(raw.slice(0, 2), 16);
+			g = parseInt(raw.slice(2, 4), 16);
+			b = parseInt(raw.slice(4, 6), 16);
+			if (raw.length === 8) a = parseInt(raw.slice(6, 8), 16) / 255;
+			break;
+		default:
+			throw new Error(`Invalid hex colour length: "${hex}"`);
+	}
 
-  return { r, g, b, a };
+	return { r, g, b, a };
 }
 
 /**
@@ -103,10 +103,10 @@ export function parseHex(hex: string): Rgb {
  * colours stay in the compact form themes expect.
  */
 export function toHex(c: Rgb): string {
-  const base = `#${byteToHex(c.r)}${byteToHex(c.g)}${byteToHex(c.b)}`;
-  const a = c.a ?? 1;
-  if (a >= 1) return base;
-  return base + byteToHex(a * 255);
+	const base = `#${byteToHex(c.r)}${byteToHex(c.g)}${byteToHex(c.b)}`;
+	const a = c.a ?? 1;
+	if (a >= 1) return base;
+	return base + byteToHex(a * 255);
 }
 
 /**
@@ -114,8 +114,8 @@ export function toHex(c: Rgb): string {
  * alpha. `1` is opaque, `0` fully transparent.
  */
 export function alpha(color: string | Rgb, a: number): string {
-  const c = typeof color === "string" ? parseHex(color) : color;
-  return toHex({ ...c, a: clamp(a, 0, 1) });
+	const c = typeof color === "string" ? parseHex(color) : color;
+	return toHex({ ...c, a: clamp(a, 0, 1) });
 }
 
 /**
@@ -124,8 +124,8 @@ export function alpha(color: string | Rgb, a: number): string {
  * already-translucent overlay) rather than to an absolute value.
  */
 export function fade(color: string | Rgb, factor: number): string {
-  const c = typeof color === "string" ? parseHex(color) : color;
-  return toHex({ ...c, a: clamp((c.a ?? 1) * factor, 0, 1) });
+	const c = typeof color === "string" ? parseHex(color) : color;
+	return toHex({ ...c, a: clamp((c.a ?? 1) * factor, 0, 1) });
 }
 
 // ── RGB ↔ HSL ─────────────────────────────────────────────────────────────────
@@ -136,35 +136,35 @@ export function fade(color: string | Rgb, factor: number): string {
  * https://en.wikipedia.org/wiki/HSL_and_HSV#From_RGB
  */
 export function rgbToHsl(c: Rgb): Hsl {
-  const r = c.r / 255;
-  const g = c.g / 255;
-  const b = c.b / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const delta = max - min;
+	const r = c.r / 255;
+	const g = c.g / 255;
+	const b = c.b / 255;
+	const max = Math.max(r, g, b);
+	const min = Math.min(r, g, b);
+	const delta = max - min;
 
-  const l = (max + min) / 2;
-  let h = 0;
-  let s = 0;
+	const l = (max + min) / 2;
+	let h = 0;
+	let s = 0;
 
-  if (delta !== 0) {
-    s = delta / (1 - Math.abs(2 * l - 1));
-    switch (max) {
-      case r:
-        h = ((g - b) / delta) % 6;
-        break;
-      case g:
-        h = (b - r) / delta + 2;
-        break;
-      default:
-        h = (r - g) / delta + 4;
-        break;
-    }
-    h *= 60;
-    if (h < 0) h += 360;
-  }
+	if (delta !== 0) {
+		s = delta / (1 - Math.abs(2 * l - 1));
+		switch (max) {
+			case r:
+				h = ((g - b) / delta) % 6;
+				break;
+			case g:
+				h = (b - r) / delta + 2;
+				break;
+			default:
+				h = (r - g) / delta + 4;
+				break;
+		}
+		h *= 60;
+		if (h < 0) h += 360;
+	}
 
-  return { h, s, l, a: c.a ?? 1 };
+	return { h, s, l, a: c.a ?? 1 };
 }
 
 /**
@@ -173,30 +173,30 @@ export function rgbToHsl(c: Rgb): Hsl {
  * https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative
  */
 export function hslToRgb(c: Hsl): Rgb {
-  const h = ((c.h % 360) + 360) % 360;
-  const s = clamp(c.s, 0, 1);
-  const l = clamp(c.l, 0, 1);
+	const h = ((c.h % 360) + 360) % 360;
+	const s = clamp(c.s, 0, 1);
+	const l = clamp(c.l, 0, 1);
 
-  const chroma = (1 - Math.abs(2 * l - 1)) * s;
-  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - chroma / 2;
+	const chroma = (1 - Math.abs(2 * l - 1)) * s;
+	const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+	const m = l - chroma / 2;
 
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (h < 60) [r, g, b] = [chroma, x, 0];
-  else if (h < 120) [r, g, b] = [x, chroma, 0];
-  else if (h < 180) [r, g, b] = [0, chroma, x];
-  else if (h < 240) [r, g, b] = [0, x, chroma];
-  else if (h < 300) [r, g, b] = [x, 0, chroma];
-  else [r, g, b] = [chroma, 0, x];
+	let r = 0;
+	let g = 0;
+	let b = 0;
+	if (h < 60) [r, g, b] = [chroma, x, 0];
+	else if (h < 120) [r, g, b] = [x, chroma, 0];
+	else if (h < 180) [r, g, b] = [0, chroma, x];
+	else if (h < 240) [r, g, b] = [0, x, chroma];
+	else if (h < 300) [r, g, b] = [x, 0, chroma];
+	else [r, g, b] = [chroma, 0, x];
 
-  return {
-    r: toByte((r + m) * 255),
-    g: toByte((g + m) * 255),
-    b: toByte((b + m) * 255),
-    a: c.a ?? 1,
-  };
+	return {
+		r: toByte((r + m) * 255),
+		g: toByte((g + m) * 255),
+		b: toByte((b + m) * 255),
+		a: c.a ?? 1,
+	};
 }
 
 /**
@@ -205,18 +205,18 @@ export function hslToRgb(c: Hsl): Rgb {
  * {@link rotateHue}, {@link saturate}, {@link lighten}, and friends.
  */
 function mapHsl(color: string | Rgb, fn: (hsl: Hsl) => Hsl): string {
-  const rgb = typeof color === "string" ? parseHex(color) : color;
-  return toHex(hslToRgb(fn(rgbToHsl(rgb))));
+	const rgb = typeof color === "string" ? parseHex(color) : color;
+	return toHex(hslToRgb(fn(rgbToHsl(rgb))));
 }
 
 /** Rotate the hue by `degrees` (may be negative); wraps around the 360° wheel. */
 export function rotateHue(color: string | Rgb, degrees: number): string {
-  return mapHsl(color, (hsl) => ({ ...hsl, h: hsl.h + degrees }));
+	return mapHsl(color, (hsl) => ({ ...hsl, h: hsl.h + degrees }));
 }
 
 /** Set the hue to an absolute `degrees` value on the colour wheel. */
 export function setHue(color: string | Rgb, degrees: number): string {
-  return mapHsl(color, (hsl) => ({ ...hsl, h: degrees }));
+	return mapHsl(color, (hsl) => ({ ...hsl, h: degrees }));
 }
 
 /**
@@ -224,17 +224,17 @@ export function setHue(color: string | Rgb, degrees: number): string {
  * Positive values intensify the colour, negative values wash it out toward grey.
  */
 export function saturate(color: string | Rgb, amount: number): string {
-  return mapHsl(color, (hsl) => ({ ...hsl, s: clamp(hsl.s + amount, 0, 1) }));
+	return mapHsl(color, (hsl) => ({ ...hsl, s: clamp(hsl.s + amount, 0, 1) }));
 }
 
 /** Shift saturation *down* by `amount`; the inverse of {@link saturate}. */
 export function desaturate(color: string | Rgb, amount: number): string {
-  return saturate(color, -amount);
+	return saturate(color, -amount);
 }
 
 /** Drop all saturation, yielding the colour's equivalent grey. */
 export function grayscale(color: string | Rgb): string {
-  return mapHsl(color, (hsl) => ({ ...hsl, s: 0 }));
+	return mapHsl(color, (hsl) => ({ ...hsl, s: 0 }));
 }
 
 /**
@@ -242,12 +242,12 @@ export function grayscale(color: string | Rgb): string {
  * Positive brightens toward white, negative darkens toward black.
  */
 export function lighten(color: string | Rgb, amount: number): string {
-  return mapHsl(color, (hsl) => ({ ...hsl, l: clamp(hsl.l + amount, 0, 1) }));
+	return mapHsl(color, (hsl) => ({ ...hsl, l: clamp(hsl.l + amount, 0, 1) }));
 }
 
 /** Shift lightness *down* by `amount`; the inverse of {@link lighten}. */
 export function darken(color: string | Rgb, amount: number): string {
-  return lighten(color, -amount);
+	return lighten(color, -amount);
 }
 
 // ── Blending & readability ──────────────────────────────────────────────────
@@ -257,20 +257,20 @@ export function darken(color: string | Rgb, amount: number): string {
  * returns `to`, `1` returns `from`, `0.5` is the midpoint. Alpha is mixed too.
  */
 export function mix(
-  from: string | Rgb,
-  to: string | Rgb,
-  weight = 0.5,
+	from: string | Rgb,
+	to: string | Rgb,
+	weight = 0.5,
 ): string {
-  const a = typeof from === "string" ? parseHex(from) : from;
-  const b = typeof to === "string" ? parseHex(to) : to;
-  const w = clamp(weight, 0, 1);
-  const lerp = (x: number, y: number) => x * w + y * (1 - w);
-  return toHex({
-    r: lerp(a.r, b.r),
-    g: lerp(a.g, b.g),
-    b: lerp(a.b, b.b),
-    a: lerp(a.a ?? 1, b.a ?? 1),
-  });
+	const a = typeof from === "string" ? parseHex(from) : from;
+	const b = typeof to === "string" ? parseHex(to) : to;
+	const w = clamp(weight, 0, 1);
+	const lerp = (x: number, y: number) => x * w + y * (1 - w);
+	return toHex({
+		r: lerp(a.r, b.r),
+		g: lerp(a.g, b.g),
+		b: lerp(a.b, b.b),
+		a: lerp(a.a ?? 1, b.a ?? 1),
+	});
 }
 
 /**
@@ -280,12 +280,12 @@ export function mix(
  * https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
  */
 export function luminance(color: string | Rgb): number {
-  const c = typeof color === "string" ? parseHex(color) : color;
-  const channel = (v: number) => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
+	const c = typeof color === "string" ? parseHex(color) : color;
+	const channel = (v: number) => {
+		const s = v / 255;
+		return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+	};
+	return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
 }
 
 /**
@@ -294,11 +294,11 @@ export function luminance(color: string | Rgb): number {
  * https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio
  */
 export function contrastRatio(a: string | Rgb, b: string | Rgb): number {
-  const la = luminance(a);
-  const lb = luminance(b);
-  const lighter = Math.max(la, lb);
-  const darker = Math.min(la, lb);
-  return (lighter + 0.05) / (darker + 0.05);
+	const la = luminance(a);
+	const lb = luminance(b);
+	const lighter = Math.max(la, lb);
+	const darker = Math.min(la, lb);
+	return (lighter + 0.05) / (darker + 0.05);
 }
 
 /**
@@ -307,11 +307,11 @@ export function contrastRatio(a: string | Rgb, b: string | Rgb): number {
  * arbitrary swatch" case (e.g. a coloured badge or keycap).
  */
 export function readableOn(
-  background: string | Rgb,
-  dark = "#000000",
-  light = "#ffffff",
+	background: string | Rgb,
+	dark = "#000000",
+	light = "#ffffff",
 ): string {
-  return contrastRatio(background, dark) >= contrastRatio(background, light)
-    ? dark
-    : light;
+	return contrastRatio(background, dark) >= contrastRatio(background, light)
+		? dark
+		: light;
 }

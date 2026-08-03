@@ -157,7 +157,10 @@ export interface ToastApi {
 	 * error toast. Returns the original promise, so it stays awaitable — and
 	 * rejections still reject, they are only *reported* here.
 	 */
-	promise: <T>(work: Promise<T>, messages: ToastPromiseMessages<T>) => Promise<T>;
+	promise: <T>(
+		work: Promise<T>,
+		messages: ToastPromiseMessages<T>,
+	) => Promise<T>;
 }
 
 /** A toast plus the scheduling state the provider tracks for it. */
@@ -319,7 +322,10 @@ export function ToastProvider({
 	}, []);
 
 	const show = useCallback(
-		(first: string | (ToastOptions & { title: string }), second?: ToastOptions) => {
+		(
+			first: string | (ToastOptions & { title: string }),
+			second?: ToastOptions,
+		) => {
 			const options: ToastOptions & { title: string } =
 				typeof first === "string" ? { ...second, title: first } : first;
 			const id = options.id ?? `toast-${seq.current}-${Date.now()}`;
@@ -360,7 +366,9 @@ export function ToastProvider({
 				...patch,
 				// `loading` is the field a promise toast flips; an explicit patch of a
 				// timed variant must not inherit the spinner's stickiness.
-				duration: patch.duration ?? (patch.loading === false ? undefined : current.duration),
+				duration:
+					patch.duration ??
+					(patch.loading === false ? undefined : current.duration),
 				id,
 				title: patch.title ?? current.title,
 				delay: 0,
@@ -406,7 +414,9 @@ export function ToastProvider({
 				(err: unknown) =>
 					update(id, {
 						title:
-							typeof messages.error === "function" ? messages.error(err) : messages.error,
+							typeof messages.error === "function"
+								? messages.error(err)
+								: messages.error,
 						variant: "error",
 						loading: false,
 					}),
@@ -463,7 +473,8 @@ export function ToastProvider({
 	// deliberately has no countdown — its time to live starts when it is seen.
 	useEffect(() => {
 		const onScreen = new Set<ToastId>();
-		for (const list of visible.values()) for (const entry of list) onScreen.add(entry.id);
+		for (const list of visible.values())
+			for (const entry of list) onScreen.add(entry.id);
 
 		for (const [id, countdown] of countdowns.current) {
 			if (onScreen.has(id)) continue;
@@ -475,7 +486,10 @@ export function ToastProvider({
 			for (const entry of list) {
 				if (!Number.isFinite(entry.duration) || entry.duration <= 0) continue;
 				if (countdowns.current.has(entry.id)) continue;
-				const timer = setTimeout(() => remove(entry.id, "timeout"), entry.duration);
+				const timer = setTimeout(
+					() => remove(entry.id, "timeout"),
+					entry.duration,
+				);
 				countdowns.current.set(entry.id, {
 					timer,
 					expiresAt: Date.now() + entry.duration,
@@ -515,7 +529,10 @@ export function ToastProvider({
 			if (!countdown?.paused) return;
 			countdown.paused = false;
 			countdown.expiresAt = Date.now() + countdown.remaining;
-			countdown.timer = setTimeout(() => remove(id, "timeout"), countdown.remaining);
+			countdown.timer = setTimeout(
+				() => remove(id, "timeout"),
+				countdown.remaining,
+			);
 		},
 		[remove],
 	);
@@ -552,7 +569,12 @@ export function ToastProvider({
 		for (const list of visible.values()) {
 			for (const entry of list) {
 				if (entry.loading) return true;
-				if (entry.progress && Number.isFinite(entry.duration) && entry.duration > 0) return true;
+				if (
+					entry.progress &&
+					Number.isFinite(entry.duration) &&
+					entry.duration > 0
+				)
+					return true;
 			}
 		}
 		return false;
@@ -571,7 +593,11 @@ export function ToastProvider({
 	/** Project a record onto what the card draws, reading the live countdown. */
 	const toVisual = (entry: ToastRecord): ToastVisual => {
 		let remaining: number | undefined;
-		if (entry.progress && Number.isFinite(entry.duration) && entry.duration > 0) {
+		if (
+			entry.progress &&
+			Number.isFinite(entry.duration) &&
+			entry.duration > 0
+		) {
 			const countdown = countdowns.current.get(entry.id);
 			const left = countdown
 				? countdown.paused

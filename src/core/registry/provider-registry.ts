@@ -21,19 +21,19 @@ import type { RuntimeProvider, ServerProvider } from "../../types/provider.ts";
  * failing.
  */
 export class UnknownProviderError extends Error {
-  constructor(
-    /** `"server"` or `"runtime"` — which registry was consulted. */
-    readonly category: string,
-    /** The id that could not be resolved. */
-    readonly id: string,
-    /** Ids that are registered, for a helpful message. */
-    readonly available: string[],
-  ) {
-    super(
-      `unknown ${category} provider "${id}" (available: ${available.join(", ") || "none"})`,
-    );
-    this.name = "UnknownProviderError";
-  }
+	constructor(
+		/** `"server"` or `"runtime"` — which registry was consulted. */
+		readonly category: string,
+		/** The id that could not be resolved. */
+		readonly id: string,
+		/** Ids that are registered, for a helpful message. */
+		readonly available: string[],
+	) {
+		super(
+			`unknown ${category} provider "${id}" (available: ${available.join(", ") || "none"})`,
+		);
+		this.name = "UnknownProviderError";
+	}
 }
 
 /**
@@ -44,62 +44,62 @@ export class UnknownProviderError extends Error {
  * hidden authoritative state the rest of MCTL avoids.
  */
 export class ProviderRegistry {
-  readonly #servers = new Map<string, ServerProvider>();
-  readonly #runtimes = new Map<string, RuntimeProvider>();
+	readonly #servers = new Map<string, ServerProvider>();
+	readonly #runtimes = new Map<string, RuntimeProvider>();
 
-  /** Register a server-kind provider. Re-registering an id replaces it. */
-  registerServer(provider: ServerProvider): this {
-    this.#servers.set(provider.id, provider);
-    return this;
-  }
+	/** Register a server-kind provider. Re-registering an id replaces it. */
+	registerServer(provider: ServerProvider): this {
+		this.#servers.set(provider.id, provider);
+		return this;
+	}
 
-  /** Register a runtime provider. Re-registering an id replaces it. */
-  registerRuntime(provider: RuntimeProvider): this {
-    this.#runtimes.set(provider.id, provider);
-    return this;
-  }
+	/** Register a runtime provider. Re-registering an id replaces it. */
+	registerRuntime(provider: RuntimeProvider): this {
+		this.#runtimes.set(provider.id, provider);
+		return this;
+	}
 
-  /**
-   * Resolve a server-kind provider by the `kind` recorded in `mctl.json`.
-   * @throws {UnknownProviderError} when no provider claims that id.
-   */
-  server(id: string): ServerProvider {
-    const provider = this.#servers.get(id);
-    if (!provider) {
-      throw new UnknownProviderError("server", id, this.serverIds());
-    }
-    return provider;
-  }
+	/**
+	 * Resolve a server-kind provider by the `kind` recorded in `mctl.json`.
+	 * @throws {UnknownProviderError} when no provider claims that id.
+	 */
+	server(id: string): ServerProvider {
+		const provider = this.#servers.get(id);
+		if (!provider) {
+			throw new UnknownProviderError("server", id, this.serverIds());
+		}
+		return provider;
+	}
 
-  /**
-   * Resolve a runtime provider by the `runtime` recorded in `mctl.json`.
-   * @throws {UnknownProviderError} when no provider claims that id.
-   */
-  runtime(id: string): RuntimeProvider {
-    const provider = this.#runtimes.get(id);
-    if (!provider) {
-      throw new UnknownProviderError("runtime", id, this.runtimeIds());
-    }
-    return provider;
-  }
+	/**
+	 * Resolve a runtime provider by the `runtime` recorded in `mctl.json`.
+	 * @throws {UnknownProviderError} when no provider claims that id.
+	 */
+	runtime(id: string): RuntimeProvider {
+		const provider = this.#runtimes.get(id);
+		if (!provider) {
+			throw new UnknownProviderError("runtime", id, this.runtimeIds());
+		}
+		return provider;
+	}
 
-  /** Every registered server provider, registration order. */
-  servers(): ServerProvider[] {
-    return [...this.#servers.values()];
-  }
+	/** Every registered server provider, registration order. */
+	servers(): ServerProvider[] {
+		return [...this.#servers.values()];
+	}
 
-  /** Every registered runtime provider, registration order. */
-  runtimes(): RuntimeProvider[] {
-    return [...this.#runtimes.values()];
-  }
+	/** Every registered runtime provider, registration order. */
+	runtimes(): RuntimeProvider[] {
+		return [...this.#runtimes.values()];
+	}
 
-  /** Ids of every registered server provider — what a UI offers on create. */
-  serverIds(): string[] {
-    return [...this.#servers.keys()];
-  }
+	/** Ids of every registered server provider — what a UI offers on create. */
+	serverIds(): string[] {
+		return [...this.#servers.keys()];
+	}
 
-  /** Ids of every registered runtime provider. */
-  runtimeIds(): string[] {
-    return [...this.#runtimes.keys()];
-  }
+	/** Ids of every registered runtime provider. */
+	runtimeIds(): string[] {
+		return [...this.#runtimes.keys()];
+	}
 }

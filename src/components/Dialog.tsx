@@ -20,26 +20,26 @@ import { variantColor, type Variant } from "./support.ts";
 
 /** Props for {@link Dialog}. */
 export interface DialogProps {
-  /** Whether the dialog is shown. When false, nothing renders. */
-  open: boolean;
-  /** Title on the dialog's top border. */
-  title?: string;
-  /**
-   * Accent for the dialog's border/title — e.g. `"error"` for a destructive
-   * confirm, `"warning"` for a caution. Defaults to `"primary"`.
-   */
-  variant?: Variant;
-  /** Invoked when the user dismisses via Esc (or a backdrop click). */
-  onClose?: () => void;
-  /** Fixed dialog width in cells. Defaults to 48. */
-  width?: number;
-  /** Body content (message, form, …). */
-  children: React.ReactNode;
-  /**
-   * Footer content, typically a right-aligned row of {@link "./Button".Button}s.
-   * Rendered under the body with a separating gap.
-   */
-  footer?: React.ReactNode;
+	/** Whether the dialog is shown. When false, nothing renders. */
+	open: boolean;
+	/** Title on the dialog's top border. */
+	title?: string;
+	/**
+	 * Accent for the dialog's border/title — e.g. `"error"` for a destructive
+	 * confirm, `"warning"` for a caution. Defaults to `"primary"`.
+	 */
+	variant?: Variant;
+	/** Invoked when the user dismisses via Esc (or a backdrop click). */
+	onClose?: () => void;
+	/** Fixed dialog width in cells. Defaults to 48. */
+	width?: number;
+	/** Body content (message, form, …). */
+	children: React.ReactNode;
+	/**
+	 * Footer content, typically a right-aligned row of {@link "./Button".Button}s.
+	 * Rendered under the body with a separating gap.
+	 */
+	footer?: React.ReactNode;
 }
 
 /**
@@ -48,72 +48,72 @@ export interface DialogProps {
  * caller keeps focus management for any buttons/inputs in `footer`/`children`.
  */
 export function Dialog({
-  open,
-  title,
-  variant = "primary",
-  onClose,
-  width = 48,
-  children,
-  footer,
+	open,
+	title,
+	variant = "primary",
+	onClose,
+	width = 48,
+	children,
+	footer,
 }: DialogProps) {
-  const { colors } = useTheme();
+	const { colors } = useTheme();
 
-  // Hooks must run unconditionally; the handler no-ops while closed.
-  useKeyboard((key) => {
-    if (open && key.name === "escape") onClose?.();
-  });
+	// Hooks must run unconditionally; the handler no-ops while closed.
+	useKeyboard((key) => {
+		if (open && key.name === "escape") onClose?.();
+	});
 
-  if (!open) return null;
+	if (!open) return null;
 
-  const accent = variantColor(colors, variant);
+	const accent = variantColor(colors, variant);
 
-  return (
-    <box
-      position="absolute"
-      left={0}
-      top={0}
-      width="100%"
-      height="100%"
-      zIndex={1000}
-      justifyContent="center"
-      alignItems="center"
-    >
-      {/* Dimming backdrop: fills the screen, its own opacity lets the page show
+	return (
+		<box
+			position="absolute"
+			left={0}
+			top={0}
+			width="100%"
+			height="100%"
+			zIndex={1000}
+			justifyContent="center"
+			alignItems="center"
+		>
+			{/* Dimming backdrop: fills the screen, its own opacity lets the page show
           through faintly. A click anywhere on it dismisses the dialog. */}
-      <box
-        position="absolute"
-        left={0}
-        top={0}
-        width="100%"
-        height="100%"
-        backgroundColor={colors.background}
-        opacity={0.7}
-        onMouseDown={onClose}
-      />
-      {/* The dialog itself, above the backdrop and fully opaque. */}
-      <box
-        zIndex={1}
-        width={width}
-        flexDirection="column"
-        border
-        borderStyle="rounded"
-        borderColor={accent}
-        title={title}
-        titleColor={accent}
-        titleAlignment="center"
-        backgroundColor={colors.surface}
-        padding={1}
-        gap={1}
-      >
-        <box flexDirection="column" gap={1}>
-          {children}
-        </box>
-        {footer ? (
-          <box flexDirection="row" justifyContent="flex-end" gap={1}>
-            {footer}
-          </box>
-        ) : null}
-      </box>
-    </box>
-  );
+			<box
+				position="absolute"
+				left={0}
+				top={0}
+				width="100%"
+				height="100%"
+				backgroundColor={colors.background}
+				opacity={0.7}
+				onMouseDown={onClose}
+			/>
+			{/* The dialog itself, above the backdrop and fully opaque. */}
+			<box
+				zIndex={1}
+				width={width}
+				flexDirection="column"
+				border
+				borderStyle="rounded"
+				borderColor={accent}
+				title={title}
+				titleColor={accent}
+				titleAlignment="center"
+				backgroundColor={colors.surface}
+				padding={1}
+				gap={1}
+			>
+				<box flexDirection="column" gap={1}>
+					{children}
+				</box>
+				{footer ? (
+					<box flexDirection="row" justifyContent="flex-end" gap={1}>
+						{footer}
+					</box>
+				) : null}
+			</box>
+		</box>
+	);
 }

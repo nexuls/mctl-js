@@ -49,69 +49,71 @@ Flags:
 
 /** Run `mctl delete`. */
 export async function runDelete(argv: string[]): Promise<number> {
-  if (argv.includes("-h") || argv.includes("--help")) {
-    console.log(DELETE_HELP);
-    return 0;
-  }
-  try {
-    const args = parseArgs(argv, { boolean: ["files", "yes", "json"] });
-    const id = args.positionals[0];
-    if (id === undefined) throw new ArgError("delete needs a server id");
+	if (argv.includes("-h") || argv.includes("--help")) {
+		console.log(DELETE_HELP);
+		return 0;
+	}
+	try {
+		const args = parseArgs(argv, { boolean: ["files", "yes", "json"] });
+		const id = args.positionals[0];
+		if (id === undefined) throw new ArgError("delete needs a server id");
 
-    const deleteFiles = boolFlag(args, "files") === true;
-    if (deleteFiles && boolFlag(args, "yes") !== true) {
-      throw new ArgError(
-        "--files erases the server directory and its worlds; pass --yes to confirm",
-      );
-    }
+		const deleteFiles = boolFlag(args, "files") === true;
+		if (deleteFiles && boolFlag(args, "yes") !== true) {
+			throw new ArgError(
+				"--files erases the server directory and its worlds; pass --yes to confirm",
+			);
+		}
 
-    const context = await cliContext();
-    await context.servers.deleteServer(id, { deleteFiles });
-    console.log(
-      wantsJson(argv)
-        ? toJson({ id, deletedFiles: deleteFiles })
-        : deleteFiles
-          ? `Deleted ${id} and its directory.`
-          : `Removed ${id} from the registry (its files are untouched).`,
-    );
-    return 0;
-  } catch (err) {
-    return reportError(err);
-  }
+		const context = await cliContext();
+		await context.servers.deleteServer(id, { deleteFiles });
+		console.log(
+			wantsJson(argv)
+				? toJson({ id, deletedFiles: deleteFiles })
+				: deleteFiles
+					? `Deleted ${id} and its directory.`
+					: `Removed ${id} from the registry (its files are untouched).`,
+		);
+		return 0;
+	} catch (err) {
+		return reportError(err);
+	}
 }
 
 /** Run `mctl edit`. */
 export async function runEdit(argv: string[]): Promise<number> {
-  if (argv.includes("-h") || argv.includes("--help")) {
-    console.log(EDIT_HELP);
-    return 0;
-  }
-  try {
-    const args = parseArgs(argv, {
-      valued: ["name", "memory", "runtime", "network", "java"],
-      boolean: ["json", "java"],
-    });
-    const id = args.positionals[0];
-    if (id === undefined) throw new ArgError("edit needs a server id");
-    if (args.positionals.length > 1) {
-      throw new ArgError(`unexpected argument "${args.positionals[1]}"`);
-    }
+	if (argv.includes("-h") || argv.includes("--help")) {
+		console.log(EDIT_HELP);
+		return 0;
+	}
+	try {
+		const args = parseArgs(argv, {
+			valued: ["name", "memory", "runtime", "network", "java"],
+			boolean: ["json", "java"],
+		});
+		const id = args.positionals[0];
+		if (id === undefined) throw new ArgError("edit needs a server id");
+		if (args.positionals.length > 1) {
+			throw new ArgError(`unexpected argument "${args.positionals[1]}"`);
+		}
 
-    // `--java 21` pins, `--no-java` clears the pin, absent leaves it alone.
-    const javaPin =
-      boolFlag(args, "java") === false ? null : (intFlag(args, "java") ?? undefined);
+		// `--java 21` pins, `--no-java` clears the pin, absent leaves it alone.
+		const javaPin =
+			boolFlag(args, "java") === false
+				? null
+				: (intFlag(args, "java") ?? undefined);
 
-    const context = await cliContext();
-    const server = await context.servers.editServer(id, {
-      name: stringFlag(args, "name"),
-      memory: stringFlag(args, "memory"),
-      runtime: stringFlag(args, "runtime") as RuntimeKind | undefined,
-      network: stringFlag(args, "network"),
-      javaPin,
-    });
-    console.log(wantsJson(argv) ? toJson(server) : formatServerStatus(server));
-    return 0;
-  } catch (err) {
-    return reportError(err);
-  }
+		const context = await cliContext();
+		const server = await context.servers.editServer(id, {
+			name: stringFlag(args, "name"),
+			memory: stringFlag(args, "memory"),
+			runtime: stringFlag(args, "runtime") as RuntimeKind | undefined,
+			network: stringFlag(args, "network"),
+			javaPin,
+		});
+		console.log(wantsJson(argv) ? toJson(server) : formatServerStatus(server));
+		return 0;
+	} catch (err) {
+		return reportError(err);
+	}
 }

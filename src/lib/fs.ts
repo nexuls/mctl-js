@@ -14,31 +14,31 @@
  */
 
 import {
-  mkdir,
-  rename,
-  writeFile,
-  readFile,
-  readdir,
-  chmod,
-  appendFile,
-  access,
-  statfs,
+	mkdir,
+	rename,
+	writeFile,
+	readFile,
+	readdir,
+	chmod,
+	appendFile,
+	access,
+	statfs,
 } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 /** True if `path` exists and is accessible, false otherwise. Never throws. */
 export async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /** Create `path` (and parents) if absent. No-op when it already exists. */
 export async function ensureDir(path: string, mode?: number): Promise<void> {
-  await mkdir(path, { recursive: true, mode });
+	await mkdir(path, { recursive: true, mode });
 }
 
 /**
@@ -47,14 +47,14 @@ export async function ensureDir(path: string, mode?: number): Promise<void> {
  * is not.
  */
 export async function readTextIfExists(
-  path: string,
+	path: string,
 ): Promise<string | undefined> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw err;
-  }
+	try {
+		return await readFile(path, "utf8");
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+		throw err;
+	}
 }
 
 /**
@@ -63,9 +63,9 @@ export async function readTextIfExists(
  * Throws `SyntaxError` on malformed JSON (a corrupt file is a real error).
  */
 export async function readJsonIfExists(path: string): Promise<unknown> {
-  const text = await readTextIfExists(path);
-  if (text === undefined) return undefined;
-  return JSON.parse(text);
+	const text = await readTextIfExists(path);
+	if (text === undefined) return undefined;
+	return JSON.parse(text);
 }
 
 /**
@@ -77,25 +77,25 @@ export async function readJsonIfExists(path: string): Promise<unknown> {
  * Names only, not full paths; the caller joins against `dir` as needed.
  */
 export async function readDirIfExists(
-  dir: string,
-  ext?: string,
+	dir: string,
+	ext?: string,
 ): Promise<string[]> {
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
-  return ext ? names.filter((n) => n.endsWith(ext)) : names;
+	let names: string[];
+	try {
+		names = await readdir(dir);
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+		throw err;
+	}
+	return ext ? names.filter((n) => n.endsWith(ext)) : names;
 }
 
 /** Free and total capacity of a filesystem, in bytes. */
 export interface DiskUsage {
-  /** Bytes available to an unprivileged process. */
-  free: number;
-  /** Total size of the filesystem. */
-  total: number;
+	/** Bytes available to an unprivileged process. */
+	free: number;
+	/** Total size of the filesystem. */
+	total: number;
 }
 
 /**
@@ -107,20 +107,20 @@ export interface DiskUsage {
  * "unknown" rather than crash.
  */
 export async function diskFree(path: string): Promise<DiskUsage | undefined> {
-  let probe = path;
-  while (!(await pathExists(probe))) {
-    const parent = dirname(probe);
-    if (parent === probe) break; // reached the filesystem root
-    probe = parent;
-  }
-  try {
-    // `bavail` is blocks available to non-root; `blocks` is the total. Both are
-    // in units of `bsize` bytes.
-    const s = await statfs(probe);
-    return { free: s.bsize * s.bavail, total: s.bsize * s.blocks };
-  } catch {
-    return undefined;
-  }
+	let probe = path;
+	while (!(await pathExists(probe))) {
+		const parent = dirname(probe);
+		if (parent === probe) break; // reached the filesystem root
+		probe = parent;
+	}
+	try {
+		// `bavail` is blocks available to non-root; `blocks` is the total. Both are
+		// in units of `bsize` bytes.
+		const s = await statfs(probe);
+		return { free: s.bsize * s.bavail, total: s.bsize * s.blocks };
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -129,7 +129,7 @@ export async function diskFree(path: string): Promise<DiskUsage | undefined> {
  * pid+random suffix so concurrent instances never collide.
  */
 export function tempNameFor(target: string): string {
-  return `.${target}.${process.pid}-${Math.random().toString(36).slice(2)}.tmp`;
+	return `.${target}.${process.pid}-${Math.random().toString(36).slice(2)}.tmp`;
 }
 
 /**
@@ -139,14 +139,14 @@ export function tempNameFor(target: string): string {
  * replace.
  */
 export function targetOfTempName(name: string): string | undefined {
-  const match = /^\.(.+)\.\d+-[0-9a-z]+\.tmp$/.exec(name);
-  return match?.[1];
+	const match = /^\.(.+)\.\d+-[0-9a-z]+\.tmp$/.exec(name);
+	return match?.[1];
 }
 
 /** Options for the atomic-write helpers. */
 export interface AtomicWriteOptions {
-  /** File mode to apply to the final file, e.g. `0o600` for `secrets.json`. */
-  mode?: number;
+	/** File mode to apply to the final file, e.g. `0o600` for `secrets.json`. */
+	mode?: number;
 }
 
 /**
@@ -156,23 +156,23 @@ export interface AtomicWriteOptions {
  * filesystem (cross-device rename is not atomic and would fall back to copy).
  */
 export async function writeFileAtomic(
-  path: string,
-  contents: string | Uint8Array,
-  options?: AtomicWriteOptions,
+	path: string,
+	contents: string | Uint8Array,
+	options?: AtomicWriteOptions,
 ): Promise<void> {
-  const dir = dirname(path);
-  await ensureDir(dir);
-  // Unique-enough temp name; collisions between instances are avoided by pid+random.
-  //
-  // The temp name **embeds the target's basename** because a directory watcher
-  // cannot otherwise tell what an atomic write touched: Bun's `fs.watch` reports
-  // a rename under the *source* name only, so `config.json` never appears in a
-  // watch event even though it is what changed. `core/events/watch.ts` maps this
-  // name back to the target — keep the two in sync (see {@link tempNameFor}).
-  const tmp = join(dir, tempNameFor(basename(path)));
-  await writeFile(tmp, contents);
-  if (options?.mode !== undefined) await chmod(tmp, options.mode);
-  await rename(tmp, path);
+	const dir = dirname(path);
+	await ensureDir(dir);
+	// Unique-enough temp name; collisions between instances are avoided by pid+random.
+	//
+	// The temp name **embeds the target's basename** because a directory watcher
+	// cannot otherwise tell what an atomic write touched: Bun's `fs.watch` reports
+	// a rename under the *source* name only, so `config.json` never appears in a
+	// watch event even though it is what changed. `core/events/watch.ts` maps this
+	// name back to the target — keep the two in sync (see {@link tempNameFor}).
+	const tmp = join(dir, tempNameFor(basename(path)));
+	await writeFile(tmp, contents);
+	if (options?.mode !== undefined) await chmod(tmp, options.mode);
+	await rename(tmp, path);
 }
 
 /**
@@ -180,11 +180,11 @@ export async function writeFileAtomic(
  * atomically. Used for every MCTL-owned JSON file.
  */
 export async function writeJsonAtomic(
-  path: string,
-  data: unknown,
-  options?: AtomicWriteOptions,
+	path: string,
+	data: unknown,
+	options?: AtomicWriteOptions,
 ): Promise<void> {
-  await writeFileAtomic(path, `${JSON.stringify(data, null, 2)}\n`, options);
+	await writeFileAtomic(path, `${JSON.stringify(data, null, 2)}\n`, options);
 }
 
 /**
@@ -195,6 +195,6 @@ export async function writeJsonAtomic(
  * must not embed newlines in it.
  */
 export async function appendLine(path: string, line: string): Promise<void> {
-  await ensureDir(dirname(path));
-  await appendFile(path, line.endsWith("\n") ? line : `${line}\n`);
+	await ensureDir(dirname(path));
+	await appendFile(path, line.endsWith("\n") ? line : `${line}\n`);
 }

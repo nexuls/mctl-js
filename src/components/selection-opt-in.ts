@@ -36,14 +36,14 @@
 
 import type { RenderContext } from "@opentui/core";
 import {
-  baseComponents,
-  extend,
-  type RenderableConstructor,
+	extend,
+	getComponentCatalogue,
+	type RenderableConstructor,
 } from "@opentui/react";
 
 /** The `selectable` flag as seen from outside the renderable class hierarchy. */
 interface MaybeSelectable {
-  selectable?: boolean;
+	selectable?: boolean;
 }
 
 /**
@@ -52,38 +52,42 @@ interface MaybeSelectable {
  * expression, so the base is narrowed to just what this wrapper touches.
  */
 type SelectableConstructor = new (
-  ctx: RenderContext,
-  options: { selectable?: boolean },
+	ctx: RenderContext,
+	options: { selectable?: boolean },
 ) => MaybeSelectable;
 
 /**
- * Re-register the built-in component catalogue so `selectable` defaults to
- * `false`. Call once, before the first render; calling it again is harmless but
- * pointless (it would wrap the already-wrapped classes).
+ * Re-register the component catalogue so `selectable` defaults to `false`. Call
+ * once, before the first render; calling it again is harmless but pointless (it
+ * would wrap the already-wrapped classes).
+ *
+ * Wraps the **currently registered** catalogue rather than the pristine
+ * `baseComponents`, so it composes with other catalogue patches
+ * (`negative-dimension-patch.ts`) in either order instead of replacing them.
  */
 export function installSelectionOptIn(): void {
-  const optIn: Record<string, RenderableConstructor> = {};
+	const optIn: Record<string, RenderableConstructor> = {};
 
-  for (const [name, Base] of Object.entries(baseComponents) as [
-    string,
-    SelectableConstructor,
-  ][]) {
-    optIn[name] = class extends Base {
-      constructor(ctx: RenderContext, options: { selectable?: boolean }) {
-        super(ctx, options);
-        // Ignore if input node. Input should be selectable, but the input field itself is not a text renderable — the selection is handled by the input's internal text buffer. The input field itself is a box, which is not selectable.
-        if (name === "input" || name === "textarea") {
-          return;
-        }
+	for (const [name, Base] of Object.entries(getComponentCatalogue()) as [
+		string,
+		SelectableConstructor,
+	][]) {
+		optIn[name] = class extends Base {
+			constructor(ctx: RenderContext, options: { selectable?: boolean }) {
+				super(ctx, options);
+				// Ignore if input node. Input should be selectable, but the input field itself is not a text renderable — the selection is handled by the input's internal text buffer. The input field itself is a box, which is not selectable.
+				if (name === "input" || name === "textarea") {
+					return;
+				}
 
-        // Prop given → the caller decides. Prop absent → off, but only for
-        // classes that opted themselves in; leave everything else as built.
-        if (options?.selectable === undefined && this.selectable === true) {
-          this.selectable = false;
-        }
-      }
-    } as unknown as RenderableConstructor;
-  }
+				// Prop given → the caller decides. Prop absent → off, but only for
+				// classes that opted themselves in; leave everything else as built.
+				if (options?.selectable === undefined && this.selectable === true) {
+					this.selectable = false;
+				}
+			}
+		} as unknown as RenderableConstructor;
+	}
 
-  extend(optIn);
+	extend(optIn);
 }

@@ -46,29 +46,29 @@ const QUERY_TIMEOUT_MS = 200;
 
 /** What the hook exposes: the palette snapshot and whether it has resolved yet. */
 export interface TerminalColorState {
-  /** Latest terminal palette, or `null` until the first query resolves. */
-  palette: TerminalPalette | null;
-  /** True once the first palette query has resolved. */
-  ready: boolean;
+	/** Latest terminal palette, or `null` until the first query resolves. */
+	palette: TerminalPalette | null;
+	/** True once the first palette query has resolved. */
+	ready: boolean;
 }
 
 /** Adapt OpenTUI's `TerminalColors` (16-entry palette + specials) to our shape. */
 function toPalette(colors: TerminalColors): TerminalPalette {
-  return {
-    foreground: colors.defaultForeground,
-    background: colors.defaultBackground,
-    // OpenTUI reports the palette in standard ANSI order; keep the first 16.
-    ansi: colors.palette.slice(0, 16),
-  };
+	return {
+		foreground: colors.defaultForeground,
+		background: colors.defaultBackground,
+		// OpenTUI reports the palette in standard ANSI order; keep the first 16.
+		ansi: colors.palette.slice(0, 16),
+	};
 }
 
 /** Order-sensitive fingerprint of the terminal colours, to skip no-op updates. */
 function signature(colors: TerminalColors): string {
-  return [
-    colors.defaultForeground,
-    colors.defaultBackground,
-    ...colors.palette,
-  ].join("|");
+	return [
+		colors.defaultForeground,
+		colors.defaultBackground,
+		...colors.palette,
+	].join("|");
 }
 
 /**
@@ -78,11 +78,11 @@ function signature(colors: TerminalColors): string {
  * ignore it and keep the last-good palette instead.
  */
 function hasColour(colors: TerminalColors): boolean {
-  return (
-    colors.defaultBackground != null ||
-    colors.defaultForeground != null ||
-    colors.palette.some((c) => c != null)
-  );
+	return (
+		colors.defaultBackground != null ||
+		colors.defaultForeground != null ||
+		colors.palette.some((c) => c != null)
+	);
 }
 
 /**
@@ -91,15 +91,15 @@ function hasColour(colors: TerminalColors): boolean {
  * not answer within `timeoutMs` (e.g. a non-TTY) — the caller falls back.
  */
 export async function queryTerminalPalette(
-  renderer: CliRenderer,
-  timeoutMs = QUERY_TIMEOUT_MS,
+	renderer: CliRenderer,
+	timeoutMs = QUERY_TIMEOUT_MS,
 ): Promise<TerminalPalette | null> {
-  try {
-    const colors = await renderer.getPalette({ timeout: timeoutMs });
-    return hasColour(colors) ? toPalette(colors) : null;
-  } catch {
-    return null;
-  }
+	try {
+		const colors = await renderer.getPalette({ timeout: timeoutMs });
+		return hasColour(colors) ? toPalette(colors) : null;
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -111,67 +111,67 @@ export async function queryTerminalPalette(
  *   used as the starting value so the first render already has terminal colours.
  */
 export function useTerminalColors(
-  initial: TerminalPalette | null = null,
+	initial: TerminalPalette | null = null,
 ): TerminalColorState {
-  const renderer = useRenderer();
-  const [palette, setPalette] = useState<TerminalPalette | null>(initial);
-  const [ready, setReady] = useState(initial !== null);
+	const renderer = useRenderer();
+	const [palette, setPalette] = useState<TerminalPalette | null>(initial);
+	const [ready, setReady] = useState(initial !== null);
 
-  useEffect(() => {
-    let alive = true;
-    let lastSignature: string | null = null;
+	useEffect(() => {
+		let alive = true;
+		let lastSignature: string | null = null;
 
-    const update = (colors: TerminalColors) => {
-      if (!alive) return;
-      // A transient all-null answer during a theme switch is not a real change —
-      // ignore it so we hold the last-good palette rather than flashing empty.
-      if (!hasColour(colors)) return;
-      setReady(true);
-      const sig = signature(colors);
-      if (sig === lastSignature) return; // unchanged — don't thrash React state
-      const first = lastSignature === null;
-      lastSignature = sig;
-      const next = toPalette(colors);
-      setPalette(next);
-      // Colours aren't secret, so logging them is fine — this is the trace the
-      // developer looks for to confirm live terminal-theme changes are landing.
-      logger.debug(
-        { first, foreground: next.foreground, background: next.background },
-        first ? "terminal palette detected" : "terminal palette changed",
-      );
-    };
+		const update = (colors: TerminalColors) => {
+			if (!alive) return;
+			// A transient all-null answer during a theme switch is not a real change —
+			// ignore it so we hold the last-good palette rather than flashing empty.
+			if (!hasColour(colors)) return;
+			setReady(true);
+			const sig = signature(colors);
+			if (sig === lastSignature) return; // unchanged — don't thrash React state
+			const first = lastSignature === null;
+			lastSignature = sig;
+			const next = toPalette(colors);
+			setPalette(next);
+			// Colours aren't secret, so logging them is fine — this is the trace the
+			// developer looks for to confirm live terminal-theme changes are landing.
+			logger.debug(
+				{ first, foreground: next.foreground, background: next.background },
+				first ? "terminal palette detected" : "terminal palette changed",
+			);
+		};
 
-    // Turn on live change notifications (see file header, point 1). OpenTUI's
-    // output backend is process.stdout, so writing the control sequence there
-    // reaches the same terminal the renderer drives.
-    process.stdout.write(ENABLE_COLOR_SCHEME_UPDATES);
+		// Turn on live change notifications (see file header, point 1). OpenTUI's
+		// output backend is process.stdout, so writing the control sequence there
+		// reaches the same terminal the renderer drives.
+		process.stdout.write(ENABLE_COLOR_SCHEME_UPDATES);
 
-    // Initial fetch + subscribe to live changes.
-    renderer
-      .getPalette({ timeout: QUERY_TIMEOUT_MS })
-      .then(update)
-      .catch(() => {});
-    renderer.on("palette", update);
+		// Initial fetch + subscribe to live changes.
+		renderer
+			.getPalette({ timeout: QUERY_TIMEOUT_MS })
+			.then(update)
+			.catch(() => {});
+		renderer.on("palette", update);
 
-    // Fallback poll for terminals without mode 2031. The cache clear is
-    // mandatory (see file header, point 2) — without it getPalette() returns the
-    // stale cached palette and a theme change is never observed.
-    const poll = setInterval(() => {
-      renderer.clearPaletteCache();
-      renderer
-        .getPalette({ timeout: QUERY_TIMEOUT_MS })
-        .then(update)
-        .catch(() => {});
-    }, POLL_INTERVAL_MS);
+		// Fallback poll for terminals without mode 2031. The cache clear is
+		// mandatory (see file header, point 2) — without it getPalette() returns the
+		// stale cached palette and a theme change is never observed.
+		const poll = setInterval(() => {
+			renderer.clearPaletteCache();
+			renderer
+				.getPalette({ timeout: QUERY_TIMEOUT_MS })
+				.then(update)
+				.catch(() => {});
+		}, POLL_INTERVAL_MS);
 
-    return () => {
-      alive = false;
-      clearInterval(poll);
-      renderer.off("palette", update);
-      // Restore the terminal to how we found it.
-      process.stdout.write(DISABLE_COLOR_SCHEME_UPDATES);
-    };
-  }, [renderer]);
+		return () => {
+			alive = false;
+			clearInterval(poll);
+			renderer.off("palette", update);
+			// Restore the terminal to how we found it.
+			process.stdout.write(DISABLE_COLOR_SCHEME_UPDATES);
+		};
+	}, [renderer]);
 
-  return { palette, ready };
+	return { palette, ready };
 }

@@ -22,10 +22,10 @@
 import { log } from "../../lib/logger.ts";
 import type { JavaPin } from "../../types/server.ts";
 import {
-  LTS_MAJORS,
-  type JavaInstallation,
-  type JavaRequirement,
-  type JavaResolution,
+	LTS_MAJORS,
+	type JavaInstallation,
+	type JavaRequirement,
+	type JavaResolution,
 } from "../../types/java.ts";
 import { installTemurin, type InstallJavaOptions } from "./adoptium.ts";
 import { detectJavaInstallations } from "./detect.ts";
@@ -37,32 +37,32 @@ const logger = log("java");
  * front-end can offer the right next step: install a JDK, or pin one manually.
  */
 export class JavaNotResolvedError extends Error {
-  constructor(
-    readonly requirement: JavaRequirement | undefined,
-    readonly installed: number[],
-    message: string,
-  ) {
-    super(message);
-    this.name = "JavaNotResolvedError";
-  }
+	constructor(
+		readonly requirement: JavaRequirement | undefined,
+		readonly installed: number[],
+		message: string,
+	) {
+		super(message);
+		this.name = "JavaNotResolvedError";
+	}
 }
 
 /** Where MCTL may install a JDK to, and stage its archive in. */
 export interface JavaPaths {
-  /** `$ROOT/java` — managed JDKs, one directory per `<vendor>-<major>`. */
-  javaDir: string;
-  /** `$ROOT/downloads` — where the archive is fetched before extraction. */
-  downloadsDir: string;
+	/** `$ROOT/java` — managed JDKs, one directory per `<vendor>-<major>`. */
+	javaDir: string;
+	/** `$ROOT/downloads` — where the archive is fetched before extraction. */
+	downloadsDir: string;
 }
 
 /** Options for {@link resolveJava}. */
 export interface ResolveJavaOptions extends InstallJavaOptions {
-  /**
-   * Allow downloading a JDK when nothing installed satisfies the requirement.
-   * Default `true`. A UI that wants to *ask first* passes `false`, gets a
-   * {@link JavaNotResolvedError}, and can then call {@link installJava} itself.
-   */
-  autoInstall?: boolean;
+	/**
+	 * Allow downloading a JDK when nothing installed satisfies the requirement.
+	 * Default `true`. A UI that wants to *ask first* passes `false`, gets a
+	 * {@link JavaNotResolvedError}, and can then call {@link installJava} itself.
+	 */
+	autoInstall?: boolean;
 }
 
 /**
@@ -81,13 +81,13 @@ export interface ResolveJavaOptions extends InstallJavaOptions {
  * below the floor would leave no valid version at all.
  */
 function effectiveMax(requirement: JavaRequirement): number {
-  if (requirement.max !== undefined) return requirement.max;
-  return Math.max(LTS_MAJORS[0], requirement.min);
+	if (requirement.max !== undefined) return requirement.max;
+	return Math.max(LTS_MAJORS[0], requirement.min);
 }
 
 /** True when `major` falls inside the effective window. */
 function satisfies(major: number, requirement: JavaRequirement): boolean {
-  return major >= requirement.min && major <= effectiveMax(requirement);
+	return major >= requirement.min && major <= effectiveMax(requirement);
 }
 
 /**
@@ -99,15 +99,15 @@ function satisfies(major: number, requirement: JavaRequirement): boolean {
  * this same question.
  */
 export function preferredMajor(requirement: JavaRequirement): number {
-  // LTS_MAJORS is newest-first, so the first match is the highest that fits.
-  const lts = LTS_MAJORS.find((major) => satisfies(major, requirement));
-  if (lts !== undefined) return lts;
-  const fallback = requirement.recommended ?? requirement.min;
-  logger.info(
-    { requirement, fallback },
-    "no LTS satisfies the requirement; falling back to its own bound",
-  );
-  return fallback;
+	// LTS_MAJORS is newest-first, so the first match is the highest that fits.
+	const lts = LTS_MAJORS.find((major) => satisfies(major, requirement));
+	if (lts !== undefined) return lts;
+	const fallback = requirement.recommended ?? requirement.min;
+	logger.info(
+		{ requirement, fallback },
+		"no LTS satisfies the requirement; falling back to its own bound",
+	);
+	return fallback;
 }
 
 /**
@@ -125,14 +125,14 @@ export function preferredMajor(requirement: JavaRequirement): number {
  *   authoritative and is handled by the caller before this is reached.)
  */
 export function chooseInstalled(
-  installed: JavaInstallation[],
-  requirement: JavaRequirement,
-  pin?: JavaPin,
+	installed: JavaInstallation[],
+	requirement: JavaRequirement,
+	pin?: JavaPin,
 ): JavaInstallation | undefined {
-  const usable = installed.filter((i) => satisfies(i.major, requirement));
-  const preferred =
-    typeof pin === "number" ? usable.find((i) => i.major === pin) : undefined;
-  return preferred ?? usable[0];
+	const usable = installed.filter((i) => satisfies(i.major, requirement));
+	const preferred =
+		typeof pin === "number" ? usable.find((i) => i.major === pin) : undefined;
+	return preferred ?? usable[0];
 }
 
 /**
@@ -149,63 +149,68 @@ export function chooseInstalled(
  *   installing is disallowed or impossible.
  */
 export async function resolveJava(
-  requirement: JavaRequirement | null | undefined,
-  pin: JavaPin | undefined,
-  paths: JavaPaths,
-  options: ResolveJavaOptions = {},
+	requirement: JavaRequirement | null | undefined,
+	pin: JavaPin | undefined,
+	paths: JavaPaths,
+	options: ResolveJavaOptions = {},
 ): Promise<JavaResolution> {
-  const installed = await detectJavaInstallations(paths.javaDir);
-  const majors = installed.map((i) => i.major);
+	const installed = await detectJavaInstallations(paths.javaDir);
+	const majors = installed.map((i) => i.major);
 
-  // 1. An explicit user pin is authoritative — it exists precisely because the
-  //    automatic answer was wrong or unavailable.
-  if (pin !== undefined && typeof pin === "object") {
-    const match = installed.find((i) => i.major === pin.pinned);
-    if (match) return { installation: match, requirement: requirement ?? undefined, pinned: true };
-    if (options.autoInstall === false) {
-      throw new JavaNotResolvedError(
-        requirement ?? undefined,
-        majors,
-        `Java ${pin.pinned} is pinned for this server but is not installed`,
-      );
-    }
-    logger.info({ pinned: pin.pinned }, "pinned Java not installed; fetching");
-    return {
-      installation: await installJava(pin.pinned, paths, options),
-      requirement: requirement ?? undefined,
-      pinned: true,
-    };
-  }
+	// 1. An explicit user pin is authoritative — it exists precisely because the
+	//    automatic answer was wrong or unavailable.
+	if (pin !== undefined && typeof pin === "object") {
+		const match = installed.find((i) => i.major === pin.pinned);
+		if (match)
+			return {
+				installation: match,
+				requirement: requirement ?? undefined,
+				pinned: true,
+			};
+		if (options.autoInstall === false) {
+			throw new JavaNotResolvedError(
+				requirement ?? undefined,
+				majors,
+				`Java ${pin.pinned} is pinned for this server but is not installed`,
+			);
+		}
+		logger.info({ pinned: pin.pinned }, "pinned Java not installed; fetching");
+		return {
+			installation: await installJava(pin.pinned, paths, options),
+			requirement: requirement ?? undefined,
+			pinned: true,
+		};
+	}
 
-  // 2. No requirement and no pin: this is the "ask the user" case, and it is a
-  //    hard stop rather than a guess.
-  if (!requirement) {
-    throw new JavaNotResolvedError(
-      undefined,
-      majors,
-      "no upstream source declares a Java version for this server; pin one explicitly",
-    );
-  }
+	// 2. No requirement and no pin: this is the "ask the user" case, and it is a
+	//    hard stop rather than a guess.
+	if (!requirement) {
+		throw new JavaNotResolvedError(
+			undefined,
+			majors,
+			"no upstream source declares a Java version for this server; pin one explicitly",
+		);
+	}
 
-  // 3. Prefer what is already installed (see `chooseInstalled` for the rules).
-  const chosen = chooseInstalled(installed, requirement, pin);
-  if (chosen) return { installation: chosen, requirement, pinned: false };
+	// 3. Prefer what is already installed (see `chooseInstalled` for the rules).
+	const chosen = chooseInstalled(installed, requirement, pin);
+	if (chosen) return { installation: chosen, requirement, pinned: false };
 
-  // 4. Nothing fits — fetch the highest LTS that does.
-  const target = preferredMajor(requirement);
-  if (options.autoInstall === false) {
-    throw new JavaNotResolvedError(
-      requirement,
-      majors,
-      `no installed Java satisfies ${describe(requirement)}; Java ${target} would be installed`,
-    );
-  }
-  logger.info({ requirement, target }, "no suitable Java installed; fetching");
-  return {
-    installation: await installJava(target, paths, options),
-    requirement,
-    pinned: false,
-  };
+	// 4. Nothing fits — fetch the highest LTS that does.
+	const target = preferredMajor(requirement);
+	if (options.autoInstall === false) {
+		throw new JavaNotResolvedError(
+			requirement,
+			majors,
+			`no installed Java satisfies ${describe(requirement)}; Java ${target} would be installed`,
+		);
+	}
+	logger.info({ requirement, target }, "no suitable Java installed; fetching");
+	return {
+		installation: await installJava(target, paths, options),
+		requirement,
+		pinned: false,
+	};
 }
 
 /**
@@ -214,21 +219,21 @@ export async function resolveJava(
  * module — swapping or adding a vendor later touches one file.
  */
 export async function installJava(
-  major: number,
-  paths: JavaPaths,
-  options: InstallJavaOptions = {},
+	major: number,
+	paths: JavaPaths,
+	options: InstallJavaOptions = {},
 ): Promise<JavaInstallation> {
-  return installTemurin(major, paths.javaDir, paths.downloadsDir, options);
+	return installTemurin(major, paths.javaDir, paths.downloadsDir, options);
 }
 
 /** Every Java MCTL can see, newest major first. Used by `mctl java list`. */
 export async function listJava(javaDir?: string): Promise<JavaInstallation[]> {
-  return detectJavaInstallations(javaDir);
+	return detectJavaInstallations(javaDir);
 }
 
 /** Human-readable form of a requirement, for error messages. */
 export function describe(requirement: JavaRequirement): string {
-  if (requirement.max === undefined) return `Java ${requirement.min}+`;
-  if (requirement.max === requirement.min) return `Java ${requirement.min}`;
-  return `Java ${requirement.min}–${requirement.max}`;
+	if (requirement.max === undefined) return `Java ${requirement.min}+`;
+	if (requirement.max === requirement.min) return `Java ${requirement.min}`;
+	return `Java ${requirement.min}–${requirement.max}`;
 }

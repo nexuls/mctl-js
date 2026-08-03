@@ -16,14 +16,16 @@ const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;
  * inputs render as `"—"` — the caller passed an unknown quantity, not a size.
  */
 export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "—";
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  const rounded =
-    unit === 0 || value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
-  return `${rounded} ${BYTE_UNITS[unit]}`;
+	if (!Number.isFinite(bytes) || bytes < 0) return "—";
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+		value /= 1024;
+		unit += 1;
+	}
+	const rounded =
+		unit === 0 || value >= 100
+			? Math.round(value)
+			: Math.round(value * 10) / 10;
+	return `${rounded} ${BYTE_UNITS[unit]}`;
 }

@@ -8,11 +8,11 @@
 
 export { ICONS, SPINNERS, iconsFor, spinnerFor } from "./catalogue.ts";
 export {
-  ICON_ENV_OVERRIDE,
-  type IconEnv,
-  detectIconSet,
-  hasNerdFont,
-  hasUtf8Locale,
-  parseIconSet,
-  resolveIconSet,
+	ICON_ENV_OVERRIDE,
+	type IconEnv,
+	detectIconSet,
+	hasNerdFont,
+	hasUtf8Locale,
+	parseIconSet,
+	resolveIconSet,
 } from "./detect.ts";

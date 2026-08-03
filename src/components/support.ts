@@ -23,13 +23,13 @@ export type SemanticColor = keyof ThemeColors;
  * hue.
  */
 export type Variant =
-  | "primary"
-  | "secondary"
-  | "success"
-  | "warning"
-  | "error"
-  | "info"
-  | "neutral";
+	| "primary"
+	| "secondary"
+	| "success"
+	| "warning"
+	| "error"
+	| "info"
+	| "neutral";
 
 /**
  * Resolve a {@link Variant} to the concrete accent hex for the active palette.
@@ -37,8 +37,8 @@ export type Variant =
  * sensible ink colour.
  */
 export function variantColor(colors: ThemeColors, variant: Variant): string {
-  if (variant === "neutral") return colors.foreground;
-  return colors[variant];
+	if (variant === "neutral") return colors.foreground;
+	return colors[variant];
 }
 
 /**
@@ -48,7 +48,7 @@ export function variantColor(colors: ThemeColors, variant: Variant): string {
  * safe, theme-agnostic choice for on-accent ink.
  */
 export function onAccent(colors: ThemeColors): string {
-  return colors.background;
+	return colors.background;
 }
 
 /**
@@ -56,12 +56,12 @@ export function onAccent(colors: ThemeColors): string {
  * because unfilled states (a resting outline/ghost chip) draw no background.
  */
 export interface StateColors {
-  /** Background fill, or `undefined` to leave the surface unfilled. */
-  bgColor?: string;
-  /** Text/ink colour. */
-  fgColor: string;
-  /** Border colour (ignored by borderless kinds). */
-  borderColor: string;
+	/** Background fill, or `undefined` to leave the surface unfilled. */
+	bgColor?: string;
+	/** Text/ink colour. */
+	fgColor: string;
+	/** Border colour (ignored by borderless kinds). */
+	borderColor: string;
 }
 
 /**
@@ -71,9 +71,9 @@ export interface StateColors {
  * means focused. Omitted states fall back to `default`.
  */
 export interface Variants {
-  default: StateColors;
-  hover?: StateColors;
-  active?: StateColors;
+	default: StateColors;
+	hover?: StateColors;
+	active?: StateColors;
 }
 
 /**
@@ -82,17 +82,17 @@ export interface Variants {
  * back to `default` when that state is not defined for the variant.
  */
 export function resolveState(
-  variants: Variants,
-  state: { hover?: boolean; active?: boolean },
+	variants: Variants,
+	state: { hover?: boolean; active?: boolean },
 ): StateColors {
-  if (state.active && variants.active) return variants.active;
-  if (state.hover && variants.hover) return variants.hover;
-  return variants.default;
+	if (state.active && variants.active) return variants.active;
+	if (state.hover && variants.hover) return variants.hover;
+	return variants.default;
 }
 
 /** Clamp `n` into the inclusive `[min, max]` range. */
 export function clamp(n: number, min: number, max: number): number {
-  return n < min ? min : n > max ? max : n;
+	return n < min ? min : n > max ? max : n;
 }
 
 /**
@@ -105,12 +105,11 @@ export function clamp(n: number, min: number, max: number): number {
  * padding on each side, and tabs are separated by a single divider cell.
  */
 export function optionsFitAsTabs(labels: string[], available: number): boolean {
-  if (labels.length === 0) return true;
-  const PADDING_PER_TAB = 2; // one cell each side of the label
-  const DIVIDER = 1; // between adjacent tabs
-  const total = labels.reduce(
-    (sum, label) => sum + label.length + PADDING_PER_TAB,
-    0,
-  ) + DIVIDER * (labels.length - 1);
-  return total <= available;
+	if (labels.length === 0) return true;
+	const PADDING_PER_TAB = 2; // one cell each side of the label
+	const DIVIDER = 1; // between adjacent tabs
+	const total =
+		labels.reduce((sum, label) => sum + label.length + PADDING_PER_TAB, 0) +
+		DIVIDER * (labels.length - 1);
+	return total <= available;
 }

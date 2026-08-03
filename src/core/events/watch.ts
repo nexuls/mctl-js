@@ -24,11 +24,7 @@
 
 import { watch, type FSWatcher } from "node:fs";
 import { basename } from "node:path";
-import {
-  configDir,
-  stateDir,
-  runtimeDir,
-} from "../../lib/paths.ts";
+import { configDir, stateDir, runtimeDir } from "../../lib/paths.ts";
 import { ensureDir, targetOfTempName } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { EventType } from "../../types/events.ts";
@@ -45,14 +41,14 @@ const DEBOUNCE_MS = 60;
  * envelope; the tail's self-skip means this never round-trips through the log.
  */
 function emitLocal(bus: EventBus, type: string, payload?: unknown): void {
-  bus.emit({
-    v: 1,
-    id: `${INSTANCE_ID}:${Date.now()}:${type}`,
-    ts: new Date().toISOString(),
-    instance: INSTANCE_ID,
-    type,
-    payload,
-  });
+	bus.emit({
+		v: 1,
+		id: `${INSTANCE_ID}:${Date.now()}:${type}`,
+		ts: new Date().toISOString(),
+		instance: INSTANCE_ID,
+		type,
+		payload,
+	});
 }
 
 /**
@@ -61,32 +57,35 @@ function emitLocal(bus: EventBus, type: string, payload?: unknown): void {
  * can't be watched (it is ensured first, so that is rare).
  */
 function watchDir(
-  dir: string,
-  onFile: (filename: string) => void,
+	dir: string,
+	onFile: (filename: string) => void,
 ): FSWatcher | undefined {
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  try {
-    return watch(dir, (_event, filename) => {
-      if (!filename) return;
-      const raw = basename(filename.toString());
-      // An in-progress atomic write is reported under its temp name; attribute it
-      // to the file it is about to replace. Debouncing then keys on the target,
-      // so the temp-write and the rename coalesce into one event.
-      const name = targetOfTempName(raw) ?? raw;
-      const existing = timers.get(name);
-      if (existing) clearTimeout(existing);
-      timers.set(
-        name,
-        setTimeout(() => {
-          timers.delete(name);
-          onFile(name);
-        }, DEBOUNCE_MS),
-      );
-    });
-  } catch (err) {
-    logger.debug({ dir, err: String(err) }, "fs.watch on directory unavailable");
-    return undefined;
-  }
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
+	try {
+		return watch(dir, (_event, filename) => {
+			if (!filename) return;
+			const raw = basename(filename.toString());
+			// An in-progress atomic write is reported under its temp name; attribute it
+			// to the file it is about to replace. Debouncing then keys on the target,
+			// so the temp-write and the rename coalesce into one event.
+			const name = targetOfTempName(raw) ?? raw;
+			const existing = timers.get(name);
+			if (existing) clearTimeout(existing);
+			timers.set(
+				name,
+				setTimeout(() => {
+					timers.delete(name);
+					onFile(name);
+				}, DEBOUNCE_MS),
+			);
+		});
+	} catch (err) {
+		logger.debug(
+			{ dir, err: String(err) },
+			"fs.watch on directory unavailable",
+		);
+		return undefined;
+	}
 }
 
 /**
@@ -100,36 +99,36 @@ function watchDir(
  * @returns a stop function that closes every watcher.
  */
 export async function startWatchers(bus: EventBus): Promise<() => void> {
-  await Promise.all([ensureDir(configDir()), ensureDir(runtimeDir())]);
-  // stateDir is the parent of runtimeDir, so ensuring runtimeDir made it too.
+	await Promise.all([ensureDir(configDir()), ensureDir(runtimeDir())]);
+	// stateDir is the parent of runtimeDir, so ensuring runtimeDir made it too.
 
-  const watchers: (FSWatcher | undefined)[] = [];
+	const watchers: (FSWatcher | undefined)[] = [];
 
-  watchers.push(
-    watchDir(configDir(), (name) => {
-      if (name === "config.json") emitLocal(bus, EventType.ConfigChanged);
-    }),
-  );
+	watchers.push(
+		watchDir(configDir(), (name) => {
+			if (name === "config.json") emitLocal(bus, EventType.ConfigChanged);
+		}),
+	);
 
-  watchers.push(
-    watchDir(stateDir(), (name) => {
-      if (name === "servers.json") emitLocal(bus, EventType.RegistryChanged);
-    }),
-  );
+	watchers.push(
+		watchDir(stateDir(), (name) => {
+			if (name === "servers.json") emitLocal(bus, EventType.RegistryChanged);
+		}),
+	);
 
-  watchers.push(
-    watchDir(runtimeDir(), (name) => {
-      // A `<id>.json` descriptor appeared/changed/was reaped — a server's live
-      // state changed. We don't know the new state here; the payload's id lets a
-      // hook re-probe just that server (or the whole list).
-      if (name.endsWith(".json")) {
-        const id = name.slice(0, -".json".length);
-        emitLocal(bus, EventType.ServerStateChanged, { id });
-      }
-    }),
-  );
+	watchers.push(
+		watchDir(runtimeDir(), (name) => {
+			// A `<id>.json` descriptor appeared/changed/was reaped — a server's live
+			// state changed. We don't know the new state here; the payload's id lets a
+			// hook re-probe just that server (or the whole list).
+			if (name.endsWith(".json")) {
+				const id = name.slice(0, -".json".length);
+				emitLocal(bus, EventType.ServerStateChanged, { id });
+			}
+		}),
+	);
 
-  return () => {
-    for (const w of watchers) w?.close();
-  };
+	return () => {
+		for (const w of watchers) w?.close();
+	};
 }

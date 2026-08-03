@@ -50,7 +50,8 @@ const ABOUT: Feature[] = [
 		icon: "server",
 		accent: "secondary",
 		name: "Multi-server",
-		detail: "Many servers from one interface, with shared backups and networking",
+		detail:
+			"Many servers from one interface, with shared backups and networking",
 	},
 	{
 		icon: "session",

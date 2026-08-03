@@ -59,9 +59,9 @@ const NERD_FONT_TERMINALS = ["ghostty", "wezterm", "kitty"];
  * users who can see the richer glyphs today.
  */
 export function hasUtf8Locale(env: IconEnv): boolean {
-  const locale = env.LC_ALL ?? env.LC_CTYPE ?? env.LANG;
-  if (locale === undefined || locale === "") return true;
-  return /utf-?8/i.test(locale);
+	const locale = env.LC_ALL ?? env.LC_CTYPE ?? env.LANG;
+	if (locale === undefined || locale === "") return true;
+	return /utf-?8/i.test(locale);
 }
 
 /**
@@ -70,16 +70,16 @@ export function hasUtf8Locale(env: IconEnv): boolean {
  * comment for why the bar is "evidence" rather than "not disproven".
  */
 export function hasNerdFont(env: IconEnv): boolean {
-  // An explicit opt-in always wins — this is the escape hatch for a patched font
-  // in a terminal we do not recognise.
-  if (isTruthy(env.MCTL_NERD_FONT) || isTruthy(env.NERD_FONT)) return true;
+	// An explicit opt-in always wins — this is the escape hatch for a patched font
+	// in a terminal we do not recognise.
+	if (isTruthy(env.MCTL_NERD_FONT) || isTruthy(env.NERD_FONT)) return true;
 
-  const candidates = [env.TERM_PROGRAM, env.TERM].filter(
-    (v): v is string => typeof v === "string" && v.length > 0,
-  );
-  return candidates.some((value) =>
-    NERD_FONT_TERMINALS.some((name) => value.toLowerCase().includes(name)),
-  );
+	const candidates = [env.TERM_PROGRAM, env.TERM].filter(
+		(v): v is string => typeof v === "string" && v.length > 0,
+	);
+	return candidates.some((value) =>
+		NERD_FONT_TERMINALS.some((name) => value.toLowerCase().includes(name)),
+	);
 }
 
 /**
@@ -88,8 +88,8 @@ export function hasNerdFont(env: IconEnv): boolean {
  * non-UTF-8 locale, and `unicode` otherwise.
  */
 export function detectIconSet(env: IconEnv): IconSet {
-  if (!hasUtf8Locale(env)) return "ascii";
-  return hasNerdFont(env) ? "nerd" : "unicode";
+	if (!hasUtf8Locale(env)) return "ascii";
+	return hasNerdFont(env) ? "nerd" : "unicode";
 }
 
 /**
@@ -109,11 +109,11 @@ export function detectIconSet(env: IconEnv): IconSet {
  * @param env The environment to read overrides and heuristics from.
  */
 export function resolveIconSet(mode: IconMode, env: IconEnv): IconSet {
-  const override = parseIconSet(env[ICON_ENV_OVERRIDE]);
-  if (override) return override;
-  if (mode === "nerd") return "nerd";
-  if (mode === "ascii") return "ascii";
-  return detectIconSet(env);
+	const override = parseIconSet(env[ICON_ENV_OVERRIDE]);
+	if (override) return override;
+	if (mode === "nerd") return "nerd";
+	if (mode === "ascii") return "ascii";
+	return detectIconSet(env);
 }
 
 /**
@@ -124,21 +124,21 @@ export function resolveIconSet(mode: IconMode, env: IconEnv): IconSet {
  * must not stop the TUI from starting.
  */
 export function parseIconSet(value: string | undefined): IconSet | undefined {
-  switch (value?.trim().toLowerCase()) {
-    case "nerd":
-      return "nerd";
-    case "unicode":
-      return "unicode";
-    case "ascii":
-      return "ascii";
-    default:
-      return undefined;
-  }
+	switch (value?.trim().toLowerCase()) {
+		case "nerd":
+			return "nerd";
+		case "unicode":
+			return "unicode";
+		case "ascii":
+			return "ascii";
+		default:
+			return undefined;
+	}
 }
 
 /** Whether an env var is set to something meaning "yes". */
 function isTruthy(value: string | undefined): boolean {
-  if (value === undefined) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized !== "" && normalized !== "0" && normalized !== "false";
+	if (value === undefined) return false;
+	const normalized = value.trim().toLowerCase();
+	return normalized !== "" && normalized !== "0" && normalized !== "false";
 }

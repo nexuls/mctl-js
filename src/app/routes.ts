@@ -9,28 +9,28 @@
 
 /** Every screen the router can render. */
 export type RouteId =
-  | "dashboard"
-  | "server"
-  | "console"
-  | "create"
-  | "jobs"
-  | "backups"
-  | "network"
-  | "settings";
+	| "dashboard"
+	| "server"
+	| "console"
+	| "create"
+	| "jobs"
+	| "backups"
+	| "network"
+	| "settings";
 
 /** Parameters a route may carry. */
 export interface RouteParams {
-  /** The server to show, for the `server` and `console` routes. */
-  serverId?: string;
+	/** The server to show, for the `server` and `console` routes. */
+	serverId?: string;
 }
 
 /** One entry in the navigation rail. */
 export interface NavItem {
-  id: RouteId;
-  /** Rail label. */
-  label: string;
-  /** Digit shortcut that jumps to this route from anywhere. */
-  digit: string;
+	id: RouteId;
+	/** Rail label. */
+	label: string;
+	/** Digit shortcut that jumps to this route from anywhere. */
+	digit: string;
 }
 
 /**
@@ -42,9 +42,9 @@ export interface NavItem {
  * which is both the summary and the fleet list.
  */
 export const NAV: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", digit: "1" },
-  { id: "jobs", label: "Jobs", digit: "2" },
-  { id: "backups", label: "Backups", digit: "3" },
-  { id: "network", label: "Network", digit: "4" },
-  { id: "settings", label: "Settings", digit: "5" },
+	{ id: "dashboard", label: "Dashboard", digit: "1" },
+	{ id: "jobs", label: "Jobs", digit: "2" },
+	{ id: "backups", label: "Backups", digit: "3" },
+	{ id: "network", label: "Network", digit: "4" },
+	{ id: "settings", label: "Settings", digit: "5" },
 ];

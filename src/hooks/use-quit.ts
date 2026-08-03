@@ -6,11 +6,11 @@ import { useRenderer } from "@opentui/react";
 // It also fires before React can run unmount cleanups, so any process-wide side
 // effect (e.g. the public listener) must be torn down here explicitly.
 export function useQuit(): () => void {
-  const renderer = useRenderer();
-  return () => {
-    // Release the public port before exiting — `process.exit` below pre-empts
-    // React's unmount cleanup, so the proxy's own teardown never gets to run.
-    renderer.destroy();
-    process.exit(0);
-  };
+	const renderer = useRenderer();
+	return () => {
+		// Release the public port before exiting — `process.exit` below pre-empts
+		// React's unmount cleanup, so the proxy's own teardown never gets to run.
+		renderer.destroy();
+		process.exit(0);
+	};
 }

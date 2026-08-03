@@ -22,12 +22,12 @@ import { z } from "zod";
  * guess (plan.md § Java Manager, "Fallback").
  */
 export interface JavaRequirement {
-  /** Lowest acceptable Java major version. */
-  min: number;
-  /** Highest acceptable Java major version, when upstream declares one. */
-  max?: number;
-  /** Upstream's recommended major, when it names one. */
-  recommended?: number;
+	/** Lowest acceptable Java major version. */
+	min: number;
+	/** Highest acceptable Java major version, when upstream declares one. */
+	max?: number;
+	/** Upstream's recommended major, when it names one. */
+	recommended?: number;
 }
 
 /**
@@ -41,31 +41,31 @@ export const LTS_MAJORS = [25, 21, 17, 11, 8] as const;
 
 /** Where a discovered JDK came from — shown in `mctl java list`. */
 export const JavaSource = z.enum([
-  /** Installed by MCTL under `$ROOT/java/<vendor>-<major>/`. */
-  "managed",
-  /** Found via `$JAVA_HOME`. */
-  "javaHome",
-  /** Found as `java` on `$PATH`. */
-  "path",
-  /** Found by scanning a well-known system location (e.g. `/usr/lib/jvm`). */
-  "system",
+	/** Installed by MCTL under `$ROOT/java/<vendor>-<major>/`. */
+	"managed",
+	/** Found via `$JAVA_HOME`. */
+	"javaHome",
+	/** Found as `java` on `$PATH`. */
+	"path",
+	/** Found by scanning a well-known system location (e.g. `/usr/lib/jvm`). */
+	"system",
 ]);
 export type JavaSource = z.infer<typeof JavaSource>;
 
 /** One Java installation MCTL can launch a server with. */
 export interface JavaInstallation {
-  /** Major version, e.g. `21`. */
-  major: number;
-  /** Full version string as the JVM reports it, e.g. `"21.0.12"`. */
-  version: string;
-  /** Absolute path to the `java` executable. */
-  javaPath: string;
-  /** Absolute path to the JDK/JRE home (the parent of `bin/`). */
-  home: string;
-  /** Where this installation was discovered. */
-  source: JavaSource;
-  /** Vendor string when the release metadata names one, e.g. `"Temurin"`. */
-  vendor?: string;
+	/** Major version, e.g. `21`. */
+	major: number;
+	/** Full version string as the JVM reports it, e.g. `"21.0.12"`. */
+	version: string;
+	/** Absolute path to the `java` executable. */
+	javaPath: string;
+	/** Absolute path to the JDK/JRE home (the parent of `bin/`). */
+	home: string;
+	/** Where this installation was discovered. */
+	source: JavaSource;
+	/** Vendor string when the release metadata names one, e.g. `"Temurin"`. */
+	vendor?: string;
 }
 
 /**
@@ -74,10 +74,10 @@ export interface JavaInstallation {
  * in that case `installation` comes from an explicit user pin.
  */
 export interface JavaResolution {
-  /** The JDK to launch with. */
-  installation: JavaInstallation;
-  /** The declared requirement this satisfies, when upstream declared one. */
-  requirement?: JavaRequirement;
-  /** True when the choice came from `mctl.json`'s explicit `{ pinned }`. */
-  pinned: boolean;
+	/** The JDK to launch with. */
+	installation: JavaInstallation;
+	/** The declared requirement this satisfies, when upstream declared one. */
+	requirement?: JavaRequirement;
+	/** True when the choice came from `mctl.json`'s explicit `{ pinned }`. */
+	pinned: boolean;
 }

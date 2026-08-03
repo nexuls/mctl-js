@@ -50,32 +50,32 @@ const KEEP_BYTES = 128 * 1024;
  * verbatim (AGENTS.md § Secrets).
  */
 export async function publish(
-  bus: EventBus,
-  type: EventType,
-  payload?: unknown,
+	bus: EventBus,
+	type: EventType,
+	payload?: unknown,
 ): Promise<void> {
-  const event: MctlEvent = {
-    v: 1,
-    id: randomUUID(),
-    ts: new Date().toISOString(),
-    instance: INSTANCE_ID,
-    type,
-    payload,
-  };
-  // Emit locally first so the originating instance reacts without waiting on the
-  // disk write; then persist for everyone else. A failed append still leaves the
-  // local UI consistent.
-  bus.emit(event);
-  await appendLine(eventsLogFile(), JSON.stringify(event));
+	const event: MctlEvent = {
+		v: 1,
+		id: randomUUID(),
+		ts: new Date().toISOString(),
+		instance: INSTANCE_ID,
+		type,
+		payload,
+	};
+	// Emit locally first so the originating instance reacts without waiting on the
+	// disk write; then persist for everyone else. A failed append still leaves the
+	// local UI consistent.
+	bus.emit(event);
+	await appendLine(eventsLogFile(), JSON.stringify(event));
 }
 
 /** The current byte length of the log, or 0 when it does not exist yet. */
 async function currentSize(file: string): Promise<number> {
-  try {
-    return (await stat(file)).size;
-  } catch {
-    return 0;
-  }
+	try {
+		return (await stat(file)).size;
+	} catch {
+		return 0;
+	}
 }
 
 /**
@@ -90,50 +90,50 @@ async function currentSize(file: string): Promise<number> {
  * @returns true when the log was rotated, false when it was already small enough.
  */
 export async function trimEventLog(
-  maxBytes = MAX_BYTES,
-  keepBytes = KEEP_BYTES,
+	maxBytes = MAX_BYTES,
+	keepBytes = KEEP_BYTES,
 ): Promise<boolean> {
-  const file = eventsLogFile();
-  const size = await currentSize(file);
-  if (size <= maxBytes) return false;
+	const file = eventsLogFile();
+	const size = await currentSize(file);
+	if (size <= maxBytes) return false;
 
-  let contents: string;
-  try {
-    contents = await readFile(file, "utf8");
-  } catch (err) {
-    logger.warn({ err: String(err) }, "event log rotation read failed");
-    return false;
-  }
+	let contents: string;
+	try {
+		contents = await readFile(file, "utf8");
+	} catch (err) {
+		logger.warn({ err: String(err) }, "event log rotation read failed");
+		return false;
+	}
 
-  // Start `keepBytes` from the end, then advance past the partial first line.
-  const from = Math.max(0, contents.length - keepBytes);
-  const newline = contents.indexOf("\n", from);
-  const tail = newline >= 0 ? contents.slice(newline + 1) : "";
-  try {
-    await writeFileAtomic(file, tail);
-  } catch (err) {
-    logger.warn({ err: String(err) }, "event log rotation write failed");
-    return false;
-  }
-  logger.debug({ from: size, to: tail.length }, "rotated event log");
-  return true;
+	// Start `keepBytes` from the end, then advance past the partial first line.
+	const from = Math.max(0, contents.length - keepBytes);
+	const newline = contents.indexOf("\n", from);
+	const tail = newline >= 0 ? contents.slice(newline + 1) : "";
+	try {
+		await writeFileAtomic(file, tail);
+	} catch (err) {
+		logger.warn({ err: String(err) }, "event log rotation write failed");
+		return false;
+	}
+	logger.debug({ from: size, to: tail.length }, "rotated event log");
+	return true;
 }
 
 /** Read `[from, to)` bytes of `file` as UTF-8. */
 async function readRange(
-  file: string,
-  from: number,
-  to: number,
+	file: string,
+	from: number,
+	to: number,
 ): Promise<string> {
-  const fh = await open(file, "r");
-  try {
-    const length = to - from;
-    const buf = Buffer.alloc(length);
-    const { bytesRead } = await fh.read(buf, 0, length, from);
-    return buf.subarray(0, bytesRead).toString("utf8");
-  } finally {
-    await fh.close();
-  }
+	const fh = await open(file, "r");
+	try {
+		const length = to - from;
+		const buf = Buffer.alloc(length);
+		const { bytesRead } = await fh.read(buf, 0, length, from);
+		return buf.subarray(0, bytesRead).toString("utf8");
+	} finally {
+		await fh.close();
+	}
 }
 
 /**
@@ -149,89 +149,89 @@ async function readRange(
  * @returns a stop function that closes the watcher and clears the timer.
  */
 export async function startTail(bus: EventBus): Promise<() => void> {
-  const file = eventsLogFile();
-  await ensureDir(dirname(file));
-  // Ensure the file exists so `fs.watch` can attach to it directly.
-  await (await open(file, "a")).close();
+	const file = eventsLogFile();
+	await ensureDir(dirname(file));
+	// Ensure the file exists so `fs.watch` can attach to it directly.
+	await (await open(file, "a")).close();
 
-  let offset = await currentSize(file);
-  let buffer = "";
-  let draining = false;
+	let offset = await currentSize(file);
+	let buffer = "";
+	let draining = false;
 
-  const drain = async (): Promise<void> => {
-    if (draining) return; // serialize; a watch + poll can fire together
-    draining = true;
-    try {
-      let size = await currentSize(file);
-      if (size < offset) {
-        // The log was rotated (by us or another instance). Resume at the new end
-        // rather than the top: everything below the cut is history we have
-        // already seen, and replaying it would double the activity feed.
-        offset = size;
-        buffer = "";
-      }
-      if (size > offset) {
-        buffer += await readRange(file, offset, size);
-        offset = size;
-        let nl = buffer.indexOf("\n");
-        while (nl >= 0) {
-          const line = buffer.slice(0, nl);
-          buffer = buffer.slice(nl + 1);
-          emitRemoteLine(bus, line);
-          nl = buffer.indexOf("\n");
-        }
-      }
-      // Opportunistic rotation: whichever instance next notices the log has
-      // outgrown its cap rewrites it. Checked here (rather than on every
-      // `publish`) so the cost is one comparison per poll tick.
-      if (size > MAX_BYTES && (await trimEventLog())) {
-        size = await currentSize(file);
-        offset = size;
-        buffer = "";
-      }
-    } catch (err) {
-      logger.warn({ err: String(err) }, "event log tail read failed");
-    } finally {
-      draining = false;
-    }
-  };
+	const drain = async (): Promise<void> => {
+		if (draining) return; // serialize; a watch + poll can fire together
+		draining = true;
+		try {
+			let size = await currentSize(file);
+			if (size < offset) {
+				// The log was rotated (by us or another instance). Resume at the new end
+				// rather than the top: everything below the cut is history we have
+				// already seen, and replaying it would double the activity feed.
+				offset = size;
+				buffer = "";
+			}
+			if (size > offset) {
+				buffer += await readRange(file, offset, size);
+				offset = size;
+				let nl = buffer.indexOf("\n");
+				while (nl >= 0) {
+					const line = buffer.slice(0, nl);
+					buffer = buffer.slice(nl + 1);
+					emitRemoteLine(bus, line);
+					nl = buffer.indexOf("\n");
+				}
+			}
+			// Opportunistic rotation: whichever instance next notices the log has
+			// outgrown its cap rewrites it. Checked here (rather than on every
+			// `publish`) so the cost is one comparison per poll tick.
+			if (size > MAX_BYTES && (await trimEventLog())) {
+				size = await currentSize(file);
+				offset = size;
+				buffer = "";
+			}
+		} catch (err) {
+			logger.warn({ err: String(err) }, "event log tail read failed");
+		} finally {
+			draining = false;
+		}
+	};
 
-  let watcher: FSWatcher | undefined;
-  try {
-    watcher = watch(file, () => void drain());
-  } catch (err) {
-    // Non-fatal: the poll below still delivers cross-instance events.
-    logger.debug(
-      { err: String(err) },
-      "fs.watch on events.jsonl unavailable; polling only",
-    );
-  }
-  const timer = setInterval(() => void drain(), POLL_MS);
+	let watcher: FSWatcher | undefined;
+	try {
+		watcher = watch(file, () => void drain());
+	} catch (err) {
+		// Non-fatal: the poll below still delivers cross-instance events.
+		logger.debug(
+			{ err: String(err) },
+			"fs.watch on events.jsonl unavailable; polling only",
+		);
+	}
+	const timer = setInterval(() => void drain(), POLL_MS);
 
-  return () => {
-    watcher?.close();
-    clearInterval(timer);
-  };
+	return () => {
+		watcher?.close();
+		clearInterval(timer);
+	};
 }
 
 /** Parse one log line and, if it is another instance's event, emit it locally. */
 function emitRemoteLine(bus: EventBus, line: string): void {
-  const trimmed = line.trim();
-  if (trimmed === "") return;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(trimmed);
-  } catch {
-    logger.warn("skipping malformed event log line");
-    return;
-  }
-  const parsed = MctlEvent.safeParse(raw);
-  if (!parsed.success) {
-    logger.warn("skipping event log line that failed validation");
-    return;
-  }
-  // Our own events were already emitted locally by `publish` — skip them so we
-  // don't double-process.
-  if (parsed.data.instance === INSTANCE_ID) return;
-  bus.emit(parsed.data);
+	const trimmed = line.trim();
+	if (trimmed === "") return;
+	let raw: unknown;
+	try {
+		raw = JSON.parse(trimmed);
+	} catch {
+		logger.warn("skipping malformed event log line");
+		return;
+	}
+	const parsed = MctlEvent.safeParse(raw);
+	if (!parsed.success) {
+		logger.warn("skipping event log line that failed validation");
+		return;
+	}
+	// Our own events were already emitted locally by `publish` — skip them so we
+	// don't double-process.
+	if (parsed.data.instance === INSTANCE_ID) return;
+	bus.emit(parsed.data);
 }

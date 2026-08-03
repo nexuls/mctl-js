@@ -21,10 +21,10 @@ import { z } from "zod";
  * defeating the point of a fixed theme).
  */
 export const HexColor = z
-  .string()
-  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, {
-    message: "must be a hex colour like #rgb or #rrggbb",
-  });
+	.string()
+	.regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, {
+		message: "must be a hex colour like #rgb or #rrggbb",
+	});
 
 /**
  * The semantic colour roles every theme must define. Kept deliberately small —
@@ -33,28 +33,28 @@ export const HexColor = z
  * cannot express itself with the existing set.
  */
 export const ThemeColors = z.object({
-  /** Page background. */
-  background: HexColor,
-  /** Primary body text. */
-  foreground: HexColor,
-  /** Slightly offset background for panels/boxes that sit on `background`. */
-  surface: HexColor,
-  /** Box borders and separators. */
-  border: HexColor,
-  /** De-emphasised text: hints, timestamps, disabled labels. */
-  muted: HexColor,
-  /** Main accent: focus, selection, active nav, primary actions. */
-  primary: HexColor,
-  /** Secondary accent, used sparingly to distinguish from `primary`. */
-  secondary: HexColor,
-  /** Positive state: running, healthy, completed. */
-  success: HexColor,
-  /** Cautionary state: pending, degraded, needs attention. */
-  warning: HexColor,
-  /** Failure state: stopped-with-error, validation failures. */
-  error: HexColor,
-  /** Informational accent: neutral highlights, tips. */
-  info: HexColor,
+	/** Page background. */
+	background: HexColor,
+	/** Primary body text. */
+	foreground: HexColor,
+	/** Slightly offset background for panels/boxes that sit on `background`. */
+	surface: HexColor,
+	/** Box borders and separators. */
+	border: HexColor,
+	/** De-emphasised text: hints, timestamps, disabled labels. */
+	muted: HexColor,
+	/** Main accent: focus, selection, active nav, primary actions. */
+	primary: HexColor,
+	/** Secondary accent, used sparingly to distinguish from `primary`. */
+	secondary: HexColor,
+	/** Positive state: running, healthy, completed. */
+	success: HexColor,
+	/** Cautionary state: pending, degraded, needs attention. */
+	warning: HexColor,
+	/** Failure state: stopped-with-error, validation failures. */
+	error: HexColor,
+	/** Informational accent: neutral highlights, tips. */
+	info: HexColor,
 });
 export type ThemeColors = z.infer<typeof ThemeColors>;
 
@@ -80,8 +80,8 @@ export type ThemeAppearance = z.infer<typeof ThemeAppearance>;
  * concrete {@link ThemeColors} for the active mode with {@link resolveColors}.
  */
 export const ThemeColorScheme = z.union([
-  z.object({ default: ThemeColors }),
-  z.object({ dark: ThemeColors, light: ThemeColors }),
+	z.object({ default: ThemeColors }),
+	z.object({ dark: ThemeColors, light: ThemeColors }),
 ]);
 export type ThemeColorScheme = z.infer<typeof ThemeColorScheme>;
 
@@ -92,11 +92,11 @@ export type ThemeColorScheme = z.infer<typeof ThemeColorScheme>;
  * gets a full palette.
  */
 export function resolveColors(
-  scheme: ThemeColorScheme,
-  mode: ThemeAppearance,
+	scheme: ThemeColorScheme,
+	mode: ThemeAppearance,
 ): ThemeColors {
-  if ("default" in scheme) return scheme.default;
-  return mode === "light" ? scheme.light : scheme.dark;
+	if ("default" in scheme) return scheme.default;
+	return mode === "light" ? scheme.light : scheme.dark;
 }
 
 /**
@@ -109,9 +109,9 @@ export function resolveColors(
  * see {@link ThemeColorScheme}.
  */
 export const ThemeFile = z.object({
-  /** Human-readable name shown in the theme picker. */
-  name: z.string().min(1),
-  colors: ThemeColorScheme,
+	/** Human-readable name shown in the theme picker. */
+	name: z.string().min(1),
+	colors: ThemeColorScheme,
 });
 export type ThemeFile = z.infer<typeof ThemeFile>;
 
@@ -122,14 +122,14 @@ export type ThemeFile = z.infer<typeof ThemeFile>;
  * the current mode via {@link resolveColors} at paint time.
  */
 export interface Theme {
-  /** Stable id used in `config.theme` and the picker. */
-  id: string;
-  /** Human-readable name. */
-  name: string;
-  /** Light/dark-aware colours (single palette or a variant pair). */
-  colors: ThemeColorScheme;
-  /** Where the theme came from — drives grouping and override precedence. */
-  source: ThemeSource;
+	/** Stable id used in `config.theme` and the picker. */
+	id: string;
+	/** Human-readable name. */
+	name: string;
+	/** Light/dark-aware colours (single palette or a variant pair). */
+	colors: ThemeColorScheme;
+	/** Where the theme came from — drives grouping and override precedence. */
+	source: ThemeSource;
 }
 
 /** Provenance of a theme. `terminal` is the dynamic host-terminal palette. */
@@ -140,9 +140,9 @@ export type ThemeSource = "builtin" | "custom" | "terminal";
  * colour set, so Settings can enumerate options cheaply.
  */
 export interface ThemeSummary {
-  id: string;
-  name: string;
-  source: ThemeSource;
+	id: string;
+	name: string;
+	source: ThemeSource;
 }
 
 /**
@@ -157,10 +157,10 @@ export interface ThemeSummary {
  * report it.
  */
 export interface TerminalPalette {
-  /** Default foreground (text) colour, or `null` if unreported. */
-  foreground: string | null;
-  /** Default background colour, or `null` if unreported. */
-  background: string | null;
-  /** The 16 ANSI colours in standard order; entries may be `null`. */
-  ansi: ReadonlyArray<string | null>;
+	/** Default foreground (text) colour, or `null` if unreported. */
+	foreground: string | null;
+	/** Default background colour, or `null` if unreported. */
+	background: string | null;
+	/** The 16 ANSI colours in standard order; entries may be `null`. */
+	ansi: ReadonlyArray<string | null>;
 }
