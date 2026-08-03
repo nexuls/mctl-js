@@ -47,6 +47,7 @@ const RouterContext = createContext<Router | undefined>(undefined);
 interface RouterProviderProps {
   /** The route to start on. Defaults to `"dashboard"`. */
   initialRoute?: RouteId;
+  params?: RouteParams;
   children: ReactNode;
 }
 
@@ -57,11 +58,12 @@ interface RouterProviderProps {
  */
 export function RouterProvider({
   initialRoute = "dashboard",
+  params = {},
   children,
 }: RouterProviderProps) {
   const [location, setLocation] = useState<Location>({
     route: initialRoute,
-    params: {},
+    params: params,
   });
   const [stack, setStack] = useState<Location[]>([]);
 
