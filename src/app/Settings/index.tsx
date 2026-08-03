@@ -43,6 +43,7 @@ import {
 	type TabItem,
 } from "../../components/index.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
@@ -52,6 +53,7 @@ import { configFile } from "../../lib/paths.ts";
 import type {
 	BackupProvider,
 	CompressionKind,
+	IconMode,
 	NetworkProvider,
 	RuntimeKind,
 	ServerKind,
@@ -85,6 +87,24 @@ const COMPRESSIONS: RadioItem<CompressionKind>[] = [
 	{ label: "tar.zst", value: "tar.zst", description: "smallest, fastest" },
 	{ label: "tar.gz", value: "tar.gz", description: "most portable" },
 	{ label: "zip", value: "zip", description: "widest tooling" },
+];
+
+/**
+ * Icon modes, with the trade-off spelled out in each description — the choice is
+ * only obvious to someone who already knows whether their font is patched.
+ */
+const ICON_MODES: RadioItem<IconMode>[] = [
+	{
+		label: "auto",
+		value: "auto",
+		description: "detect what the terminal can draw",
+	},
+	{ label: "nerd", value: "nerd", description: "requires a Nerd Font" },
+	{
+		label: "ascii",
+		value: "ascii",
+		description: "plain 7-bit, works anywhere",
+	},
 ];
 
 /** Network profiles available today; tunnels arrive in Phase 4. */
@@ -133,7 +153,7 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 	defaults: ["mc", "memory", "kind", "runtime", "eula"],
 	backups: ["backupEnabled"],
 	network: ["network"],
-	appearance: ["theme"],
+	appearance: ["theme", "icons"],
 };
 
 /**
@@ -209,6 +229,15 @@ function Section({
 
 export function Settings() {
 	const { colors, themeId, setThemeId, themes } = useTheme();
+	// Like the theme, the icon set is owned by its provider and persisted on
+	// change — it is not part of the save-on-Ctrl+S draft, so the effect of a
+	// pick is visible across the whole UI the instant it is made.
+	const {
+		icons,
+		set: iconSet,
+		mode: iconMode,
+		setMode: setIconMode,
+	} = useIcons();
 	const {
 		draft,
 		config,
@@ -221,11 +250,10 @@ export function Settings() {
 		save,
 		saving,
 		saveError,
-		saved,
 	} = useSettings();
 
 	const toast = useToast();
-	const [group, setGroup] = useState<GroupId>("defaults");
+	const [group, setGroup] = useState<GroupId>("locations");
 
 	// The ring depends on both the visible group and the override toggles, so it is
 	// rebuilt every render from the draft rather than tracked separately.
@@ -244,7 +272,7 @@ export function Settings() {
 	 * from anywhere on the page. A failed save offers `r` to try again.
 	 */
 	const commit = async (): Promise<void> => {
-		const error = await save(themeId);
+		const error = await save(themeId, iconMode);
 		if (error === null) {
 			toast.success("Settings saved", {
 				description: `Written to ${configFile()}`,
@@ -506,6 +534,50 @@ export function Settings() {
 							onFocused={() => ring.setFocus("theme")}
 							onChange={(id) => setThemeId(id)}
 						/>
+
+						{/* The hint names the *resolved* set, not just the mode: "auto" on
+						    its own tells the user nothing about what they are looking at,
+						    and the whole point of picking a set is seeing it applied. */}
+						<RadioGroup
+							label="Icons"
+							hint={
+								iconMode === "auto"
+									? `detected: ${iconSet}`
+									: `using: ${iconSet}`
+							}
+							options={ICON_MODES}
+							value={iconMode}
+							focused={ring.isFocused("icons")}
+							onFocused={() => ring.setFocus("icons")}
+							onChange={(mode) => setIconMode(mode)}
+						/>
+
+						{/* A live sample, so the choice can be judged by eye rather than by
+						    guessing whether the font has the glyphs. A row of tofu here is
+						    exactly the signal that `nerd` is the wrong pick. */}
+						<box flexDirection="row" gap={2} flexShrink={0} paddingLeft={1}>
+							<text fg={colors.muted}>preview</text>
+							<text fg={colors.success}>{icons.success}</text>
+							<text fg={colors.warning}>{icons.warning}</text>
+							<text fg={colors.error}>{icons.error}</text>
+							<text fg={colors.info}>{icons.info}</text>
+							<text fg={colors.primary}>{icons.running}</text>
+							<text fg={colors.muted}>{icons.stopped}</text>
+							<text fg={colors.secondary}>{icons.backup}</text>
+							<text fg={colors.secondary}>{icons.network}</text>
+							<text fg={colors.foreground}>{icons.radioOn}</text>
+							<text fg={colors.muted}>{icons.radioOff}</text>
+							<text fg={colors.primary}>{icons.caret}</text>
+						</box>
+
+						{/* Honest about the limit rather than letting the user discover it:
+						    `borderStyle` is OpenTUI's, and 0.4.5 offers no ASCII variant. */}
+						{iconSet === "ascii" ? (
+							<text fg={colors.muted} attributes={TextAttributes.DIM}>
+								Note: panel borders still use box-drawing characters — the
+								terminal UI library provides no ASCII border style.
+							</text>
+						) : null}
 					</Section>
 				) : null}
 			</ScrollBox>

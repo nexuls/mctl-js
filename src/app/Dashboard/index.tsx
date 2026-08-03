@@ -11,6 +11,7 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { useServers } from "../../hooks/use-servers.ts";
 import { useRecentEvents } from "../../hooks/use-recent-events.ts";
 import { useRouter } from "../../hooks/use-router.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
 import type { ThemeColors } from "../../types/theme.ts";
 import type { Server } from "../../types/server.ts";
 import type { MctlEvent } from "../../types/events.ts";
@@ -61,23 +62,28 @@ function clockTime(iso: string): string {
   return Number.isNaN(d.getTime()) ? "--:--:--" : d.toTimeString().slice(0, 8);
 }
 
-/** A one-line human summary of an event for the feed. */
-function describe(event: MctlEvent): string {
+/**
+ * A one-line human summary of an event for the feed.
+ *
+ * @param arrow The active icon set's transition marker (`→`, or `->` in ASCII).
+ */
+function describe(event: MctlEvent, arrow: string): string {
   const payload = event.payload as { id?: string; state?: string } | undefined;
   const id = payload?.id ? ` ${payload.id}` : "";
-  const state = payload?.state ? ` → ${payload.state}` : "";
+  const state = payload?.state ? ` ${arrow} ${payload.state}` : "";
   return `${event.type}${id}${state}`;
 }
 
 export function Dashboard() {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   const { data: servers, loading } = useServers();
   const events = useRecentEvents(12);
   const { navigate } = useRouter();
   const s = summarize(servers);
 
   return (
-    <box flexDirection="column" flexGrow={1}>
+    <box flexDirection="column" flexGrow={1} paddingX={1}>
       <PageHeader
         title="Dashboard"
         subtitle={loading ? "reading servers…" : "live server summary & activity"}
@@ -123,7 +129,7 @@ export function Dashboard() {
           events.map((event) => (
             <box key={event.id} flexDirection="row" gap={1}>
               <text fg={colors.muted}>{clockTime(event.ts)}</text>
-              <text fg={activityColor(colors, event.type)}>{describe(event)}</text>
+              <text fg={activityColor(colors, event.type)}>{describe(event, icons.transition)}</text>
             </box>
           ))
         )}

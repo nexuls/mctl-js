@@ -26,6 +26,7 @@ import { TextAttributes } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { alpha, mix } from "../lib/colors.ts";
 import { ScrollBox } from "./ScrollBox.tsx";
 import { onAccent } from "./support.ts";
@@ -76,18 +77,6 @@ export interface TabsProps {
 
 /** One cell of padding on each side of a tab's label. */
 const TAB_PADDING_X = 1;
-
-/** Glyphs the rule row is built from. */
-const BORDER_CHARS = {
-  /** Cap to the left of the active segment. */
-  LEFT: "╺",
-  /** Cap to the right of the active segment. */
-  RIGHT: "╸",
-  /** A plain (inactive) run of rule. */
-  PLAIN: "━",
-  /** The active run while the bar does *not* hold keyboard focus. */
-  QUIET: "─",
-};
 
 /**
  * The exact cell width a tab occupies: its leading separator, side padding and
@@ -177,6 +166,11 @@ export function Tabs({
   paddingX = 0,
 }: TabsProps) {
   const { colors } = useTheme();
+  // Rule glyphs come from the active icon set. The heavy/light pair is
+  // load-bearing here — keyboard focus is shown purely as rule weight — which is
+  // why the ASCII set carries two distinguishable runs (`=` and `-`) rather than
+  // collapsing both to one character.
+  const { icons } = useIcons();
   const { width: viewportWidth } = useTerminalDimensions();
   const activeIndex = Math.max(
     0,
@@ -263,7 +257,7 @@ export function Tabs({
       <box flexDirection="row" flexShrink={0} height={1}>
         {leadCells > 0 ? (
           <text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-            {BORDER_CHARS.PLAIN.repeat(leadCells)}
+            {icons.ruleLine.repeat(leadCells)}
           </text>
         ) : null}
         {items.map((item) => {
@@ -273,7 +267,7 @@ export function Tabs({
           return (
             <box key={item.id} flexDirection="row" flexShrink={0}>
               <text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-                {active ? BORDER_CHARS.RIGHT : BORDER_CHARS.PLAIN}
+                {active ? icons.ruleCapRight : icons.ruleLine}
               </text>
               <text
                 width={width}
@@ -282,13 +276,13 @@ export function Tabs({
                 attributes={active ? undefined : TextAttributes.DIM}
               >
                 {(active && !focused
-                  ? BORDER_CHARS.QUIET
-                  : BORDER_CHARS.PLAIN
+                  ? icons.ruleQuiet
+                  : icons.ruleLine
                 ).repeat(width)}
               </text>
               {active && (
                 <text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-                  {BORDER_CHARS.LEFT}
+                  {icons.ruleCapLeft}
                 </text>
               )}
             </box>
@@ -297,7 +291,7 @@ export function Tabs({
         {/* Carry the rule out to the right edge past the last tab. */}
         <box flexGrow={1} flexShrink={1} overflow="hidden">
           <text fg={rule} attributes={TextAttributes.DIM}>
-            {BORDER_CHARS.PLAIN.repeat(tailCells)}
+            {icons.ruleLine.repeat(tailCells)}
           </text>
         </box>
       </box>

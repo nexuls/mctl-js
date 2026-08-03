@@ -46,7 +46,6 @@ import {
 } from "react";
 import { useKeyboard } from "@opentui/react";
 import {
-	SPINNER_FRAMES,
 	TOAST_POSITIONS,
 	ToastViewport,
 	type ToastAction,
@@ -54,6 +53,7 @@ import {
 	type ToastVisual,
 } from "../components/Toast.tsx";
 import type { Variant } from "../components/support.ts";
+import { useIcons } from "./use-icons.tsx";
 import { useKeysCaptured } from "./use-input-capture.tsx";
 
 /** Handle to a live toast, returned by every raise. */
@@ -233,6 +233,7 @@ export function ToastProvider({
 	progress = false,
 }: ToastProviderProps) {
 	const [toasts, setToasts] = useState<ToastRecord[]>([]);
+	const { spinner: spinnerFrames } = useIcons();
 	// Bumped by the animation ticker to repaint spinners and meters. The countdowns
 	// themselves live in refs, so a tick is the only thing that re-reads them.
 	const [tick, setTick] = useState(0);
@@ -563,7 +564,9 @@ export function ToastProvider({
 		return () => clearInterval(timer);
 	}, [animating]);
 
-	const spinner = SPINNER_FRAMES[tick % SPINNER_FRAMES.length];
+	// The active icon set's frames — ASCII spins with four, Unicode with ten — so
+	// the modulus must use the live length rather than a baked-in count.
+	const spinner = spinnerFrames[tick % spinnerFrames.length];
 
 	/** Project a record onto what the card draws, reading the live countdown. */
 	const toVisual = (entry: ToastRecord): ToastVisual => {

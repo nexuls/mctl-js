@@ -24,6 +24,7 @@ import { useState } from "react";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { alpha, mix } from "../lib/colors.ts";
 import { ScrollBox } from "../components/index.ts";
 import { onAccent } from "../components/support.ts";
@@ -41,13 +42,6 @@ interface NavRailProps {
 const TAB_PADDING_X = 1;
 /** One cell between a tab's digit hint and its label. */
 const TAB_GAP = 1;
-
-/** Border Characters */
-const BORDER_CHARS = {
-	LEFT: "╺",
-	RIGHT: "╸",
-	PLAIN: "━",
-};
 
 /**
  * The exact cell width of a tab: side padding + digit + gap + label. Both the
@@ -133,6 +127,9 @@ function NavTab({ item, sepColor, active, onSelect }: NavTabProps) {
 export function NavRail({ active, onNavigate }: NavRailProps) {
 	const { width: viewportWidth } = useTerminalDimensions();
 	const { colors } = useTheme();
+	// The rule glyphs come from the active icon set: they are box-drawing, which a
+	// non-UTF-8 terminal cannot draw, so ASCII substitutes `=`/`-` runs.
+	const { icons } = useIcons();
 	// The detail route has no tab of its own, so it lights up the Servers tab it
 	// was opened from. Resolved once and shared by both rows.
 	const isActive = (item: NavItem) =>
@@ -176,7 +173,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 			</box>
 			<box flexDirection="row" flexShrink={0} height={1}>
 				<text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-					{BORDER_CHARS.PLAIN.repeat(1 + RightTextWidth)}
+					{icons.ruleLine.repeat(1 + RightTextWidth)}
 				</text>
 				{NAV.map((item) => {
 					const active = isActive(item);
@@ -185,7 +182,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 					return (
 						<>
 							<text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-								{active ? BORDER_CHARS.RIGHT : BORDER_CHARS.PLAIN}
+								{active ? icons.ruleCapRight : icons.ruleLine}
 							</text>
 							<text
 								key={item.id}
@@ -194,11 +191,11 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 								fg={isActive(item) ? colors.primary : rule}
 								attributes={active ? undefined : TextAttributes.DIM}
 							>
-								{BORDER_CHARS.PLAIN.repeat(width)}
+								{icons.ruleLine.repeat(width)}
 							</text>
 							{active && (
 								<text fg={rule} attributes={TextAttributes.DIM} flexShrink={0}>
-									{BORDER_CHARS.LEFT}
+									{icons.ruleCapLeft}
 								</text>
 							)}
 						</>
@@ -207,7 +204,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 				{/* Carry the rule out to the right edge past the last tab. */}
 				<box flexGrow={1} flexShrink={1} overflow="hidden">
 					<text fg={rule} attributes={TextAttributes.DIM}>
-						{BORDER_CHARS.PLAIN.repeat(tailCells)}
+						{icons.ruleLine.repeat(tailCells)}
 					</text>
 				</box>
 			</box>

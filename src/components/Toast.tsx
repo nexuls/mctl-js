@@ -17,10 +17,12 @@
 
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { Kbd } from "./Kbd.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
 import { variantColor, type Variant } from "./support.ts";
 import { alpha } from "../lib/colors.ts";
+import type { IconName } from "../types/icons.ts";
 
 /** Where a stack of toasts is anchored on screen. */
 export type ToastPosition =
@@ -62,30 +64,21 @@ export interface ToastAction {
 	onAction: () => void;
 }
 
-/** The default glyph for each variant, used when no `icon` is given. */
-export const TOAST_ICONS: Record<Variant, string> = {
-	primary: "●",
-	secondary: "◆",
-	success: "✔",
-	warning: "▲",
-	error: "✖",
-	info: "ℹ",
-	neutral: "·",
+/**
+ * The semantic icon each variant asks for when the caller gives no `icon`.
+ *
+ * Names, not glyphs: the actual character depends on the active icon set, which
+ * only {@link useIcons} knows (see `core/icons/catalogue.ts`).
+ */
+export const TOAST_ICON_NAMES: Readonly<Record<Variant, IconName>> = {
+	primary: "bullet",
+	secondary: "diamond",
+	success: "success",
+	warning: "warning",
+	error: "error",
+	info: "info",
+	neutral: "separator",
 };
-
-/** Spinner frames for a `loading` toast, cycled by the provider's ticker. */
-export const SPINNER_FRAMES = [
-	"⠋",
-	"⠙",
-	"⠹",
-	"⠸",
-	"⠼",
-	"⠴",
-	"⠦",
-	"⠧",
-	"⠇",
-	"⠏",
-] as const;
 
 /** Default card width in cells, when the caller does not pick one. */
 export const DEFAULT_TOAST_WIDTH = 42;
@@ -132,11 +125,16 @@ export interface ToastVisual {
  *
  * Terminal text does not reflow on its own here — each line is rendered as its
  * own `<text>` — so wrapping is our job. Exported for unit testing.
+ *
+ * @param ellipsis The truncation marker. Defaults to the Unicode ellipsis so
+ *   existing callers and tests are unaffected; {@link ToastCard} passes the
+ *   active icon set's, which is three ASCII dots when icons are set to `ascii`.
  */
 export function wrapText(
 	text: string,
 	width: number,
 	maxLines: number,
+	ellipsis = "…",
 ): string[] {
 	if (width <= 0 || maxLines <= 0) return [];
 	const words = text.split(/\s+/).filter((w) => w.length > 0);
@@ -176,10 +174,14 @@ export function wrapText(
 	const wanted = words.join(" ");
 	if (consumed.length < wanted.length) {
 		const last = lines[lines.length - 1] ?? "";
+		// The marker's own width is subtracted, not a literal 1: the ASCII icon set
+		// spells the ellipsis "..." (three cells), and assuming one would push the
+		// final line past `width` and reflow the card.
+		const room = Math.max(0, width - ellipsis.length);
 		lines[lines.length - 1] =
-			last.length >= width
-				? `${last.slice(0, Math.max(0, width - 1))}…`
-				: `${last}…`;
+			last.length + ellipsis.length > width
+				? `${last.slice(0, room)}${ellipsis}`
+				: `${last}${ellipsis}`;
 	}
 	return lines;
 }
@@ -217,26 +219,34 @@ export function ToastCard({
 	onResume,
 }: ToastCardProps) {
 	const { colors } = useTheme();
+	const { icons, spinner: spinnerFrames } = useIcons();
 	const accent = variantColor(colors, toast.variant);
 	const width = toast.width ?? DEFAULT_TOAST_WIDTH;
 	const dismissible = toast.dismissible ?? true;
 
 	// Interior width: the border eats two cells and the card pads one each side.
 	const inner = Math.max(1, width - 4);
-	// The icon column (glyph + gap) and the trailing ✕ shrink the text column.
+	// The icon column (glyph + gap) and the trailing close glyph shrink the text
+	// column. A caller-supplied `icon` is passed through as-is — it is a literal
+	// glyph, deliberately outside the icon set.
 	const glyph = toast.loading
-		? (spinner ?? SPINNER_FRAMES[0])
+		? (spinner ?? spinnerFrames[0])
 		: toast.icon === false
 			? undefined
-			: (toast.icon ?? TOAST_ICONS[toast.variant]);
+			: (toast.icon ?? icons[TOAST_ICON_NAMES[toast.variant]]);
 	const textWidth = Math.max(
 		1,
 		inner - (glyph ? 2 : 0) - (dismissible ? 2 : 0),
 	);
 
-	const titleLines = wrapText(toast.title, textWidth, TITLE_LINES);
+	const titleLines = wrapText(
+		toast.title,
+		textWidth,
+		TITLE_LINES,
+		icons.ellipsis,
+	);
 	const descriptionLines = toast.description
-		? wrapText(toast.description, textWidth, DESCRIPTION_LINES)
+		? wrapText(toast.description, textWidth, DESCRIPTION_LINES, icons.ellipsis)
 		: [];
 
 	return (
@@ -291,7 +301,7 @@ export function ToastCard({
 				</box>
 				{dismissible ? (
 					<box flexShrink={0} onMouseDown={onDismiss}>
-						<text fg={colors.muted}>✕</text>
+						<text fg={colors.muted}>{icons.close}</text>
 					</box>
 				) : null}
 			</box>

@@ -36,6 +36,22 @@ export type RuntimeKind = z.infer<typeof RuntimeKind>;
 export const CompressionKind = z.enum(["tar.zst", "tar.gz", "zip"]);
 export type CompressionKind = z.infer<typeof CompressionKind>;
 
+/**
+ * How the UI picks its glyphs.
+ *
+ * - `auto` — detect what the terminal can draw (see `core/icons/detect.ts`).
+ * - `nerd` — force Nerd Font glyphs; the user asserts their font is patched.
+ * - `ascii` — force 7-bit ASCII, for terminals and pipes that mangle anything else.
+ *
+ * The *rendering* sets are a superset of this (`nerd | unicode | ascii`, see
+ * `types/icons.ts`): `unicode` is the middle tier `auto` lands on and is not
+ * offered as a mode, because "the plain symbols every UTF-8 terminal has" is
+ * exactly what auto-detection should be trusted to decide. `MCTL_ICONS` can
+ * still pin it explicitly for debugging.
+ */
+export const IconMode = z.enum(["auto", "nerd", "ascii"]);
+export type IconMode = z.infer<typeof IconMode>;
+
 /** Available Server Kinds, e.g. "vanilla", "paper", "fabric". */
 export const ServerKind = z.enum(["vanilla"]);
 export type ServerKind = z.infer<typeof ServerKind>;
@@ -111,6 +127,10 @@ export const Config = z.object({
   // the palette itself is resolved by the theme registry at startup, so a config
   // naming a since-deleted theme degrades gracefully rather than storing colours.
   theme: z.string().min(1).default("terminal"),
+  // Glyph family for the UI, alongside `theme` as the other half of the
+  // appearance settings. An enum rather than a free string: unlike themes, icon
+  // sets are not user-extensible — they are a fixed table in `core/icons/`.
+  icons: IconMode.default("auto"),
   // `.prefault({})` = input-side default: an absent section is parsed as `{}`,
   // which fills each nested field's own default. (`.default()` in Zod v4 wants a
   // fully-formed output object, which would duplicate every nested default here.)

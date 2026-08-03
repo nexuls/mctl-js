@@ -18,9 +18,11 @@ import { configExists, loadConfig, writeConfig } from "../core/config/index.ts";
 import { ThemeRegistry } from "../core/theme/registry.ts";
 import { startEventSystem, type EventBus } from "../core/events/index.ts";
 import { EventType } from "../types/events.ts";
+import type { Config, IconMode } from "../types/config.ts";
 import { reapStaleLocks } from "../core/session/session-manager.ts";
 import { log } from "../lib/logger.ts";
 import { ThemeProvider } from "../hooks/use-theme.tsx";
+import { IconProvider } from "../hooks/use-icons.tsx";
 import { EventBusProvider } from "../hooks/use-event-bus.tsx";
 import { InputCaptureProvider } from "../hooks/use-input-capture.tsx";
 import { ToastProvider } from "../hooks/use-toast.tsx";
@@ -69,7 +71,7 @@ export async function renderApp(): Promise<void> {
   // the persisted theme id before the first paint. Front-end → core service:
   // the React tree never touches disk itself.
   const registry = await new ThemeRegistry().load();
-  const initialThemeId = await loadThemeId();
+  const appearance = await loadAppearance();
 
   // Reap stale locks (crashed instances' start/install/supervisor locks) once at
   // startup, before anything reads runtime state (architecture.md § Statelessness).
@@ -110,105 +112,142 @@ export async function renderApp(): Promise<void> {
   // it in shortly; the empty-terminal theme covers the gap.
   const initialPalette = await queryTerminalPalette(renderer);
 
-  // Bridge `ConfigChanged` (another instance switching theme, or a hand-edit of
-  // config.json) back into the theme provider, which sits above the bus provider
-  // and does no I/O of its own. Built once so its identity is stable across
-  // renders — the provider uses it as an effect dependency.
-  const subscribeThemeId = themeIdSubscriber(events.bus);
+  // Bridge `ConfigChanged` (another instance changing the theme or icon set, or
+  // a hand-edit of config.json) back into the appearance providers, which sit
+  // above the bus provider and do no I/O of their own. Built once each so their
+  // identities are stable across renders — the providers use them as effect
+  // dependencies.
+  const subscribeThemeId = configSubscriber(events.bus, (c) => c.theme);
+  const subscribeIconMode = configSubscriber(events.bus, (c) => c.icons);
 
   createRoot(renderer).render(
     <ThemeProvider
       registry={registry}
-      initialThemeId={initialThemeId}
+      initialThemeId={appearance.theme}
       initialPalette={initialPalette}
-      onThemeChange={persistThemeId}
+      onThemeChange={(theme) => persistAppearance({ theme })}
       subscribeThemeId={subscribeThemeId}
     >
-      <EventBusProvider bus={events.bus}>
-        {/* Above the app so both the wizard and the router's pages can hold the
-            capture, and so toasts (below it) can stand their action keys down
-            while a text field is being typed into. */}
-        <InputCaptureProvider>
-          <ToastProvider>
-            <App firstRun={firstRun} />
-          </ToastProvider>
-        </InputCaptureProvider>
-      </EventBusProvider>
+      {/* Icons are the other half of "appearance", so the provider sits beside
+          the theme's — above everything, since the component kit itself
+          (Toast, Form, Tabs, Hint) reads glyphs from it. */}
+      <IconProvider
+        initialMode={appearance.icons}
+        onModeChange={(icons) => persistAppearance({ icons })}
+        subscribeMode={subscribeIconMode}
+      >
+        <EventBusProvider bus={events.bus}>
+          {/* Above the app so both the wizard and the router's pages can hold the
+              capture, and so toasts (below it) can stand their action keys down
+              while a text field is being typed into. */}
+          <InputCaptureProvider>
+            <ToastProvider>
+              <App firstRun={firstRun} />
+            </ToastProvider>
+          </InputCaptureProvider>
+        </EventBusProvider>
+      </IconProvider>
     </ThemeProvider>,
   );
 }
 
+/** The persisted appearance preferences, read once before the first paint. */
+interface Appearance {
+  /** Active theme id (`config.theme`). */
+  theme: string;
+  /** Active icon mode (`config.icons`). */
+  icons: IconMode;
+}
+
 /**
- * Read the persisted theme id from `config.json`. Before first-run setup there
- * is no config, so we default to `"terminal"` (the host palette) — the app must
- * be themeable before the wizard exists.
+ * Read the persisted appearance from `config.json`. Before first-run setup
+ * there is no config, so this falls back to `"terminal"` (the host palette) and
+ * `"auto"` (detected glyphs) — the app must be themeable and drawable before
+ * the wizard that writes config exists.
  */
-async function loadThemeId(): Promise<string> {
+async function loadAppearance(): Promise<Appearance> {
   try {
-    return (await loadConfig()).theme;
+    const config = await loadConfig();
+    return { theme: config.theme, icons: config.icons };
   } catch {
     // ConfigNotFoundError (first run) or a malformed file: fall back rather than
-    // block the UI on a theme preference.
-    return "terminal";
+    // block the UI on a display preference.
+    return { theme: "terminal", icons: "auto" };
   }
 }
 
 /**
- * Build the `ConfigChanged` → theme-id bridge for {@link ThemeProvider}. The
- * watcher event carries no payload, so the new id is re-read from disk through
- * the config service (the UI layer never reads it itself).
+ * Build a `ConfigChanged` → provider bridge. The watcher event carries no
+ * payload, so the new value is re-read from disk through the config service
+ * (the UI layer never reads it itself).
  *
- * @returns a subscribe function to hand to `ThemeProvider`; call it once and
- * keep the result, as the provider treats it as a stable effect dependency.
+ * @param select Pulls the value of interest out of the reloaded config.
+ * @returns a subscribe function to hand to a provider; call it **once** and keep
+ * the result, as providers treat it as a stable effect dependency.
  */
-function themeIdSubscriber(
+function configSubscriber<T>(
   bus: EventBus,
-): (apply: (id: string) => void) => () => void {
+  select: (config: Config) => T,
+): (apply: (value: T) => void) => () => void {
   return (apply) =>
     bus.subscribe((event) => {
       if (event.type !== EventType.ConfigChanged) return;
       loadConfig()
-        .then((config) => apply(config.theme))
+        .then((config) => apply(select(config)))
         .catch((err) => {
-          // A transient unreadable/half-written config: keep the current theme
-          // rather than flashing a fallback. The next change re-reads it.
-          logger.debug({ err: String(err) }, "theme id not re-read on change");
+          // A transient unreadable/half-written config: keep the current
+          // appearance rather than flashing a fallback. The next change re-reads.
+          logger.debug({ err: String(err) }, "appearance not re-read on change");
         });
     });
 }
 
 /**
- * Persist a theme selection into `config.json`. Best-effort: when there is no
- * config yet (first run) the choice simply isn't saved, which is correct — the
- * wizard writes config, and Settings persists thereafter. Never blocks the UI.
+ * Persist an appearance change (theme id, icon mode, or both) into
+ * `config.json`. Best-effort: when there is no config yet (first run) the choice
+ * simply isn't saved, which is correct — the wizard writes config, and Settings
+ * persists thereafter. Never blocks the UI.
  *
- * Writes are **serialized and coalesced to the latest id**. Cycling themes with
- * `t` fires this faster than a read-modify-write round-trip completes, and
- * overlapping writes could land out of order — with the `ConfigChanged` bridge
- * above now feeding the file back into the UI, a stale winner would visibly snap
- * the theme back. One in-flight write at a time, and only the newest id matters.
+ * Writes are **serialized and coalesced**, and theme and icons deliberately
+ * share the one queue. Two reasons:
+ *
+ * 1. Cycling themes with `t` fires faster than a read-modify-write round-trip
+ *    completes, so overlapping writes could land out of order — and with the
+ *    `ConfigChanged` bridge feeding the file back into the UI, a stale winner
+ *    visibly snaps the theme back.
+ * 2. Each write is a read-modify-write of the *whole* config, so a theme write
+ *    and an icon write racing on separate queues would clobber one another. One
+ *    queue makes that impossible.
  */
-function persistThemeId(id: string): void {
-  pendingThemeId = id;
-  if (themeWrite) return;
-  themeWrite = (async () => {
+function persistAppearance(patch: Partial<Appearance>): void {
+  pendingAppearance = { ...pendingAppearance, ...patch };
+  if (appearanceWrite) return;
+  appearanceWrite = (async () => {
     try {
-      while (pendingThemeId !== undefined) {
-        const next = pendingThemeId;
-        pendingThemeId = undefined;
+      while (pendingAppearance !== undefined) {
+        const next = pendingAppearance;
+        pendingAppearance = undefined;
         const config = await loadConfig();
-        if (config.theme !== next) await writeConfig({ ...config, theme: next });
+        const merged = { ...config, ...next };
+        // Skip a no-op write: it would fire `ConfigChanged` in every instance
+        // for nothing.
+        if (merged.theme !== config.theme || merged.icons !== config.icons) {
+          await writeConfig(merged);
+        }
       }
     } catch (err) {
-      pendingThemeId = undefined;
-      logger.debug({ err: String(err) }, "theme not persisted (no config yet)");
+      pendingAppearance = undefined;
+      logger.debug(
+        { err: String(err) },
+        "appearance not persisted (no config yet)",
+      );
     } finally {
-      themeWrite = undefined;
+      appearanceWrite = undefined;
     }
   })();
 }
 
-/** The theme id waiting to be written, if any (see {@link persistThemeId}). */
-let pendingThemeId: string | undefined;
-/** The in-flight theme write, if any — guarantees one writer at a time. */
-let themeWrite: Promise<void> | undefined;
+/** The appearance patch waiting to be written (see {@link persistAppearance}). */
+let pendingAppearance: Partial<Appearance> | undefined;
+/** The in-flight appearance write, if any — guarantees one writer at a time. */
+let appearanceWrite: Promise<void> | undefined;

@@ -19,6 +19,7 @@
 
 import { useKeyboard, useRenderer } from "@opentui/react";
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
 import { RouterProvider, useRouter } from "../hooks/use-router.tsx";
 import {
@@ -74,6 +75,7 @@ function AppShell() {
 	const renderer = useRenderer();
 	const quit = useQuit();
 	const { theme, colors: c, setThemeId, themes } = useTheme();
+	const { icons } = useIcons();
 	const { route, navigate, back, canBack } = useRouter();
 	// `captured()` is a getter, not a boolean: the handler below closes over this
 	// render, and the capture can change without one. `typing` is the reactive
@@ -169,7 +171,7 @@ function AppShell() {
 									{ keys: "Esc", label: canBack ? "back" : "quit" },
 								]
 							: [
-									{ keys: ["1", "…", "6"], label: "navigate" },
+									{ keys: ["1", icons.ellipsis, "6"], label: "navigate" },
 									{ keys: "Enter", label: "open" },
 									{ keys: "Esc", label: canBack ? "back" : "quit" },
 									{ keys: "t", label: "theme" },

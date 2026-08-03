@@ -9,6 +9,7 @@
 
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../../hooks/use-theme.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
 
 /** Props for {@link Stepper}. */
 export interface StepperProps {
@@ -21,12 +22,17 @@ export interface StepperProps {
 /** The left-hand progress rail. Fixed-width so the content column stays stable. */
 export function Stepper({ steps, current }: StepperProps) {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   return (
     <box flexDirection="column" gap={1} width={18} flexShrink={0}>
       {steps.map((label, i) => {
         const done = i < current;
         const active = i === current;
-        const marker = done ? "●" : active ? "●" : "○";
+        const marker = done
+          ? icons.stepDone
+          : active
+            ? icons.stepActive
+            : icons.stepTodo;
         const markerColor = done
           ? colors.success
           : active

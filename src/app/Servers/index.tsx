@@ -14,16 +14,25 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { useServers } from "../../hooks/use-servers.ts";
 import { useRouter } from "../../hooks/use-router.tsx";
 import type { Server } from "../../types/server.ts";
-import { PageHeader, serverStateColor } from "../shared.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
+import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
 
 /** Fixed column widths for the aligned server rows. */
 const COLS = { id: 16, kind: 10, mc: 10, runtime: 12 };
 
-/** Pad/trim a cell to a fixed width so rows align without a table renderable. */
-function cell(text: string, width: number): string {
-  return text.length > width
-    ? `${text.slice(0, width - 1)}…`
-    : text.padEnd(width);
+/**
+ * Pad/trim a cell to a fixed width so rows align without a table renderable.
+ *
+ * @param ellipsis The active icon set's truncation marker. Its own length is
+ *   subtracted, not a literal 1 — the ASCII set spells it "...", and assuming
+ *   one cell would push the column past `width` and break the alignment this
+ *   function exists to provide.
+ */
+function cell(text: string, width: number, ellipsis: string): string {
+  if (text.length <= width) return text.padEnd(width);
+  return `${text.slice(0, Math.max(0, width - ellipsis.length))}${ellipsis}`.padEnd(
+    width,
+  );
 }
 
 function ServerRow({
@@ -36,6 +45,7 @@ function ServerRow({
   onOpen: () => void;
 }) {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   const stateColor = serverStateColor(colors, server.state);
   return (
     <box
@@ -45,24 +55,32 @@ function ServerRow({
       onMouseDown={onOpen}
     >
       <text fg={selected ? colors.primary : colors.muted}>
-        {selected ? "▸" : " "}
+        {selected ? icons.caret : " "}
       </text>
       <text
         fg={selected ? colors.primary : colors.foreground}
         attributes={selected ? TextAttributes.BOLD : undefined}
       >
-        {cell(server.id, COLS.id)}
+        {cell(server.id, COLS.id, icons.ellipsis)}
       </text>
-      <text fg={colors.muted}>{cell(server.kind, COLS.kind)}</text>
-      <text fg={colors.muted}>{cell(server.minecraftVersion, COLS.mc)}</text>
-      <text fg={colors.muted}>{cell(server.runtime, COLS.runtime)}</text>
-      <text fg={stateColor}>{server.state}</text>
+      <text fg={colors.muted}>{cell(server.kind, COLS.kind, icons.ellipsis)}</text>
+      <text fg={colors.muted}>
+        {cell(server.minecraftVersion, COLS.mc, icons.ellipsis)}
+      </text>
+      <text fg={colors.muted}>
+        {cell(server.runtime, COLS.runtime, icons.ellipsis)}
+      </text>
+      {/* State reads as shape *and* colour, so it survives a colour-blind eye. */}
+      <text fg={stateColor}>
+        {icons[serverStateIcon(server.state)]} {server.state}
+      </text>
     </box>
   );
 }
 
 export function Servers() {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   const { data: servers, loading, error } = useServers();
   const { navigate } = useRouter();
   const [selected, setSelected] = useState(0);
@@ -97,7 +115,7 @@ export function Servers() {
             ? `error: ${error}`
             : loading
               ? "reading servers…"
-              : `${servers.length} server${servers.length === 1 ? "" : "s"} · ↑/↓ move · Enter open`
+              : `${servers.length} server${servers.length === 1 ? "" : "s"} ${icons.separator} ${icons.arrowUp}/${icons.arrowDown} move ${icons.separator} Enter open`
         }
       />
 
@@ -114,11 +132,15 @@ export function Servers() {
           <box flexDirection="row" gap={1} marginBottom={0}>
             <text fg={colors.muted}> </text>
             <text fg={colors.secondary} attributes={TextAttributes.BOLD}>
-              {cell("ID", COLS.id)}
+              {cell("ID", COLS.id, icons.ellipsis)}
             </text>
-            <text fg={colors.secondary}>{cell("KIND", COLS.kind)}</text>
-            <text fg={colors.secondary}>{cell("MC", COLS.mc)}</text>
-            <text fg={colors.secondary}>{cell("RUNTIME", COLS.runtime)}</text>
+            <text fg={colors.secondary}>
+              {cell("KIND", COLS.kind, icons.ellipsis)}
+            </text>
+            <text fg={colors.secondary}>{cell("MC", COLS.mc, icons.ellipsis)}</text>
+            <text fg={colors.secondary}>
+              {cell("RUNTIME", COLS.runtime, icons.ellipsis)}
+            </text>
             <text fg={colors.secondary}>STATE</text>
           </box>
           {servers.map((server, i) => (

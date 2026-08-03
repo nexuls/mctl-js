@@ -39,7 +39,7 @@ import { Config, Secrets } from "../../types/config.ts";
 const logger = log("config");
 
 /** `MCTL_*` env vars that are settings, not secrets — excluded from overrides. */
-const RESERVED_ENV = new Set(["MCTL_LOG_LEVEL"]);
+const RESERVED_ENV = new Set(["MCTL_LOG_LEVEL", "MCTL_ICONS", "MCTL_NERD_FONT"]);
 
 /** Thrown when a config-dependent action runs before first-run setup exists. */
 export class ConfigNotFoundError extends Error {

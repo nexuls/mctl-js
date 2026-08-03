@@ -9,6 +9,7 @@
  */
 
 import { Button, Hint, type HintItem } from "../../components/index.ts";
+import { useIcons } from "../../hooks/use-icons.tsx";
 
 /** Props for {@link WizardFooter}. */
 export interface WizardFooterProps {
@@ -47,6 +48,7 @@ export function WizardFooter({
   onFocusBack,
   onFocusNext,
 }: WizardFooterProps) {
+  const { icons } = useIcons();
   return (
     <box
       flexDirection="row"
@@ -64,7 +66,8 @@ export function WizardFooter({
             onClick={onBack}
             onFocused={onFocusBack}
           >
-            ← Back
+            {/* One interpolated string: `Button` only inks a plain-string label. */}
+            {`${icons.arrowLeft} Back`}
           </Button>
         ) : null}
         <Button

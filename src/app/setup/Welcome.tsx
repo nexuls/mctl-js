@@ -10,7 +10,9 @@
 import { TextAttributes } from "@opentui/core";
 import { Button, Hint, MinecraftHead } from "../../components/index.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
 import type { ThemeColors } from "../../types/theme.ts";
+import type { IconName } from "../../types/icons.ts";
 import pkg from "../../../package.json" with { type: "json" };
 
 /** Props for {@link Welcome}. */
@@ -26,8 +28,9 @@ export interface WelcomeProps {
  * walks through them.
  */
 interface Feature {
-	/** Leading glyph, tinted with {@link accent}. */
-	icon: string;
+	/** Leading icon, tinted with {@link accent}. A name, not a glyph — the
+	 * character depends on the active icon set. */
+	icon: IconName;
 	/** Semantic colour role for the icon — colour-codes the feature at a glance. */
 	accent: keyof ThemeColors;
 	/** Short feature name; rendered in the fixed-width label column. */
@@ -38,25 +41,25 @@ interface Feature {
 
 const ABOUT: Feature[] = [
 	{
-		icon: "◆",
+		icon: "loader",
 		accent: "primary",
 		name: "Multi-loader",
 		detail: "Vanilla, Paper, Fabric, Forge, NeoForge, Quilt, Purpur",
 	},
 	{
-		icon: "▤",
+		icon: "server",
 		accent: "secondary",
 		name: "Multi-server",
 		detail: "Many servers from one interface, with shared backups and networking",
 	},
 	{
-		icon: "▷",
+		icon: "session",
 		accent: "info",
 		name: "Sessions",
 		detail: "Run in tmux, docker, or foreground mode",
 	},
 	{
-		icon: "◇",
+		icon: "backup",
 		accent: "success",
 		name: "Backups",
 		detail: "Automatic, scheduled, and on-demand, with retention policies",
@@ -69,6 +72,7 @@ const LABEL_WIDTH = Math.max(...ABOUT.map((f) => f.name.length));
 /** The branded welcome hero. */
 export function Welcome({ onBegin }: WelcomeProps) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 
 	return (
 		<box
@@ -99,7 +103,7 @@ export function Welcome({ onBegin }: WelcomeProps) {
 				borderStyle="rounded"
 				borderColor={colors.border}
 				backgroundColor={colors.surface}
-				title=" · WELCOME TO MCTL · "
+				title={` ${icons.separator} WELCOME TO MCTL ${icons.separator} `}
 				titleColor={colors.primary}
 				titleAlignment="center"
 				paddingTop={1}
@@ -124,7 +128,7 @@ export function Welcome({ onBegin }: WelcomeProps) {
 					{ABOUT.map((f) => (
 						<box key={f.name} flexDirection="row" gap={2} flexShrink={0}>
 							<text fg={colors[f.accent]} flexShrink={0}>
-								{f.icon}
+								{icons[f.icon]}
 							</text>
 							<box width={LABEL_WIDTH} flexShrink={0}>
 								<text fg={colors.foreground} attributes={TextAttributes.BOLD}>
@@ -143,7 +147,9 @@ export function Welcome({ onBegin }: WelcomeProps) {
 
 			<box>
 				<Button kind="outline" variant="primary" focused onClick={onBegin}>
-					Get started →
+					{/* One interpolated string, not `text {expr}`: `Button` only inks
+					    its label when `children` is a plain string (see Button.tsx). */}
+					{`Get started ${icons.arrowRight}`}
 				</Button>
 			</box>
 			<Hint

@@ -16,6 +16,7 @@ import {
   type SelectItem,
 } from "../../../components/index.ts";
 import { useFocusRing } from "../../../hooks/use-focus-ring.ts";
+import { useIcons } from "../../../hooks/use-icons.tsx";
 import { StepScaffold } from "../StepScaffold.tsx";
 import { WizardFooter } from "../WizardFooter.tsx";
 import type { StepProps } from "../types.ts";
@@ -46,6 +47,7 @@ const RUNTIMES: RadioItem<RuntimeKind>[] = [
 ];
 
 export function DefaultsStep({ draft, setDraft, onNext, onBack }: StepProps) {
+  const { icons } = useIcons();
   const ring = useFocusRing([
     "mc",
     "kind",
@@ -64,7 +66,7 @@ export function DefaultsStep({ draft, setDraft, onNext, onBack }: StepProps) {
         <WizardFooter
           hints={[
             { keys: "Tab", label: "next field" },
-            { keys: ["↑", "↓"], label: "choose" },
+            { keys: [icons.arrowUp, icons.arrowDown], label: "choose" },
           ]}
           backFocused={ring.isFocused("__back")}
           nextFocused={ring.isFocused("__next")}

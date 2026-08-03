@@ -13,10 +13,11 @@
  * rename over `config.json` is exactly what it watches for), so a save needs no
  * explicit event: `useConfig` re-reads and every instance's UI follows.
  *
- * **Theme is deliberately not part of the draft.** The theme provider owns the
- * active theme id and persists it on change (`App.tsx`), so a theme picked here
- * applies instantly like `t` does, rather than waiting for Save; a settings save
- * carries whatever id is active at that moment.
+ * **Theme and icon set are deliberately not part of the draft.** Their providers
+ * own them and persist on change (`App.tsx`), so a theme or icon set picked here
+ * applies instantly — a theme like `t` does, and the glyphs across the whole UI
+ * at once, which is the only way to judge the choice. A settings save carries
+ * whatever values are active at that moment.
  */
 
 import { isAbsolute } from "node:path";
@@ -27,6 +28,7 @@ import type {
   BackupProvider,
   CompressionKind,
   Config,
+  IconMode,
   NetworkProvider,
   RuntimeKind,
   ServerKind,
@@ -102,22 +104,29 @@ export function configToDraft(config: Config): SettingsDraft {
 
 /**
  * Fold the edit buffer back into a full config object. Pure, and deliberately
- * **merge-not-replace**: `root`, `configVersion`, `theme`, the named network
- * profiles, and the backup schedule/retention are carried over untouched, so
+ * **merge-not-replace**: `root`, `configVersion`, the named network profiles,
+ * and the backup schedule/retention are carried over untouched, so
  * editing a field the form shows never drops one it doesn't. An override toggled
  * off removes the key entirely, restoring the `root/...` default.
  *
  * @param themeId The theme id to persist — the *currently active* one, since the
  *   theme provider (not this draft) owns that choice.
+ * @param iconMode The icon mode to persist, for the same reason: the icon
+ *   provider owns it. Passing the live value (rather than trusting `config`)
+ *   closes the window where a set picked a moment ago has been written to disk
+ *   but the `ConfigChanged` refresh has not landed yet — without it, a Save in
+ *   that window would write the *previous* mode back.
  */
 export function draftToConfig(
   config: Config,
   draft: SettingsDraft,
   themeId: string,
+  iconMode: IconMode,
 ): unknown {
   return {
     ...config,
     theme: themeId,
+    icons: iconMode,
     servers_dir: draft.overrideServers ? draft.serversDir.trim() : undefined,
     backups_dir: draft.overrideBackups ? draft.backupsDir.trim() : undefined,
     defaults: {
@@ -181,7 +190,7 @@ export interface UseSettings {
    * Write the draft. Resolves `null` on success, or the failure message — the
    * caller needs the message itself to report it (a toast), not just a flag.
    */
-  save: (themeId: string) => Promise<string | null>;
+  save: (themeId: string, iconMode: IconMode) => Promise<string | null>;
   /** True while a write is in flight. */
   saving: boolean;
   /** The last save failure message, or `null`. */
@@ -260,12 +269,14 @@ export function useSettings(): UseSettings {
   }, [fromDisk]);
 
   const save = useCallback(
-    async (themeId: string) => {
+    async (themeId: string, iconMode: IconMode) => {
       if (!config || !draft) return "settings are still loading";
       setSaving(true);
       setSaveError(null);
       try {
-        const written = await writeConfig(draftToConfig(config, draft, themeId));
+        const written = await writeConfig(
+          draftToConfig(config, draft, themeId, iconMode),
+        );
         // A relocated servers_dir/backups_dir must exist before anything tries to
         // scan or write into it; ensureDirTree is idempotent for the rest.
         await ensureDirTree(written);

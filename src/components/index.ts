@@ -38,8 +38,7 @@ export {
   type ToastAction,
   type ToastPosition,
   TOAST_POSITIONS,
-  TOAST_ICONS,
-  SPINNER_FRAMES,
+  TOAST_ICON_NAMES,
   DEFAULT_TOAST_WIDTH,
   wrapText,
 } from "./Toast.tsx";

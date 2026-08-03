@@ -6,6 +6,7 @@
  */
 
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { Kbd } from "./Kbd.tsx";
 
 /** One shortcut: the key(s) that trigger it and what it does. */
@@ -34,6 +35,7 @@ export interface HintProps {
  */
 export function Hint({ items, gap = 1 }: HintProps) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 	return (
 		<box flexDirection="row" flexWrap="wrap" columnGap={gap} alignItems="center">
 			{items.map((item, i) => {
@@ -53,7 +55,9 @@ export function Hint({ items, gap = 1 }: HintProps) {
 							))}
 							<text fg={colors.muted}>{item.label}</text>
 						</box>
-						{i === items.length - 1 ? null : <text fg={colors.muted}>·</text>}
+						{i === items.length - 1 ? null : (
+							<text fg={colors.muted}>{icons.separator}</text>
+						)}
 					</>
 				);
 			})}

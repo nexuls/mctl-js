@@ -354,6 +354,54 @@ delete entries that stop being true. Newest-relevant first.
 - **`console.log` is swallowed under OpenTUI** — it is not a debugging channel here (and CLAUDE.md
   bans stdout writes outright). Use `lib/logger.ts` or write a captured frame to a file.
 
+## Icon sets — Nerd / Unicode / ASCII (2026-08-03)
+
+- **Icons are theming's twin, and are built the same way**: pure catalogue in `core/icons/`, React
+  adapter in `hooks/use-icons.tsx`, one persisted key in `config.json` (`icons`). Components ask for
+  a **semantic name** (`icons.success`, `icons.caret`, `icons.ruleLine`) and never a literal glyph —
+  the same rule colour already follows. `core/icons/catalogue.ts` is the single glyph table; adding
+  an icon = one row there.
+- **Three rendering sets, three config modes, and they are NOT the same three.** `IconSet` =
+  `nerd | unicode | ascii`; `config.icons` = `auto | nerd | ascii`. `unicode` is the middle tier
+  `auto` lands on and is deliberately not offered as a mode — "the plain symbols every UTF-8
+  terminal has" is what auto-detection should be trusted to decide. It is still reachable via
+  `MCTL_ICONS=unicode` for debugging.
+  - **Why not fall straight from `nerd` to `ascii`:** that would downgrade the majority of
+    terminals (which draw `●`/`✔` fine without a patched font) and would have visibly regressed
+    the app's existing look for everyone on the default.
+- **There is no way to ask a terminal whether its font has Nerd Font glyphs.** So `auto` requires
+  **positive evidence** — `TERM_PROGRAM`/`TERM` naming ghostty, WezTerm, or kitty (all three ship
+  Nerd Font coverage by default), or an explicit `MCTL_NERD_FONT` — and otherwise picks `unicode`.
+  A missing glyph is tofu or, worse, a two-cell replacement that shifts the layout.
+  - Only an **explicit** non-UTF-8 locale (`C`, `POSIX`, `iso88591`) downgrades to `ascii`. An
+    entirely unset `LANG` is treated as capable — routine in containers whose terminal is fine.
+  - An explicit `nerd` mode is honoured even in a `C` locale: the user asserting "my font has these
+    glyphs" beats any heuristic, and overriding them would make the setting useless to exactly the
+    people who need it.
+- **Every glyph must be one cell wide**, in every set. East-Asian *Wide* characters are barred
+  outright (`☕` U+2615 was the first pick for `java` and is why the rule is tested); *Ambiguous*
+  ones (`●`, `◉`, `—`) are fine — the app already draws them. Two documented ASCII exceptions,
+  `ellipsis` ("...") and `transition` ("->"), because no fixed-width column measures against them.
+  - **Consequence that bit twice:** any truncation helper must subtract `ellipsis.length`, not a
+    literal `1`. `Toast.wrapText` and `Servers.cell` both take the marker as a parameter now.
+- **`useIcons()` deliberately does NOT throw outside a provider** — it returns the auto-detected
+  set. This is the one place the icon system diverges from theming: a component with no colours is
+  unrenderable so `useTheme()` failing loudly is right, but every icon has a working default, and
+  kit components must stay mountable in a bare test renderer.
+- **`Button` only inks its label when `children` is a plain string** (`Button.tsx:212`). So
+  `Get started {icons.arrowRight}` silently loses the label colour — children become an array.
+  Interpolate into one string instead: `` {`Get started ${icons.arrowRight}`} ``.
+- **Theme and icon writes share ONE queue** (`persistAppearance` in `App.tsx`, replacing
+  `persistThemeId`). Each is a read-modify-write of the whole config, so separate queues would
+  clobber each other. `configSubscriber(bus, select)` generalises the old `themeIdSubscriber` and
+  feeds both providers.
+  - `Settings.save` now takes `(themeId, iconMode)` for the same reason the theme id was already
+    passed: `config` in hand can lag one write behind what the user is looking at.
+- **ASCII mode cannot be complete:** `borderStyle` is OpenTUI's and 0.4.5 offers only
+  `single | double | rounded | heavy`. Panel borders stay box-drawing; the Settings picker says so
+  when `ascii` resolves rather than letting the user discover it. Prose ellipses/em-dashes in
+  sentences are likewise untouched — they are typography, not icons.
+
 ## Scroll acceleration (2026-08-01)
 
 - **A `<scrollbox>` defaults to `LinearScrollAccel` — one line per wheel notch, forever.** On a tall

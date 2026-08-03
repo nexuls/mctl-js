@@ -50,7 +50,7 @@ describe("draftToConfig", () => {
   test("round-trips an untouched draft to an equivalent config", () => {
     const config = baseConfig({ servers_dir: "/mnt/big/mc" });
     const written = Config.parse(
-      draftToConfig(config, configToDraft(config), config.theme),
+      draftToConfig(config, configToDraft(config), config.theme, config.icons),
     );
     expect(written).toEqual(config);
   });
@@ -68,7 +68,7 @@ describe("draftToConfig", () => {
     });
     const draft = configToDraft(config);
     const written = Config.parse(
-      draftToConfig(config, { ...draft, memory: "8G" }, config.theme),
+      draftToConfig(config, { ...draft, memory: "8G" }, config.theme, config.icons),
     );
     expect(written.defaults.memory).toBe("8G");
     expect(written.backup.schedule).toBe("0 4 * * *");
@@ -79,14 +79,14 @@ describe("draftToConfig", () => {
   test("turning an override off removes the key, restoring the default", () => {
     const config = baseConfig({ servers_dir: "/mnt/big/mc" });
     const draft = { ...configToDraft(config), overrideServers: false };
-    const written = Config.parse(draftToConfig(config, draft, config.theme));
+    const written = Config.parse(draftToConfig(config, draft, config.theme, config.icons));
     expect(written.servers_dir).toBeUndefined();
   });
 
   test("takes the theme id from the argument, not the stale config", () => {
     const config = baseConfig({ theme: "terminal" });
     const written = Config.parse(
-      draftToConfig(config, configToDraft(config), "nord"),
+      draftToConfig(config, configToDraft(config), "nord", config.icons),
     );
     expect(written.theme).toBe("nord");
   });
@@ -94,7 +94,7 @@ describe("draftToConfig", () => {
   test("blanking the Minecraft version drops the key rather than writing ''", () => {
     const config = baseConfig({ defaults: { minecraftVersion: "1.21.4" } });
     const draft = { ...configToDraft(config), minecraftVersion: "  " };
-    const written = Config.parse(draftToConfig(config, draft, config.theme));
+    const written = Config.parse(draftToConfig(config, draft, config.theme, config.icons));
     expect(written.defaults.minecraftVersion).toBeUndefined();
   });
 });
@@ -122,5 +122,17 @@ describe("validateDraft", () => {
 
   test("memory may not be blank", () => {
     expect(validateDraft(draft({ memory: "   " })).memory).toBeDefined();
+  });
+});
+
+describe("draftToConfig — icon mode", () => {
+  test("takes the icon mode from the argument, not the stale config", () => {
+    // The icon provider persists on change, so `config` in hand can lag one
+    // write behind the set the user is actually looking at.
+    const config = baseConfig({ icons: "auto" });
+    const written = Config.parse(
+      draftToConfig(config, configToDraft(config), config.theme, "ascii"),
+    );
+    expect(written.icons).toBe("ascii");
   });
 });

@@ -220,6 +220,40 @@ and validated in `types/theme.ts` (`ThemeColors`, hex-only for user files).
   React tree never touches disk. Active id is persisted in **`config.theme`** (default `"terminal"`),
   read at startup — an id naming a deleted theme degrades to the terminal/fallback theme.
 
+## Icons — `core/icons/` + `hooks/use-icons`
+
+The other half of "appearance", built on the same split as theming: **pure data and
+resolution in core, a React adapter in `hooks/`, one persisted id in `config.json`.**
+Components never hardcode a glyph, exactly as they never hardcode a colour — they ask for a
+semantic name (`icons.success`, `icons.caret`, `icons.ruleLine`).
+
+- **`types/icons.ts`** — `IconSet` (`nerd | unicode | ascii`), the `IconName` union, `IconMap`.
+- **`core/icons/catalogue.ts`** — `ICONS`, the exhaustive `IconName × IconSet` glyph table, plus
+  `SPINNERS` and the memoized `iconsFor(set)` / `spinnerFor(set)`. Nerd glyphs are written as
+  `\u{…}` escapes with their upstream names so the file is readable without a patched font.
+  **Invariant: one cell per glyph** (bar `ellipsis`/`transition` in ASCII), enforced by a test —
+  a wider glyph in one set would shift every column beside it on a switch.
+- **`core/icons/detect.ts`** — `resolveIconSet(mode, env)`, pure over an env record. Precedence:
+  `MCTL_ICONS` env → explicit `config.icons` → `auto`. `auto` picks `nerd` only on **positive**
+  evidence (ghostty / WezTerm / kitty, or `MCTL_NERD_FONT`), `ascii` on an explicitly non-UTF-8
+  locale, and `unicode` otherwise — a terminal cannot be asked whether its font has Nerd glyphs,
+  and a wrong guess is tofu.
+- **`config.icons`** is `auto | nerd | ascii` (an enum — unlike themes, icon sets are not
+  user-extensible). The rendering sets are a *superset*: `unicode` is what `auto` lands on and is
+  reachable only through `MCTL_ICONS`.
+- **`hooks/use-icons.tsx`** — `IconProvider` (mounted in `renderApp()` beside `ThemeProvider`,
+  above the component kit) + `useIcons()`. Same `onModeChange` / `subscribeMode` prop pair the
+  theme provider uses, for the same reasons. **One deliberate difference: `useIcons()` does not
+  throw outside a provider** — it returns the auto-detected set, so a kit component stays
+  mountable in a test. `useTheme()` still throws, because a component with no colours is
+  unrenderable while every icon has a working default.
+- **`App.tsx` persists both through one queue** (`persistAppearance`). Each write is a
+  read-modify-write of the whole config, so separate queues for theme and icons would clobber
+  one another; `configSubscriber(bus, select)` is the shared `ConfigChanged` bridge back.
+- **Known limit:** `borderStyle` is OpenTUI's, and 0.4.5 offers only `single | double | rounded |
+  heavy` — no ASCII variant. Panel borders therefore stay box-drawing even in `ascii` mode, and
+  the Settings picker says so rather than letting the user discover it.
+
 ## Dual interface — `cli/` and `app/`
 
 `src/index.tsx` dispatches on argv: no args → mount the OpenTUI app; `mctl <cmd>` → run one command and
@@ -289,8 +323,11 @@ the validated config to a flat `SettingsDraft` (everything but `root`, which is 
 it, and commits with `writeConfig` → `ensureDirTree`. `draftToConfig` **merges over the loaded
 config**, so keys the form does not render (backup schedule/retention, named network profiles, keys
 written by a newer MCTL) survive an edit. Edits are buffered and written on Save / Ctrl+S; the
-config-dir watcher's `ConfigChanged` refreshes this and every other instance. The theme picker is the
-one exception — the theme provider owns and persists that id, so it applies immediately.
+config-dir watcher's `ConfigChanged` refreshes this and every other instance. The **Appearance group
+is the exception**: its theme and icon pickers are owned by their providers, which persist on change,
+so both apply immediately rather than on Save. `save(themeId, iconMode)` takes both live values as
+arguments, so a Save fired in the window between a pick and its `ConfigChanged` refresh cannot write
+the previous value back.
 
 ---
 

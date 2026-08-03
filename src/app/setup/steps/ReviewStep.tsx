@@ -10,6 +10,7 @@
 
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../../../hooks/use-theme.tsx";
+import { useIcons } from "../../../hooks/use-icons.tsx";
 import { useFocusRing } from "../../../hooks/use-focus-ring.ts";
 import { rootPaths } from "../../../lib/paths.ts";
 import { StepScaffold } from "../StepScaffold.tsx";
@@ -51,6 +52,7 @@ export function ReviewStep({
   error,
 }: ReviewStepProps) {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   const ring = useFocusRing(["__back", "__next"]);
   const paths = rootPaths(
     draft.root,
@@ -72,7 +74,7 @@ export function ReviewStep({
             { keys: "Tab", label: "back / create" },
             { keys: "Enter", label: "create" },
           ]}
-          nextLabel={committing ? "Creating…" : "Create ✓"}
+          nextLabel={committing ? "Creating…" : `Create ${icons.success}`}
           nextDisabled={committing}
           backFocused={ring.isFocused("__back")}
           nextFocused={ring.isFocused("__next")}

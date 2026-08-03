@@ -18,6 +18,7 @@ import { useCallback, useState } from "react";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useTheme } from "../../hooks/use-theme.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
 import { ScrollBox } from "../../components/index.ts";
 import { Stepper } from "./Stepper.tsx";
 import { Welcome } from "./Welcome.tsx";
@@ -41,6 +42,7 @@ export interface SetupWizardProps {
 /** The complete first-run wizard. */
 export function SetupWizard({ onComplete }: SetupWizardProps) {
 	const { colors, theme, themeId } = useTheme();
+	const { icons } = useIcons();
 	const quit = useQuit();
 
 	const [stage, setStage] = useState<"welcome" | "wizard">("welcome");
@@ -149,7 +151,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 						mctl
 					</text>
 					<text fg={colors.muted}>
-						· first-run setup · step {step + 1} of {STEP_TITLES.length}
+						{icons.separator} first-run setup {icons.separator} step {step + 1} of{" "}
+						{STEP_TITLES.length}
 					</text>
 				</box>
 

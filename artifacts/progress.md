@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-01 (shell scroll acceleration)_
+_Last updated: 2026-08-03 (icon sets: Nerd / Unicode / ASCII)_
 
 ---
 
@@ -328,6 +328,50 @@ _Last updated: 2026-08-01 (shell scroll acceleration)_
   - Verified: `bunx tsc --noEmit` clean; `bun test` 50/50; driven under a pty at 100×30 in two sandbox
     HOMEs — the first-run wizard's welcome renders, and with a config the NavRail bar, Servers, and
     Settings (its `Tabs` strip + scrolling panel) all draw with no errors.
+
+- **Icon sets — Nerd / Unicode / ASCII (this session):**
+  - `src/types/icons.ts` — `IconSet` (`nerd | unicode | ascii`), `ICON_SETS`, the `IconName` union
+    (~40 semantic names: status, server state, selection controls, stepper, chrome, arrows, rules,
+    domain), `IconMap`.
+  - `src/core/icons/` — `catalogue.ts` (`ICONS`, the exhaustive `IconName × IconSet` glyph table;
+    `SPINNERS`; memoized `iconsFor` / `spinnerFor`), `detect.ts` (`resolveIconSet(mode, env)` —
+    pure over an env record; `detectIconSet`, `hasNerdFont`, `hasUtf8Locale`, `parseIconSet`;
+    `MCTL_ICONS` override), `index.ts` barrel. Nerd glyphs are `\u{…}` escapes with their upstream
+    Font Awesome names in comments, so the table is readable without a patched font.
+  - `src/types/config.ts` — `IconMode` (`auto | nerd | ascii`) + `config.icons` (default `"auto"`),
+    sitting beside `theme`. `core/config/index.ts` — `MCTL_ICONS`/`MCTL_NERD_FONT` added to
+    `RESERVED_ENV` so they are settings, not secrets.
+  - `src/hooks/use-icons.tsx` — `IconProvider` + `useIcons()`, mirroring `use-theme`'s
+    `onModeChange` / `subscribeMode` prop pair. `useIcons()` returns the auto-detected set instead
+    of throwing when no provider is mounted (see `memory.md` for why it diverges from `useTheme`).
+  - `src/app/App.tsx` — `IconProvider` mounted beside `ThemeProvider`; `loadThemeId` →
+    `loadAppearance()`, `themeIdSubscriber` → generic `configSubscriber(bus, select)`, and
+    `persistThemeId` → **`persistAppearance(patch)`: one shared write queue for theme + icons**
+    (each is a read-modify-write of the whole config, so separate queues would clobber).
+  - `src/app/Settings/` — Appearance group gains an Icons `RadioGroup` (auto/nerd/ascii), a hint
+    naming the *resolved* set, a live glyph preview row, and an honest note about panel borders in
+    ascii mode. `save(themeId, iconMode)` now carries both live provider-owned values.
+  - Call sites converted off hardcoded glyphs: `Toast` (variant icons → `TOAST_ICON_NAMES`, close,
+    spinner, `wrapText` ellipsis param), `use-toast` (spinner frames from the set), `Form`
+    (Checkbox/RadioGroup/Radio markers, option-description separator), `Hint`, `Tabs` + `NavRail`
+    (the rule/cap glyphs — `BORDER_CHARS` deleted from both), `Stepper`, `Welcome` (feature icons
+    are `IconName`s now), `WizardFooter`, `DefaultsStep`, `ReviewStep`, `SetupWizard`, `Router`,
+    `Dashboard`, `Servers` (+ `cell()` takes the ellipsis), `Server`, and `shared.tsx`
+    (new `serverStateIcon(state)` beside `serverStateColor`).
+  - Tests (76 total, 9 files): `core/icons/detect.test.ts` — 26 tests over locale/font heuristics,
+    override precedence, and catalogue invariants (every set defines every name; ASCII is 7-bit;
+    every glyph is single-cell bar the two documented exceptions; nothing is East-Asian Wide;
+    `iconsFor` is memoized). `Settings/use-settings.test.ts` updated for the new `save` arity plus
+    a case proving the icon mode comes from the argument, not a stale config.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 76/76; the real app driven under a pty at
+    110×30 in a sandbox HOME at all three sets — `unicode` draws `━╸╺` rules / `▸ survival` /
+    `○ stopped` / `1 … 6 · Enter`, `ascii` draws `==-==` rules / `> survival` / `. stopped` /
+    `1 ... 6 | Enter` / `^/v move`, and `nerd` emits the PUA codepoints. `mctl init` writes
+    `"icons": "auto"`.
+  - **Not verified:** the Settings Appearance picker itself was never driven to completion under a
+    pty — the scripted run hung and was killed, so `config.icons` was still `"auto"` afterwards.
+    The wiring type-checks and the persist path is shared with the theme picker, but *picking a
+    mode in the UI and seeing it written* is unconfirmed. Do this first next session.
 
 ## In progress
 

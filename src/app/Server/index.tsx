@@ -11,7 +11,8 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { useServer } from "../../hooks/use-servers.ts";
 import { useRouter } from "../../hooks/use-router.tsx";
 import type { Server } from "../../types/server.ts";
-import { PageHeader, serverStateColor } from "../shared.tsx";
+import { useIcons } from "../../hooks/use-icons.tsx";
+import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
 
 /** A `label: value` detail row. */
 function Detail({ label, value }: { label: string; value: string }) {
@@ -24,9 +25,14 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Human-readable Java field. */
-function javaLabel(server: Server): string {
-  if (server.java === undefined) return "—";
+/**
+ * Human-readable Java field.
+ *
+ * @param empty The active icon set's placeholder for an absent value — passed
+ *   in rather than hardcoded, since this is a module function with no hooks.
+ */
+function javaLabel(server: Server, empty: string): string {
+  if (server.java === undefined) return empty;
   return typeof server.java === "number"
     ? String(server.java)
     : `${server.java.pinned} (pinned)`;
@@ -34,6 +40,7 @@ function javaLabel(server: Server): string {
 
 export function ServerDetail() {
   const { colors } = useTheme();
+  const { icons } = useIcons();
   const { params } = useRouter();
   const id = params.serverId ?? "";
   const { data: server, loading } = useServer(id);
@@ -64,7 +71,9 @@ export function ServerDetail() {
         <text fg={colors.foreground} attributes={TextAttributes.BOLD}>
           {server.name}
         </text>
-        <text fg={serverStateColor(colors, server.state)}>● {server.state}</text>
+        <text fg={serverStateColor(colors, server.state)}>
+          {icons[serverStateIcon(server.state)]} {server.state}
+        </text>
       </box>
 
       <box
@@ -79,8 +88,11 @@ export function ServerDetail() {
         <Detail label="id" value={server.id} />
         <Detail label="kind" value={server.kind} />
         <Detail label="minecraft" value={server.minecraftVersion} />
-        <Detail label="loader" value={server.loaderVersion ?? "—"} />
-        <Detail label="java" value={javaLabel(server)} />
+        <Detail
+          label="loader"
+          value={server.loaderVersion ?? icons.emptyValue}
+        />
+        <Detail label="java" value={javaLabel(server, icons.emptyValue)} />
         <Detail label="memory" value={server.memory} />
         <Detail label="runtime" value={server.runtime} />
         <Detail label="network" value={server.network} />

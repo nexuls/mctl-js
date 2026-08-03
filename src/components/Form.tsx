@@ -31,6 +31,7 @@ import type {
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
+import { useIcons } from "../hooks/use-icons.tsx";
 import { onAccent, optionsFitAsTabs, variantColor } from "./support.ts";
 
 export { Label } from "./Label.tsx";
@@ -645,6 +646,7 @@ export function Checkbox({
 	onFocused,
 }: CheckboxProps) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 
 	useKeyboard((key) => {
 		if (!focused) return;
@@ -666,7 +668,7 @@ export function Checkbox({
 				onMouseDown={() => onChange?.(!checked)}
 			>
 				<text fg={checked ? colors.success : colors.muted} flexShrink={0}>
-					{checked ? "[◉]" : "[○]"}
+					{`${checked ? icons.checkOn : icons.checkOff} `}
 				</text>
 				<text fg={colors.foreground} truncate wrapMode="none">
 					{caption}
@@ -731,6 +733,7 @@ export function RadioGroup<T = string>({
 	required = false,
 }: RadioGroupProps<T>) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 	const selectedIndex = Math.max(
 		0,
 		options.findIndex((o) => o.value === value),
@@ -774,7 +777,7 @@ export function RadioGroup<T = string>({
 								fg={selected ? colors.primary : colors.muted}
 								flexShrink={0}
 							>
-								{selected ? "◉" : "○"}
+								{`${selected ? icons.radioOn : icons.radioOff} `}
 							</text>
 							<text
 								fg={selected ? colors.foreground : colors.muted}
@@ -785,7 +788,7 @@ export function RadioGroup<T = string>({
 							{opt.description ? (
 								<text fg={colors.muted} truncate wrapMode="none">
 									{" "}
-									— {opt.description}
+									{icons.separator} {opt.description}
 								</text>
 							) : null}
 						</box>
@@ -813,6 +816,7 @@ export function Radio({
 	onSelect?: () => void;
 }) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 	return (
 		<box
 			flexDirection="row"
@@ -822,7 +826,7 @@ export function Radio({
 			onMouseDown={onSelect}
 		>
 			<text fg={selected ? colors.primary : colors.muted}>
-				{selected ? "◉" : "◯"}
+				{selected ? icons.radioOn : icons.radioOff}
 			</text>
 			<text fg={selected ? colors.foreground : colors.muted}>{label}</text>
 		</box>

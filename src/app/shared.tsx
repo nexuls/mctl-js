@@ -8,6 +8,7 @@ import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../hooks/use-theme.tsx";
 import type { ThemeColors } from "../types/theme.ts";
 import type { ServerState } from "../types/server.ts";
+import type { IconName } from "../types/icons.ts";
 
 /** The accent colour a server's run state should read in (badge, dot, label). */
 export function serverStateColor(
@@ -23,6 +24,27 @@ export function serverStateColor(
       return colors.error;
     default:
       return colors.warning;
+  }
+}
+
+/**
+ * The semantic icon a server's run state reads as. Names, not glyphs — the
+ * caller resolves them through `useIcons()`.
+ *
+ * State is deliberately carried by *both* colour and shape: colour alone fails
+ * for colour-blind users and on the handful of themes whose `muted` and
+ * `warning` sit close together.
+ */
+export function serverStateIcon(state: ServerState): IconName {
+  switch (state) {
+    case "running":
+      return "running";
+    case "stopped":
+      return "stopped";
+    case "unavailable":
+      return "unavailable";
+    default:
+      return "unknownState";
   }
 }
 
