@@ -29,6 +29,7 @@ import type {
 	TextareaRenderable,
 } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
+import type { BoxProps, InputProps as OpenTuiInputProps } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { useIcons } from "../hooks/use-icons.tsx";
@@ -77,7 +78,7 @@ export function FormGroup({
 // ---------------------------------------------------------------------------
 
 /** Props for {@link FormField}. */
-export interface FormFieldProps {
+export type FormFieldProps = BoxProps & {
 	/** Label drawn on the top border. */
 	label?: string;
 	/** Hint/help drawn on the bottom border (keep it short — it shares the border line). */
@@ -97,6 +98,8 @@ export interface FormFieldProps {
 	width?: number | `${number}%` | "auto";
 	/** Maximum width in cells. Omit to size to the parent (flex). */
 	maxWidth?: number | `${number}%`;
+	/** Hide the border and titles, leaving only the inner control. */
+	noBorder?: boolean;
 	/**
 	 * Signals a validation problem: the border turns the error colour and the hint
 	 * (if any) is shown in error colour context by the caller. Overrides `focused`
@@ -104,8 +107,13 @@ export interface FormFieldProps {
 	 */
 	invalid?: boolean;
 	children: React.ReactNode;
+	/** Element to render on the left side of the input, inside the border. */
+	prefix?: React.ReactNode;
+	/** Element to render on the right side of the input, inside the border. */
+	suffix?: React.ReactNode;
+	/** Ref to the box renderable, so the page can measure its width. */
 	ref?: React.Ref<BoxRenderable>;
-}
+};
 
 /**
  * The frame that gives every control its label, hint, and focus affordance. Uses
@@ -121,9 +129,13 @@ export function FormField({
 	onFocused,
 	width,
 	maxWidth,
+	noBorder = false,
 	invalid = false,
 	children,
+	prefix,
+	suffix,
 	ref,
+	...rest
 }: FormFieldProps) {
 	const { colors } = useTheme();
 	const borderColor = invalid
@@ -140,9 +152,9 @@ export function FormField({
 	return (
 		<box
 			ref={ref}
-			border
-			borderStyle="rounded"
-			borderColor={borderColor}
+			border={noBorder ? undefined : true}
+			borderStyle={noBorder ? undefined : "rounded"}
+			borderColor={noBorder ? undefined : borderColor}
 			title={label ? (required ? ` ${label} * ` : ` ${label} `) : undefined}
 			titleColor={titleColor}
 			titleAlignment="left"
@@ -154,10 +166,14 @@ export function FormField({
 			paddingRight={1}
 			width={width}
 			maxWidth={maxWidth}
+			flexDirection="row"
 			flexShrink={0}
 			onMouseDown={onFocused ? () => onFocused() : undefined}
+			{...rest}
 		>
-			{children}
+			{prefix && <box paddingRight={1}>{prefix}</box>}
+			<box flexGrow={1}>{children}</box>
+			{suffix && <box paddingLeft={1}>{suffix}</box>}
 		</box>
 	);
 }
@@ -205,7 +221,7 @@ function useBoxWidth(ref: React.RefObject<BoxRenderable | null>): number {
 // ---------------------------------------------------------------------------
 
 /** Props for {@link Input}. */
-export interface InputProps {
+export type InputProps = OpenTuiInputProps & {
 	/** Field label (top border). */
 	label?: string;
 	/** Field hint (bottom border). */
@@ -230,7 +246,11 @@ export interface InputProps {
 	width?: number | `${number}%` | "auto";
 	/** Maximum width in cells. */
 	maxWidth?: number | `${number}%`;
-}
+	/** Hide the border and titles, leaving only the inner control. */
+	noBorder?: boolean;
+	/** FormField props */
+	formFieldProps?: Omit<FormFieldProps, "children">;
+};
 
 /**
  * A single-line text input inside a {@link FormField}. The cursor uses the accent
@@ -250,6 +270,7 @@ export function Input({
 	invalid = false,
 	width,
 	maxWidth,
+	formFieldProps,
 }: InputProps) {
 	const { colors } = useTheme();
 	const ref = useRef<InputRenderable | null>(null);
@@ -263,6 +284,7 @@ export function Input({
 			invalid={invalid}
 			width={width}
 			maxWidth={maxWidth}
+			{...formFieldProps}
 		>
 			<input
 				ref={ref}
