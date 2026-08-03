@@ -124,7 +124,7 @@ export function ServerCreate() {
   });
 
   return (
-    <box flexDirection="column" flexGrow={1}>
+    <box flexDirection="column" flexGrow={1} paddingX={1}>
       <PageHeader
         title="New server"
         subtitle={

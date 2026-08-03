@@ -139,7 +139,7 @@ export function ServerDetail() {
   }
 
   return (
-    <box flexDirection="column" flexGrow={1}>
+    <box flexDirection="column" flexGrow={1} paddingX={1}>
       <box flexDirection="row" gap={2} alignItems="center" marginBottom={1}>
         <text fg={colors.foreground} attributes={TextAttributes.BOLD}>
           {server.name}

@@ -103,7 +103,7 @@ export function Jobs() {
   ).length;
 
   return (
-    <box flexDirection="column" flexGrow={1}>
+    <box flexDirection="column" flexGrow={1} paddingX={1}>
       <PageHeader
         title="Jobs"
         subtitle={
