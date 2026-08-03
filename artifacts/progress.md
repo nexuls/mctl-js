@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, install, foreground runtime)_
+_Last updated: 2026-08-03 (Dashboard/Servers merge; Phase 2: server lifecycle)_
 
 ---
 
@@ -145,7 +145,7 @@ _Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, instal
     `useRouter`, back-stack), `app/Router.tsx` (shell: top bar + `NavRail` + page host + `Hint`;
     owns global keyboard), `app/NavRail.tsx`, and pages `Dashboard`/`Servers`/`Server`/`Settings` (real)
     + `Jobs`/`Backups`/`Network` (`Placeholder`). Data hooks `use-servers`/`use-config`/
-    `use-recent-events`/`use-event-bus`. `App.tsx` now: `renderApp` reaps stale locks + starts the event
+    `use-event-bus`. `App.tsx` now: `renderApp` reaps stale locks + starts the event
     system + injects the bus (`EventBusProvider`), and routes to `<AppRouter/>` post-setup.
   - Verified: `tsc --noEmit` clean; CLI e2e in a sandbox HOME (first-run steer→init, empty list,
     drop-in auto-discovery folded into `servers.json`, `list`/`status`/`--json`); headless smoke (8/8:
@@ -413,8 +413,9 @@ _Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, instal
     `hooks/use-jobs.ts`, `hooks/use-console.ts`; pages `app/ServerCreate/` (form + live job progress)
     and `app/Console/` (auto-scrolling output + command input); `app/Server/` gained a
     focus-ringed action bar (Start/Stop/Restart/Console/Remove) and a delete confirmation `Dialog`;
-    `app/Jobs/` is now real; Servers gained `n` (new) and `c` (console). Routes `create`/`console`
-    added (not in `NAV`); `console` joined `OWN_SCROLL`.
+    `app/Jobs/` is now real; the server list gained `n` (new) and `c` (console) — that list now lives
+    on the Dashboard, see the entry above. Routes `create`/`console` added (not in `NAV`); `console`
+    joined `OWN_SCROLL`.
   - Tests (**127 total, 13 files**, +51): `core/java/java-manager.test.ts` (selection policy incl.
     the LTS ceiling), `cli/args.test.ts` (incl. the `--java 21` / `--no-java` regression),
     `core/session/lock.test.ts` (exclusion, stale reclaim, release-on-throw),
@@ -438,6 +439,21 @@ _Last updated: 2026-08-03 (Phase 2: server lifecycle — providers, Java, instal
   where it was wanted. Now `<text selectable>` (the console log lines) selects and everything else
   ignores drag. Verified at runtime against the real catalogue: `text` → `false` by default, `true`
   with the prop, `false` with `selectable={false}`; `box`/`input` unaffected. `bunx tsc --noEmit` clean.
+
+- **Dashboard absorbed the Servers screen (this session, user request).**
+  - `src/app/Dashboard/index.tsx` rewritten: summary tiles → column header → server rows, with the
+    **selected row expanding in place** (name/loader/java/memory/network/path + pid/port/startedAt when
+    running, and an `Enter/c/n` hint). Keeps the old list's keyboard (↑/↓ or j/k, Enter open, `c`
+    console, `n` new). The Recent Activity feed is gone.
+  - **Deleted:** `src/app/Servers/` and `src/hooks/use-recent-events.ts` (its only consumer).
+  - `app/routes.ts` — `servers` removed from `RouteId` and `NAV`; digits renumbered **1–5**.
+    `app/Router.tsx` — page switch + import dropped, hint strip now `1 … 5`. `app/NavRail.tsx` —
+    `server`/`console`/`create` all light the **Dashboard** tab. `navigate("servers")` →
+    `navigate("dashboard")` in `app/Server/` and `app/ServerCreate/`.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 127/127 (no test referenced the Servers page);
+    driven under a pty at 110×40 in a sandbox `$HOME` with two discovered servers — the rail shows the
+    five renumbered tabs, the table renders, `j` moves the caret and the expansion follows it, `2`
+    reaches Jobs and `1` returns to the Dashboard.
 
 ## In progress
 

@@ -5,7 +5,7 @@
  * pages read the active route and call `navigate` / `back` via {@link useRouter}.
  * This is the one place that decides "which screen is showing"; the `Router`
  * shell renders it, and pages navigate between each other through it (e.g. the
- * Servers list opens a server's detail page with a `serverId` param).
+ * Dashboard's server table opens a detail page with a `serverId` param).
  *
  * UI-layer hook — React state only, no I/O, no domain knowledge beyond a
  * {@link RouteId}.
@@ -54,7 +54,7 @@ interface RouterProviderProps {
 /**
  * Provide router state to the tree. Keeps a simple back-stack so `Esc` /
  * back-navigation returns to the previous screen (e.g. from a server's detail
- * page back to the Servers list) rather than always quitting.
+ * page back to the Dashboard) rather than always quitting.
  */
 export function RouterProvider({
   initialRoute = "dashboard",

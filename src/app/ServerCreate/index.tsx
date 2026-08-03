@@ -64,7 +64,7 @@ export function ServerCreate() {
 
   const ring = useFocusRing(FIELDS);
   // While a text field owns the ring, the shell's digit/q/t shortcuts stand down
-  // so typing "2" edits the field instead of navigating to Servers.
+  // so typing "2" edits the field instead of navigating to Jobs.
   useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
 
   const id = idFromName(name);
@@ -222,7 +222,7 @@ export function ServerCreate() {
             kind="ghost"
             variant="neutral"
             size="small"
-            onClick={() => navigate("servers")}
+            onClick={() => navigate("dashboard")}
           >
             Cancel
           </Button>

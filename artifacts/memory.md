@@ -5,6 +5,28 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Dashboard absorbed the Servers screen (2026-08-03, user request)
+
+- **There is no Servers page any more.** `src/app/Servers/` is deleted and the `servers` route is gone
+  from `RouteId`/`NAV`; the Dashboard is the summary **and** the server table. Rail digits renumbered
+  to **1–5** (Dashboard/Jobs/Backups/Network/Settings) — the shell's hint strip (`1 … 5`) and every
+  `navigate("servers")` call site (`Server`, `ServerCreate`) moved with it.
+  - **How to apply:** nothing may navigate to `"servers"`; go to `"dashboard"`. `NavRail` lights the
+    Dashboard tab for the three rail-less routes (`server`/`console`/`create`), not just `server`.
+- **Selection *is* the expansion** — the selected row renders a detail panel directly beneath itself
+  (left-border accent, two columns + path + a key hint). No separate expand/collapse key: one panel is
+  open at all times, so the page cannot grow into a wall of detail and there is no second piece of
+  state to keep in sync with the selection.
+- **A mouse click on an unselected row selects it; a click on the selected row opens it.** That makes
+  the pointer agree with the keyboard (Enter opens the row the caret is on) instead of the old
+  list's click-always-navigates, which would have made the expansion unreachable by mouse.
+- **Recent activity was dropped** (user: "I don't think we need any section for Recent Activity").
+  `hooks/use-recent-events.ts` had no other consumer and was deleted with it — `events.jsonl` is the
+  cross-instance sync mechanism, not a user-facing log.
+- The full `server` detail page **stays** (Enter): it owns the lifecycle action bar and the delete
+  confirmation. The inline panel is read-only by design — duplicating the action bar into a list row
+  would mean a second focus ring competing with the row selection.
+
 ## Stack & direction
 
 - **Stack is TypeScript + OpenTUI on Bun**, not Rust/Ratatui. The Rust plan's *architecture* (provider
@@ -125,9 +147,10 @@ delete entries that stop being true. Newest-relevant first.
   quit, `q`=quit, `t`=cycle theme. `App.tsx` renders `<AppRouter/>` post-setup.
   - **Digit-nav (plus `q`/`t`) is gated by the input capture** — see the 2026-07-27 entry above. The
     `TODO(phase-1)` in `Router.tsx` is resolved and gone.
-  - Real pages: `Dashboard` (server-count tiles + recent-activity feed from `useRecentEvents`),
-    `Servers` (live list, ↑/↓/j/k + Enter/click → detail), `Server` (read-only detail via `useServer`),
-    `Settings` (**editable config form**). `Jobs`/`Backups`/`Network` = honest `Placeholder`.
+  - Real pages: `Dashboard` (summary tiles + the server table with an expanding selected row —
+    see the Dashboard entry at the top of this file), `Server` (detail + lifecycle actions via
+    `useServer`), `Settings` (**editable config form**). `Jobs`/`Backups`/`Network` = honest
+    `Placeholder`.
   - **NavRail is a horizontal tab bar, not a left rail** (redesigned 2026-07-26 to a user-supplied
     reference): a 2-row scrollbox — tabs on row 1, the rule on row 2 — whose active tab is a **solid
     pill** (`backgroundColor: colors.primary`, ink `onAccent(colors)`, BOLD) and whose inactive tabs
@@ -149,7 +172,7 @@ delete entries that stop being true. Newest-relevant first.
     - The **screen name rides the shell's top border** (`title` + `titleAlignment="right"`, the
       reference's "Request" placement) and the brand rides `bottomTitle` — neither costs a row. The
       old commented-out top-bar block in `Router.tsx` is gone; `titleFor(route)` now feeds the title.
-  - Data hooks (`hooks/`): `use-servers` (`useServers`/`useServer`), `use-config`, `use-recent-events`,
+  - Data hooks (`hooks/`): `use-servers` (`useServers`/`useServer`), `use-config`,
     `use-event-bus` — all re-run the core read path on invalidating bus events, holding no authoritative
     state. `use-event-bus`/`use-router` are `.tsx` (they hold JSX providers).
 - **`lib/http.ts` — ETag cache** (Phase-1 tail; first real use is Phase-2 downloads). One JSON file per

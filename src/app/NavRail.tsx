@@ -130,10 +130,13 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 	// The rule glyphs come from the active icon set: they are box-drawing, which a
 	// non-UTF-8 terminal cannot draw, so ASCII substitutes `=`/`-` runs.
 	const { icons } = useIcons();
-	// The detail route has no tab of its own, so it lights up the Servers tab it
-	// was opened from. Resolved once and shared by both rows.
+	// The server-scoped routes have no tab of their own, so they light up the
+	// Dashboard tab that owns the server table they were opened from. Resolved
+	// once and shared by both rows.
 	const isActive = (item: NavItem) =>
-		item.id === active || (active === "server" && item.id === "servers");
+		item.id === active ||
+		(item.id === "dashboard" &&
+			(active === "server" || active === "console" || active === "create"));
 
 	const rule = alpha(colors.border, 0.6);
 

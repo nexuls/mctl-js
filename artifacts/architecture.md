@@ -54,7 +54,7 @@ src/
   index.tsx            entry: parse argv → TUI (no args) | one-shot CLI
   cli/                 router.ts, commands/ (list, create, start, …), format.ts (--json vs table)
   app/                 the TUI — App.tsx, Router.tsx, setup/ (wizard), and PAGES live here now
-                         Dashboard/ Servers/ Server/ ServerCreate/ Console/ Jobs/
+                         Dashboard/ Server/ ServerCreate/ Console/ Jobs/
                          Backups/ Network/ Settings/
   components/          pure UI (Table, Console, ProgressBar, Modal, StatusBar…)
   hooks/               useServers, useServer, useJobs, useConsole, useEventLog…
@@ -353,7 +353,7 @@ exit. Both call identical core services.
 `Router.tsx` is the shell (top bar + `NavRail` + page host + hint strip) and owns the global keyboard
 (digits 1–6 → routes, `Esc` = back-else-quit, `q` quit, `t` theme). Adding a screen = one `NAV` row +
 one entry in the `Page` switch. The event bus (started in `renderApp`, injected via `EventBusProvider`)
-drives the data hooks (`use-servers`/`use-config`/`use-recent-events`), which re-run the core read path
+drives the data hooks (`use-servers`/`use-config`/`use-jobs`), which re-run the core read path
 on invalidating events and hold no authoritative state — statelessness reaches into the UI.
 
 > **Character-shortcut constraint:** digits, `q`, and `t` are plain characters, so the shell stands them
@@ -372,8 +372,9 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > `console` (which pins a command input under a scrolling output pane).
 
 > **Routes outside the rail.** `server`, `console`, and `create` are not in `NAV`: two of them need a
-> `serverId` param, so a bare digit shortcut could not address them. They are reached from Servers
-> (`Enter` / `c` / `n`) and from the detail page's action bar.
+> `serverId` param, so a bare digit shortcut could not address them. They are reached from the
+> Dashboard's server table (`Enter` / `c` / `n`) and from the detail page's action bar. **There is no
+> Servers screen** — the table lives on the Dashboard (§ Dashboard below).
 
 ## Notifications — `components/Toast.tsx` + `hooks/use-toast.tsx`
 
@@ -401,6 +402,20 @@ path overrides → defaults → backup policy → network → review & write. Wr
 `config.json`, and an empty `0600` `secrets.json`, then enters the dashboard. Settings renders the same
 Zod schema so everything but `root` is editable later; `configVersion` drives forward migration.
 `mctl init` is the headless equivalent, same fields as flags, identical `config.json` output.
+
+## Dashboard — `app/Dashboard/`
+
+The landing screen **and** the fleet list: the former Servers page was folded into it (2026-08-03), so
+there is one place that answers "what do I have and what is it doing". Layout is summary tiles →
+column header → one row per server, and the **selected row expands in place** beneath itself with the
+fields the table has no column for (name, loader, java, memory, network, path) plus the live session
+(pid/port/startedAt) when the server is running. Expansion follows selection rather than being a
+separate toggle — there is only ever one open panel, so the page cannot become a wall of detail.
+
+`Enter` opens the full detail page (`server`), `c` the console, `n` the create form; ↑/↓ or j/k move.
+A mouse click selects an unselected row and opens an already-selected one, so the pointer and the
+keyboard mean the same thing. Recent activity was dropped: the event feed read as debug output next
+to the server table, and `events.jsonl` is a sync mechanism, not a user-facing log.
 
 ## Settings — `app/Settings/`
 

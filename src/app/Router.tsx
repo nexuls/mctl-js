@@ -13,7 +13,7 @@
  * into. A page with a live text field holds an *input capture* (see
  * `hooks/use-input-capture.tsx`) and the shell stands its character shortcuts
  * down for as long as it is held — typing `2` in the Settings form edits the
- * field instead of navigating to Servers. `Esc` is exempt: it is the universal
+ * field instead of navigating to Jobs. `Esc` is exempt: it is the universal
  * "get me out of here" key and never inserts a character.
  */
 
@@ -30,7 +30,6 @@ import { Hint, ScrollBox } from "../components/index.ts";
 import { NAV, type RouteId } from "./routes.ts";
 import { NavRail } from "./NavRail.tsx";
 import { Dashboard } from "./Dashboard/index.tsx";
-import { Servers } from "./Servers/index.tsx";
 import { ServerDetail } from "./Server/index.tsx";
 import { Console } from "./Console/index.tsx";
 import { ServerCreate } from "./ServerCreate/index.tsx";
@@ -62,8 +61,6 @@ function Page({ route }: { route: RouteId }) {
 	switch (route) {
 		case "dashboard":
 			return <Dashboard />;
-		case "servers":
-			return <Servers />;
 		case "server":
 			return <ServerDetail />;
 		case "console":
@@ -182,7 +179,7 @@ function AppShell() {
 									{ keys: "Esc", label: canBack ? "back" : "quit" },
 								]
 							: [
-									{ keys: ["1", icons.ellipsis, "6"], label: "navigate" },
+									{ keys: ["1", icons.ellipsis, "5"], label: "navigate" },
 									{ keys: "Enter", label: "open" },
 									{ keys: "Esc", label: canBack ? "back" : "quit" },
 									{ keys: "t", label: "theme" },

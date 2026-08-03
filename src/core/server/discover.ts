@@ -2,7 +2,7 @@
  * Server discovery — builds `Server` view models by combining the location
  * registry, each server's `mctl.json`, and a live session probe. This is the
  * single **read path** shared by both front-ends: the CLI `list`/`status`
- * commands and the TUI Dashboard/Servers pages all call these, so neither
+ * commands and the TUI Dashboard page all call these, so neither
  * front-end holds logic the other lacks (AGENTS.md § Two front-ends, one core).
  *
  * Core service — no UI, no argv, no provider imports. It re-derives everything

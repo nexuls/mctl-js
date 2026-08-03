@@ -110,7 +110,7 @@ export function ServerDetail() {
       toast.success(`Removed ${id}`, {
         description: "Its directory and worlds were left untouched.",
       });
-      navigate("servers");
+      navigate("dashboard");
     } catch (err) {
       toast.error(`Could not remove ${id}`, {
         description: err instanceof Error ? err.message : String(err),

@@ -281,7 +281,7 @@ src/
     App.tsx
     Router.tsx
     setup/               first-run wizard (its own flow, not a normal page)
-    Dashboard/  Servers/  Server/  Console/  Jobs/
+    Dashboard/  Server/  Console/  Jobs/
     Backups/    Network/  Settings/
 
   components/            pure UI: Table, Console, ProgressBar, Modal, StatusBar…
@@ -620,7 +620,7 @@ Queued → Downloading → Installing → Verifying → Done
 # TUI Pages (under `src/app/`)
 
 ```
-Dashboard  Servers  Server  Console  Jobs  Backups  Network  Settings
+Dashboard  Server  Console  Jobs  Backups  Network  Settings
                                               (+ setup wizard on first run)
 ```
 

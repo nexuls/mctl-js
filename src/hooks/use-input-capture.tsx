@@ -4,7 +4,7 @@
  * The app shell owns single-key global shortcuts (digits jump between routes,
  * `q` quits, `t` cycles themes). Those are only safe while nothing on screen is
  * consuming plain characters: typing `2` into the Settings form's *Memory* field
- * must edit the field, not navigate to Servers.
+ * must edit the field, not navigate to Jobs.
  *
  * OpenTUI delivers every key to every mounted `useKeyboard` handler, so there is
  * no built-in notion of "an input has focus" for the shell to consult. This is
