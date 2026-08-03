@@ -37,7 +37,13 @@ export function Hint({ items, gap = 1 }: HintProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	return (
-		<box flexDirection="row" flexWrap="wrap" columnGap={gap} alignItems="center">
+		<box
+			flexDirection="row"
+			flexWrap="wrap"
+			flexShrink={0}
+			columnGap={gap}
+			alignItems="center"
+		>
 			{items.map((item, i) => {
 				const keys = Array.isArray(item.keys) ? item.keys : [item.keys];
 				return (

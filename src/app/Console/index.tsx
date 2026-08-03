@@ -57,13 +57,13 @@ export function Console() {
 	useCaptureKeys(true);
 
 	const lineCount = lines.length;
-	useEffect(() => {
-		// `scrollTop` is clamped by the renderable, so an over-large value is the
-		// simplest correct way to say "bottom" without knowing the content height.
-		if (lineCount > 0 && scroll.current) {
-			scroll.current.scrollTop = Number.MAX_SAFE_INTEGER;
-		}
-	}, [lineCount]);
+	// useEffect(() => {
+	// 	// `scrollTop` is clamped by the renderable, so an over-large value is the
+	// 	// simplest correct way to say "bottom" without knowing the content height.
+	// 	if (lineCount > 0 && scroll.current) {
+	// 		scroll.current.scrollTop = Number.MAX_SAFE_INTEGER;
+	// 	}
+	// }, [lineCount]);
 
 	const submit = async () => {
 		const text = command.trim();
@@ -74,73 +74,94 @@ export function Console() {
 	};
 
 	return (
-		<box flexDirection="column" flexGrow={1} paddingX={1}>
-			<box flexDirection="row" gap={2} alignItems="center" marginBottom={1}>
-				<text fg={colors.foreground}>{server?.name ?? id}</text>
+		<box flexDirection="column" flexGrow={1}>
+			<box
+				flexDirection="row"
+				gap={2}
+				alignItems="center"
+				marginBottom={1}
+				paddingX={1}
+			>
+				<text fg={colors.primary}>{server?.name ?? id}</text>
 				{server ? (
 					<text fg={serverStateColor(colors, server.state)}>
 						{icons[serverStateIcon(server.state)]} {server.state}
 					</text>
 				) : null}
-				<text fg={colors.muted}>{lines.length} lines</text>
+				<text fg={colors.muted}>({lines.length} lines)</text>
 			</box>
 
-			<ScrollBox
-				ref={scroll}
-				flexGrow={1}
-				border
+			<box
+				border={["top"]}
 				borderColor={colors.border}
-        borderStyle="rounded"
-        enableAccel
-				title=" Console "
-				titleColor={colors.primary}
-				paddingX={1}
+				borderStyle="rounded"
 			>
-				{error ? (
-					<text fg={colors.error}>{error}</text>
-				) : lines.length === 0 ? (
-					<text fg={colors.muted}>
-						No output captured. Start the server to see its console here.
-					</text>
-				) : (
-					lines.map((line, i) => (
-						// Index keys are correct here: the buffer is append-and-drop-front,
-						// so a line's identity *is* its position in the current window.
-						<box key={i} flexDirection="row" width="100%">
-							<box
-								width={lineCount.toString().length + 2}
-								flexDirection="row"
-								justifyContent="flex-end"
-                paddingRight={2}
-							>
-								<text fg={colors.muted}>{i + 1}</text>
+				<ScrollBox
+					ref={scroll}
+					flexGrow={1}
+					enableAccel
+					paddingX={1}
+					stickyScroll
+					stickyStart="bottom"
+				>
+					{error ? (
+						<text fg={colors.error}>{error}</text>
+					) : lines.length === 0 ? (
+						<text fg={colors.muted}>
+							No output captured. Start the server to see its console here.
+						</text>
+					) : (
+						lines.map((line, i) => (
+							// Index keys are correct here: the buffer is append-and-drop-front,
+							// so a line's identity *is* its position in the current window.
+							<box key={i} flexDirection="row" width="100%">
+								<box
+									width={lineCount.toString().length + 3}
+									flexDirection="row"
+									justifyContent="flex-end"
+									paddingRight={2}
+								>
+									<text fg={colors.muted}>{i + 1}</text>
+								</box>
+								<text
+									fg={lineColor(line, colors)}
+									selectable
+									selectionBg={colors.secondary}
+								>
+									{line}
+								</text>
 							</box>
-							<text fg={lineColor(line, colors)}>{line}</text>
-						</box>
-					))
-				)}
-			</ScrollBox>
+						))
+					)}
+				</ScrollBox>
 
-			<Input
-				label="Command"
-				hint={
-					server?.state === "running"
-						? "sent to the server console"
-						: "the server is not running"
-				}
-				value={command}
-				onChange={setCommand}
-				onSubmit={() => void submit()}
-				focused
-				width="100%"
-			/>
+				<Input
+					label="Command"
+					hint={
+						server?.state === "running"
+							? "sent to the server console"
+							: "the server is not running"
+					}
+					value={command}
+					onChange={setCommand}
+					onSubmit={() => void submit()}
+					focused
+					width="100%"
+					formFieldProps={{
+						border: ["top"],
+						borderColor: colors.border,
+						titleColor: colors.border,
+						prefix: <text fg={colors.primary}>{icons.caret}</text>,
+					}}
+				/>
+			</box>
 
-			{/* <Hint
+			<Hint
 				items={[
 					{ keys: "Enter", label: "send" },
 					{ keys: "Esc", label: "back" },
 				]}
-			/> */}
+			/>
 		</box>
 	);
 }
