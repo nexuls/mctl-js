@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-03 (server inspection + responsive Table; richer Dashboard/Server pages)_
+_Last updated: 2026-08-07 (Server page split into nine tabs)_
 
 ---
 
@@ -530,6 +530,34 @@ _Last updated: 2026-08-03 (server inspection + responsive Table; richer Dashboar
     world vs total size, the full rules panel, columns dropping in priority order as the terminal
     narrowed, and header/row alignment holding once the scrollbar appeared.
 
+- **Server page became a tabbed multi-screen page (this session, user request).** "Start with the
+  scaffolding and implement the basics now."
+  - `src/app/Server/tabs.ts` — the tab model (`ServerTabId`, `SERVER_TABS` with label + description,
+    `DEFAULT_SERVER_TAB`, `serverTab`, `isServerTabId`).
+  - `src/app/Server/panels.tsx` — the page's shared vocabulary: `Panel`, `Detail`, `Meter`,
+    `EmptyNote`, `Columns`, `LABEL_WIDTH`, `TWO_COLUMN_WIDTH`, `ServerTabProps`, `javaLabel`.
+  - `src/app/Server/tabs/` — nine screens: **Overview** (status, live meters, connection, server
+    facts), **Console**, **Players** (online sample + the four rosters), **World** (world, difficulty,
+    rules, load), **Content** (mods/plugins/datapacks, resource pack, on-disk), **Backups** (honest
+    Phase-4 note + the configured policy), **Performance** (now, a session sample window, runtime,
+    and the not-measurable list), **Network** (join address, profile, listeners), **Settings**
+    (identity, execution, location, and the `mctl edit` commands — read-only for now).
+  - `src/app/Server/index.tsx` rewritten as the container: identity header + lifecycle action bar +
+    `Tabs` + tab body + hint + delete dialog, with a focus ring of `[tabs, …actions, console?]`.
+  - `src/app/Console/ConsoleView.tsx` — the console pane extracted so the `console` route and the
+    Console tab share one implementation; its input capture follows `focused`.
+  - `src/app/Router.tsx` — `server` added to `OWN_SCROLL`.
+  - **One real defect found in the pty:** the 1-row action bar had no `flexShrink={0}` beside the
+    `flexGrow` tab body, so at 74×24 yoga shrank it away and Start/Stop disappeared. Fixed on both
+    pinned rows.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 182/182 (no new tests — the tabs are presentation
+    over already-tested read paths); driven under **tmux** at 120×40 and 74×24 against a sandbox
+    `$HOME` with a fabricated Paper server — all nine tabs render, ←/→ switch them, the tab bar
+    scrolls when narrow, panels stack to one column at 74, typing in the Console tab inserts
+    characters instead of navigating, and pointing a runtime descriptor at a live pid showed real CPU
+    (99% of 8 cores), RSS against the 4G heap, threads, a 3 h uptime and the session min/avg/peak
+    summary, with the action bar flipping to Stop/Restart. No stderr in any run.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
@@ -555,6 +583,15 @@ _Last updated: 2026-08-03 (server inspection + responsive Table; richer Dashboar
   the wizard (it exercises Input/Select/Toggle/Checkbox/RadioGroup/Button/Hint/FormField in anger).
 
 ## Known gaps / carried forward
+
+- **The Server page's Settings tab is read-only.** Editing goes through `mctl edit` today; making it
+  a form over `ServerManager.editServer` (buffered draft + validation + Ctrl+S, mirroring
+  `app/Settings/use-settings.ts`) is marked `TODO(phase-3)` in `tabs/Settings.tsx`.
+- **The Backups and Network tabs are honest scaffolding**, not features: Backups shows the configured
+  policy and says archives arrive in Phase 4; Network shows the direct picture and says tunnels/DNS
+  do. Both have a `TODO(phase-4)` naming the provider call that fills them in.
+- **Content counts jars; it does not list them.** A real mod/plugin list needs the Modrinth/CurseForge
+  integration (`TODO(phase-5)`).
 
 - **TPS / MSPT, per-server network traffic, and JVM heap occupancy are still unavailable** and are
   labelled as such in the Resources panel. TPS needs an RCON client (Phase 4/5) — that is the single

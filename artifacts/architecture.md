@@ -475,11 +475,36 @@ to the server table, and `events.jsonl` is a sync mechanism, not a user-facing l
 
 ## Server detail — `app/Server/`
 
-The exhaustive view of one server, and the owner of its lifecycle actions. Six panels — Status,
-Resources, Players, World & rules, Storage & content, Configuration — in two columns when the
-terminal can carry them and one when it cannot. Everything beyond `mctl.json` comes from
-`useServerInsight`, which polls `core/server/inspect.ts`. The Resources panel names TPS/MSPT as
-unavailable rather than omitting them: a gap where a number is expected reads as a bug.
+The exhaustive view of one server, and the owner of its lifecycle actions — **a tabbed multi-screen
+page**, because one server carries far more than a screen. Three parts:
+
+- **`tabs.ts`** — the tab model (`ServerTabId`, `SERVER_TABS`). Data only.
+- **`panels.tsx`** — the page's presentation vocabulary (`Panel`, `Detail`, `Meter`, `EmptyNote`,
+  `Columns`, `LABEL_WIDTH`, `TWO_COLUMN_WIDTH`, `ServerTabProps`). It lives here rather than in
+  `components/` because the label column and panel chrome are *this page's* layout; a second page
+  wanting them is the signal to promote them.
+- **`tabs/*.tsx`** — one screen each: Overview, Console, Players, World, Content, Backups,
+  Performance, Network, Settings. Each renders from the `{server, insight, size}` it is handed and
+  does no I/O.
+
+The container owns what the tabs share — identity header, lifecycle action bar, the tab bar, the
+focus ring, the delete confirmation — and fetches `useServer` + `useServerInsight` once for all of
+them. **Adding a screen is a `SERVER_TABS` row, a file, and a `case`**; the union makes a missing
+case a compile error.
+
+Its route is in `OWN_SCROLL`: the chrome is pinned and only the tab body scrolls. `TAB_OWNS_SCROLL`
+applies the same rule one level down for the Console tab, which pins a command line under its own
+scrolling pane. The console itself is `app/Console/ConsoleView.tsx`, shared with the full-screen
+`console` route so there is one implementation; its input capture follows `focused` rather than
+mounting, so the tab bar's ←/→ still work when the ring is not on the command line.
+
+Two rules the pty found: a pinned 1-row bar needs `flexShrink={0}` beside a `flexGrow` body (yoga
+shrinks it to nothing on a short terminal), and every `Detail` label must fit `LABEL_WIDTH`.
+
+What is not measurable is named rather than omitted — TPS/MSPT, heap occupancy and per-process
+network I/O on Performance; Phase-4 tunnels on Network; Phase-4 archives on Backups. The Settings tab
+is read-only and prints the `mctl edit` commands that change those values (TODO(phase-3): make it a
+form over `ServerManager.editServer`).
 
 ## Settings — `app/Settings/`
 

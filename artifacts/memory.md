@@ -5,6 +5,49 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Server page became a tabbed multi-screen page (2026-08-07, user request)
+
+- **`src/app/Server/` is now a container + nine tab bodies**, not one file. `tabs.ts` holds the tab
+  model (`ServerTabId`, `SERVER_TABS` with a label *and* a one-line description), `panels.tsx` the
+  shared presentation vocabulary (`Panel`/`Detail`/`Meter`/`EmptyNote`/`Columns`, `LABEL_WIDTH`,
+  `TWO_COLUMN_WIDTH`, `ServerTabProps`, `javaLabel`), and `tabs/*.tsx` one screen each.
+  - **Adding a screen is three edits:** a row in `SERVER_TABS`, a file under `tabs/`, a `case` in the
+    container's switch. The `ServerTabId` union makes a missing case a *compile* error, not a blank
+    screen — same trick `executeInstall` uses for install strategies.
+  - The container fetches `useServer` + `useServerInsight` **once** and passes `{server, insight,
+    size}` down; no tab does its own I/O or polling.
+- **Route `server` joined `OWN_SCROLL`** — header, action bar and tab bar are pinned chrome and only
+  the tab body scrolls. `TAB_OWNS_SCROLL` (currently just `console`) is the same rule one level down:
+  the Console tab pins a command line under its own scrolling pane, so the container hosts it in a
+  plain box. Never nest one page scrollbox inside another.
+- **A pinned 1-row action bar MUST carry `flexShrink={0}`.** Found in a pty at 74×24: the tab body is
+  `flexGrow`, so yoga shrank the button row **to nothing** and the Start/Stop buttons silently
+  vanished at small terminal sizes while rendering fine at 120×40. The identity header has the same
+  guard now. Check this on any page that pins a short row above a growing one.
+- **`ConsoleView` was extracted to `app/Console/ConsoleView.tsx`** and is shared by the `console`
+  route and the Server page's Console tab — one console implementation, not two.
+  - **Its key capture follows `focused`, not mounting** (`useCaptureKeys(focused)`). The standalone
+    page passes `focused` always; inside the Server page the ring owns it, so ←/→ still reach the tab
+    bar when the ring is elsewhere. Verified in a pty: typing `say 3 hi` in the tab inserts the `3`
+    instead of navigating to Backups, and the shell's hint strip flips to typing hints.
+  - `onLineCount` is reported from a `useEffect`, not the render body — the host stores it in state,
+    and setting a parent's state while rendering a child is the update-during-render React refuses.
+- **Every `Detail` label must fit `LABEL_WIDTH` (13).** `"everything else"` overflowed the padded
+  column and pushed its value out of alignment on the Content tab; renamed to `"rest"`.
+- **Tab focus ring:** `[TABS_ID, ...actions, CONSOLE_ID?]` — the tab bar is first so ←/→ switch tabs
+  the moment the page opens, and the console's command line joins the ring only while its tab is
+  active. Same shape as Settings' per-group ring.
+- **The Console *button* is gone from the action bar** (there is a Console tab now); the `console`
+  route stays, reached from the Dashboard's `c`.
+- **What each tab is honest about, deliberately:** Backups says "Phase 4" and shows the configured
+  policy (resolved through `resolveRootPaths`, so an unset `backups_dir` shows the real default);
+  Network shows the direct picture and says tunnels/DNS are Phase 4; Settings is read-only and prints
+  the `mctl edit` commands that do change these values; Performance names TPS/MSPT, heap occupancy
+  and network I/O as unmeasurable rather than leaving gaps.
+- **Performance keeps a session-local sample window** (last 60 readings → min/avg/peak), reset when
+  the pid changes. It is a derived observation of this page's own polls, never persisted, and does
+  not violate statelessness — every reading still comes from a fresh probe.
+
 ## Server inspection + responsive Table (2026-08-03, user request)
 
 - **Everything a server "is doing" now comes from `core/server/inspect.ts`**, the read-only twin of
