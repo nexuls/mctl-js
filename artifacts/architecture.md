@@ -54,7 +54,7 @@ src/
   index.tsx            entry: parse argv → TUI (no args) | one-shot CLI
   cli/                 router.ts, commands/ (list, create, start, …), format.ts (--json vs table)
   app/                 the TUI — App.tsx, Router.tsx, setup/ (wizard), and PAGES live here now
-                         Dashboard/ Server/ ServerCreate/ Console/ Jobs/
+                         Dashboard/ Server/ ServerCreate/ Jobs/
                          Backups/ Network/ Settings/
   components/          pure UI (Table, Console, ProgressBar, Modal, StatusBar…)
   hooks/               useServers, useServer, useJobs, useConsole, useEventLog…
@@ -384,12 +384,14 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > above its panel and an action bar below it) instead names its route in `OWN_SCROLL` in `Router.tsx`
 > and is hosted in a plain `flexGrow` box; that host is what gives it a **definite height**, which an
 > inner `<scrollbox flexGrow={1}>` needs to resolve against. Such a page scrolls only its own panel —
-> never nest a page-level scrollbox inside the shell's. `OWN_SCROLL` currently holds `settings` and
-> `console` (which pins a command input under a scrolling output pane).
+> never nest a page-level scrollbox inside the shell's. `OWN_SCROLL` currently holds `settings`,
+> `dashboard` and `server`.
 
-> **Routes outside the rail.** `server`, `console`, and `create` are not in `NAV`: two of them need a
-> `serverId` param, so a bare digit shortcut could not address them. They are reached from the
-> Dashboard's server table (`Enter` / `c` / `n`) and from the detail page's action bar. **There is no
+> **Routes outside the rail.** `server` and `create` are not in `NAV`: `server` needs a `serverId`
+> param, so a bare digit shortcut could not address it. They are reached from the
+> Dashboard's server table (`Enter` / `n`) and from the detail page's action bar. **There is no
+> `console` route** — a server's console is a tab of the Server page, so it is only ever reached
+> through that server; a route addressable on its own gave the same output two homes. **There is no
 > Servers screen** — the table lives on the Dashboard (§ Dashboard below).
 
 ## Keyboard hints — `hooks/use-hints.tsx` + the shell's strip
@@ -487,7 +489,8 @@ adapt to the terminal width — the table by dropping columns in priority order,
 the resource totals and shortening a label. Expansion follows selection rather than being a separate
 toggle — there is only ever one open panel, so the page cannot become a wall of detail.
 
-`Enter` opens the full detail page (`server`), `c` the console, `n` the create form; ↑/↓ or j/k move.
+`Enter` opens the full detail page (`server`), `n` the create form; ↑/↓ or j/k move. The console is
+not reachable from here — it lives on the Server page, one `Enter` and one tab away.
 A mouse click selects an unselected row and opens an already-selected one, so the pointer and the
 keyboard mean the same thing. Recent activity was dropped: the event feed read as debug output next
 to the server table, and `events.jsonl` is a sync mechanism, not a user-facing log.
@@ -513,9 +516,9 @@ case a compile error.
 
 Its route is in `OWN_SCROLL`: the chrome is pinned and only the tab body scrolls. `TAB_OWNS_SCROLL`
 applies the same rule one level down for the Console tab, which pins a command line under its own
-scrolling pane. The console itself is `app/Console/ConsoleView.tsx`, shared with the full-screen
-`console` route so there is one implementation; its input capture follows `focused` rather than
-mounting, so the tab bar's ←/→ still work when the ring is not on the command line.
+scrolling pane. The console itself is `app/Server/ConsoleView.tsx` and the Console tab is its **only**
+entry point; its input capture follows `focused` rather than mounting, so the tab bar's ←/→ still
+work when the ring is not on the command line.
 
 Two rules the pty found: a pinned 1-row bar needs `flexShrink={0}` beside a `flexGrow` body (yoga
 shrinks it to nothing on a short terminal), and every `Detail` label must fit `LABEL_WIDTH`.

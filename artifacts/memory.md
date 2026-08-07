@@ -5,6 +5,21 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The `console` route is gone (2026-08-08, user request)
+
+- **A server's console is reachable only from the Server page's Console tab.** `RouteId` no longer
+  has `console`; `Router.tsx` lost the case, the import, the `OWN_SCROLL` entry and the title, and
+  the Dashboard lost its `c` shortcut (plus the hint and the expanded row's key line). `NavRail`
+  lights the Dashboard tab for `server`/`create` only.
+  - **Why:** the same output had two homes, and the standalone route said nothing the tab does not —
+    a console makes no sense addressed without the server it belongs to.
+- **`ConsoleView` moved to `app/Server/ConsoleView.tsx`** and `app/Console/` is deleted. The move was
+  free on imports (`src/app/Console/` and `src/app/Server/` are the same depth); only
+  `Server/tabs/Console.tsx` changed its specifier. A folder named after a page that no longer exists
+  is a trap for the next agent, which is why the file moved rather than staying put.
+- `hooks/use-console.ts` is untouched and still the single bridge to `RuntimeManager`; the CLI's
+  `logs`/`exec` are unaffected — they were never the route's peers, they are the console's.
+
 ## One hint strip, contributed to from anywhere (2026-08-07, user request)
 
 - **The strip is rendered exactly once, in `Router.tsx`.** Every page now *registers* its shortcuts
@@ -55,8 +70,8 @@ delete entries that stop being true. Newest-relevant first.
   `flexGrow`, so yoga shrank the button row **to nothing** and the Start/Stop buttons silently
   vanished at small terminal sizes while rendering fine at 120×40. The identity header has the same
   guard now. Check this on any page that pins a short row above a growing one.
-- **`ConsoleView` was extracted to `app/Console/ConsoleView.tsx`** and is shared by the `console`
-  route and the Server page's Console tab — one console implementation, not two.
+- **`ConsoleView` lives at `app/Server/ConsoleView.tsx`** and the Console tab is its only host (see
+  the console-route entry at the top of this file).
   - **Its key capture follows `focused`, not mounting** (`useCaptureKeys(focused)`). The standalone
     page passes `focused` always; inside the Server page the ring owns it, so ←/→ still reach the tab
     bar when the ring is elsewhere. Verified in a pty: typing `say 3 hi` in the tab inserts the `3`
@@ -68,8 +83,7 @@ delete entries that stop being true. Newest-relevant first.
 - **Tab focus ring:** `[TABS_ID, ...actions, CONSOLE_ID?]` — the tab bar is first so ←/→ switch tabs
   the moment the page opens, and the console's command line joins the ring only while its tab is
   active. Same shape as Settings' per-group ring.
-- **The Console *button* is gone from the action bar** (there is a Console tab now); the `console`
-  route stays, reached from the Dashboard's `c`.
+- **The Console *button* is gone from the action bar** — the Console tab replaced it.
 - **What each tab is honest about, deliberately:** Backups says "Phase 4" and shows the configured
   policy (resolved through `resolveRootPaths`, so an unset `backups_dir` shows the real default);
   Network shows the direct picture and says tunnels/DNS are Phase 4; Settings is read-only and prints
@@ -151,7 +165,7 @@ delete entries that stop being true. Newest-relevant first.
   to **1–5** (Dashboard/Jobs/Backups/Network/Settings) — the shell's hint strip (`1 … 5`) and every
   `navigate("servers")` call site (`Server`, `ServerCreate`) moved with it.
   - **How to apply:** nothing may navigate to `"servers"`; go to `"dashboard"`. `NavRail` lights the
-    Dashboard tab for the three rail-less routes (`server`/`console`/`create`), not just `server`.
+    Dashboard tab for the rail-less routes (`server`/`create`), not just `server`.
 - **Selection *is* the expansion** — the selected row renders a detail panel directly beneath itself
   (left-border accent, two columns + path + a key hint). No separate expand/collapse key: one panel is
   open at all times, so the page cannot grow into a wall of detail and there is no second piece of

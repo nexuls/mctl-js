@@ -1,10 +1,10 @@
 /**
  * ConsoleView — the scrolling output pane and command line for one server.
  *
- * Extracted from the Console *page* so the Server page's Console tab and the
- * standalone `console` route are **one** implementation: the two are the same
- * view at different sizes, and a second copy would drift (AGENTS.md § 3 — the
- * front-ends are projections, not re-implementations).
+ * The console is reachable **only** through the Server page's Console tab —
+ * there is no `console` route any more, so a server's output is always entered
+ * through the server it belongs to. This file stays separate from that tab
+ * because the tab is the wiring (ring hand-off, props) and this is the view.
  *
  * Page-layer: all streaming and sending goes through {@link useConsole}, which
  * drives `RuntimeManager`. No I/O here.

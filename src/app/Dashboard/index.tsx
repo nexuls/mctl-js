@@ -5,8 +5,10 @@
  * place, so browsing the fleet never costs a navigation.
  *
  * Page-layer (AGENTS.md § 3): renders view models from hooks and navigates; it
- * does no I/O. Keyboard (↑/↓ or j/k to move, Enter to open, `c` console, `n` new)
- * is safe alongside the shell's digit nav because none of those keys overlap.
+ * does no I/O. Keyboard (↑/↓ or j/k to move, Enter to open, `n` new) is safe
+ * alongside the shell's digit nav because none of those keys overlap. The
+ * console is not reachable from here: it is a tab of the Server page, so it is
+ * always entered through the server it belongs to.
  *
  * **What lands here versus on the Server page.** This screen answers "what do I
  * have and what is it doing right now", so it carries the numbers that change:
@@ -299,8 +301,7 @@ function ServerDetails({
 			<box marginTop={1} flexDirection="column">
 				<Detail label="path" value={server.path} />
 				<text fg={colors.muted} alignSelf="flex-end">
-					<span fg={colors.info}>Enter</span> full details {icons.separator}{" "}
-					<span fg={colors.info}>c</span> console
+					<span fg={colors.info}>Enter</span> full details
 				</text>
 			</box>
 		</box>
@@ -354,7 +355,6 @@ export function Dashboard() {
 			: [
 					{ keys: `${icons.arrowUp}${icons.arrowDown}/jk`, label: "move" },
 					{ keys: "Enter", label: "details" },
-					{ keys: "c", label: "console", when: "idle" },
 					{ keys: "n", label: "new server", when: "idle" },
 				],
 	);
@@ -366,11 +366,6 @@ export function Dashboard() {
 			return;
 		}
 		if (servers.length === 0) return;
-		if (key.name === "c") {
-			const server = servers[selected];
-			if (server) navigate("console", { serverId: server.id });
-			return;
-		}
 		if (key.name === "down" || key.name === "j") {
 			setSelected((i) => Math.min(i + 1, servers.length - 1));
 		} else if (key.name === "up" || key.name === "k") {

@@ -135,8 +135,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 	// once and shared by both rows.
 	const isActive = (item: NavItem) =>
 		item.id === active ||
-		(item.id === "dashboard" &&
-			(active === "server" || active === "console" || active === "create"));
+		(item.id === "dashboard" && (active === "server" || active === "create"));
 
 	const rule = alpha(colors.border, 0.6);
 

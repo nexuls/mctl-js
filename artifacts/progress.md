@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-07 (global hint provider — one strip, contributed to from anywhere)_
+_Last updated: 2026-08-08 (the `console` route removed — the console is a Server page tab only)_
 
 ---
 
@@ -582,6 +582,18 @@ _Last updated: 2026-08-07 (global hint provider — one strip, contributed to fr
     every screen, the Dashboard/Server/Settings/Create keys merging ahead of the shell's, `Esc cancel`
     replacing `Esc back` on the create form, and the character shortcuts disappearing the moment a
     text field or the console command line takes the capture. No stderr in any run.
+
+- **The `console` route removed (this session, user request).** "We should only be able to see the
+  console from inside the server page."
+  - `app/routes.ts` — `console` dropped from `RouteId`; `RouteParams.serverId` now serves `server`
+    alone. `app/Router.tsx` — the `Console` import, the `Page` case, the `OWN_SCROLL` entry and the
+    `titleFor` line are gone. `app/NavRail.tsx` — the Dashboard tab lights for `server`/`create`.
+  - `app/Dashboard/index.tsx` — the `c` key, its hint, and the `c console` line in the expanded row
+    panel are gone; `Enter` (details) and `n` (new) are unchanged.
+  - **`app/Console/` deleted**: `index.tsx` (the page) removed and `ConsoleView.tsx` moved to
+    `app/Server/ConsoleView.tsx` — the Server page's Console tab is now its only host. Same directory
+    depth, so only `Server/tabs/Console.tsx`'s import specifier changed.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 189/189; `bun run format` clean.
 
 ## In progress
 

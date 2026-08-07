@@ -39,7 +39,6 @@ import { NAV, type RouteId } from "./routes.ts";
 import { NavRail } from "./NavRail.tsx";
 import { Dashboard } from "./Dashboard/index.tsx";
 import { ServerDetail } from "./Server/index.tsx";
-import { Console } from "./Console/index.tsx";
 import { ServerCreate } from "./ServerCreate/index.tsx";
 import { Jobs } from "./Jobs/index.tsx";
 import { Backups } from "./Backups/index.tsx";
@@ -59,9 +58,6 @@ import { alpha } from "../lib/colors.ts";
  */
 const OWN_SCROLL: ReadonlySet<RouteId> = new Set<RouteId>([
 	"settings",
-	// The console pins its command input below a scrolling output pane, exactly
-	// the Settings shape: chrome that must not scroll away.
-	"console",
 	// The dashboard pins its summary tiles and the server table's column header
 	// above the scrolling rows — a table whose header scrolls away is unreadable
 	// the moment the list is longer than the screen.
@@ -79,8 +75,6 @@ function Page({ route }: { route: RouteId }) {
 			return <Dashboard />;
 		case "server":
 			return <ServerDetail />;
-		case "console":
-			return <Console />;
 		case "create":
 			return <ServerCreate />;
 		case "jobs":
@@ -221,7 +215,6 @@ function AppShell() {
 /** The human title for a route (routes outside the rail name themselves). */
 function titleFor(route: RouteId): string {
 	if (route === "server") return "Server";
-	if (route === "console") return "Console";
 	if (route === "create") return "New server";
 	return NAV.find((n) => n.id === route)?.label ?? "";
 }

@@ -2,16 +2,19 @@
  * Route definitions for the TUI — the set of screens the router can show and the
  * navigation rail's ordering. Pure data + types, no JSX and no I/O.
  *
- * `server`, `console`, and `create` are intentionally **not** in {@link NAV}:
- * they are reached from the Dashboard's server table and two of them need a
- * `serverId` param, so a bare digit shortcut could not address them.
+ * `server` and `create` are intentionally **not** in {@link NAV}: they are
+ * reached from the Dashboard's server table and `server` needs a `serverId`
+ * param, so a bare digit shortcut could not address it.
+ *
+ * There is no `console` route. A server's console is one of the Server page's
+ * tabs, so it is only ever reached through that server — a full-screen console
+ * addressed on its own duplicated the tab and gave the same output two homes.
  */
 
 /** Every screen the router can render. */
 export type RouteId =
 	| "dashboard"
 	| "server"
-	| "console"
 	| "create"
 	| "jobs"
 	| "backups"
@@ -20,7 +23,7 @@ export type RouteId =
 
 /** Parameters a route may carry. */
 export interface RouteParams {
-	/** The server to show, for the `server` and `console` routes. */
+	/** The server to show, for the `server` route. */
 	serverId?: string;
 }
 

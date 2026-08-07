@@ -1,14 +1,15 @@
 /**
  * Console tab — the server's live output inside the Server page.
  *
- * The pane is {@link ConsoleView}, shared with the full-screen `console` route,
- * so there is exactly one console implementation. This tab owns its own
- * scrolling (the command line is pinned under a scrolling pane), which is why
- * the container hosts it without a scrollbox.
+ * The pane is {@link ConsoleView}. This is the **only** way into a server's
+ * console — there is no `console` route — so the output is always reached
+ * through the server that produced it. The tab owns its own scrolling (the
+ * command line is pinned under a scrolling pane), which is why the container
+ * hosts it without a scrollbox.
  */
 
 import type { ServerTabProps } from "../panels.tsx";
-import { ConsoleView } from "../../Console/ConsoleView.tsx";
+import { ConsoleView } from "../ConsoleView.tsx";
 
 /** Props for {@link ConsoleTab} — the tab props plus the ring hand-off. */
 export interface ConsoleTabProps extends ServerTabProps {
