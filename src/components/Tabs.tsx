@@ -188,7 +188,7 @@ export function Tabs({
 		}
 	});
 
-	const rule = alpha(colors.border, 0.6);
+	const rule = alpha(colors.border, 0.8);
 	// The accent reads as a quieter line when the bar is not focused, so blend it
 	// toward the rule rather than leaving it at full strength.
 	const accent = focused ? colors.primary : mix(colors.primary, rule, 0.75);

@@ -11,6 +11,7 @@
  * may be `null`: we never hand the UI an undefined colour.
  */
 
+import { alpha } from "../../lib/colors.ts";
 import type {
 	Theme,
 	ThemeAppearance,
@@ -98,7 +99,7 @@ export function themeFromTerminalColors(palette: TerminalPalette): Theme {
 		// A panel background one step off the page: the ANSI "black" cell usually
 		// reads as a near-background surface on dark terminals; fall back to bg.
 		surface: pick(a[ANSI.black], palette.background, "#1a1a1a"),
-		border: pick(a[ANSI.brightBlack], a[ANSI.black], "#3a3a3a"),
+		border: alpha(pick(a[ANSI.brightBlack], a[ANSI.black], "#3a3a3a"), 0.6),
 		muted: pick(a[ANSI.brightBlack], a[ANSI.white], "#808080"),
 		primary: pick(a[ANSI.blue], a[ANSI.brightBlue], "#3b78ff"),
 		secondary: pick(a[ANSI.magenta], a[ANSI.brightMagenta], "#b048c0"),

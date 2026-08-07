@@ -137,7 +137,7 @@ export function NavRail({ active, onNavigate }: NavRailProps) {
 		item.id === active ||
 		(item.id === "dashboard" && (active === "server" || active === "create"));
 
-	const rule = alpha(colors.border, 0.6);
+	const rule = alpha(colors.border, 0.8);
 
 	const BRAND = "MCTL ";
 	const RightTextWidth = BRAND.length;
