@@ -5,6 +5,37 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## One hint strip, contributed to from anywhere (2026-08-07, user request)
+
+- **The strip is rendered exactly once, in `Router.tsx`.** Every page now *registers* its shortcuts
+  through `useHints` (`hooks/use-hints.tsx`) instead of drawing a `Hint` of its own — the shell's
+  strip plus a page's strip meant the same keys appeared twice and could contradict each other.
+  `Hint`/`HintItem` in `components/` are unchanged (still pure UI); the hook is the new layer above.
+  - **Rule going forward: a page must never render `<Hint>`.** The only remaining callers are the
+    setup wizard (`Welcome`, `WizardFooter`), which lives *outside* the router and has no strip to
+    merge into. `useHints` is deliberately inert without a provider, so the wizard is safe either way.
+- **Merge is by key signature, not label** (`keySignature` joins multi-key hints, so `["Ctrl","S"]`
+  and `"Ctrl+S"` are one key). Scope order `context` → `page` → `global`, first occurrence wins ⇒ a
+  page *overrides* a shell hint on the same key rather than adding a second: `ServerCreate` turns
+  `Esc back` into `Esc cancel` without knowing what the shell said.
+- **`when: "idle" | "typing" | "always"` (default `always`) centralises the typing rule.** The shell
+  used to swap its own strip on `useIsCapturing()`; now the *provider* filters, so character
+  shortcuts (`q`/`t`/digits/`c`/`n`) vanish the moment any text field captures, on every page, for
+  free. The shell's global set has **no** typing hints left — moving through a form is the page's
+  keyboard, not the shell's, and a global `Tab next field` read as nonsense on the Console route.
+- **Hints follow the focus ring, not just the route** — that is the part worth copying. Settings only
+  advertises `←→ group` while the ring is on the tab bar (elsewhere ←/→ are the text cursor) and only
+  advertises `Ctrl+S save` while a save would actually do something; the Server page swaps its whole
+  set for `Enter send command` when the ring sits on the Console tab's command line.
+- **Two contexts on purpose** (`RegisterContext` stable + `ItemsContext` reactive): with one, every
+  contributing page would re-render each time any hint changed — which is on every focus move.
+  Registrations live in a **ref** keyed by serial id with a counter in state as the change signal; a
+  `Map` in state would make the registering effect feed its own dependency.
+- **`useHints` compares `items` by value (`JSON.stringify`)**, so callers need no `useMemo`. Requiring
+  one would be a trap that fails as an infinite re-register loop rather than a type error.
+- `composeHints` is pure + exported and covered by `hooks/use-hints.test.ts` (7 cases) — including
+  the one non-obvious interaction: a hint suppressed by `when` frees its key for a lower scope.
+
 ## Server page became a tabbed multi-screen page (2026-08-07, user request)
 
 - **`src/app/Server/` is now a container + nine tab bodies**, not one file. `tabs.ts` holds the tab

@@ -3,12 +3,12 @@
  * `mctl logs -f` and `mctl exec`.
  *
  * The pane itself is {@link ConsoleView}, shared with the Server page's Console
- * tab; this page is the route wrapper that gives it the whole screen, a header
- * and the hint strip. Page-layer (AGENTS.md § 3): no I/O of its own.
+ * tab; this page is the route wrapper that gives it the whole screen and a
+ * header. Page-layer (AGENTS.md § 3): no I/O of its own.
  */
 
 import { useState } from "react";
-import { Hint } from "../../components/index.ts";
+import { useHints } from "../../hooks/use-hints.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import { useRouter } from "../../hooks/use-router.tsx";
 import { useServer } from "../../hooks/use-servers.ts";
@@ -23,6 +23,11 @@ export function Console() {
 	const id = params.serverId ?? "";
 	const { data: server } = useServer(id);
 	const [lineCount, setLineCount] = useState(0);
+
+	// The command line owns the keyboard on this page, so the only page-specific
+	// key is Enter; the shell's strip supplies Esc and stands its own character
+	// shortcuts down while the field is capturing.
+	useHints([{ keys: "Enter", label: "send command" }], { scope: "context" });
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
@@ -47,13 +52,6 @@ export function Console() {
 				state={server?.state}
 				focused
 				onLineCount={setLineCount}
-			/>
-
-			<Hint
-				items={[
-					{ keys: "Enter", label: "send" },
-					{ keys: "Esc", label: "back" },
-				]}
 			/>
 		</box>
 	);

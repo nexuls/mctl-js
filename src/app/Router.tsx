@@ -8,6 +8,11 @@
  * comes from hooks. It is the single place that maps a {@link RouteId} to a page
  * component, so adding a screen is one map entry plus a {@link NAV} row.
  *
+ * **The hint strip is drawn here and nowhere else.** Pages contribute their
+ * shortcuts through {@link useHints} and the shell renders the merged result (see
+ * `hooks/use-hints.tsx` for the scope and typing rules) — a page must never paint
+ * a strip of its own, or the same keys appear twice and can disagree.
+ *
  * **Character-shortcut safety:** digits, `q`, and `t` are plain characters, so
  * they are only safe as global shortcuts while nothing on screen is being typed
  * into. A page with a live text field holds an *input capture* (see
@@ -22,10 +27,13 @@ import { useTheme } from "../hooks/use-theme.tsx";
 import { useIcons } from "../hooks/use-icons.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
 import { RouterProvider, useRouter } from "../hooks/use-router.tsx";
+import { useKeysCaptured } from "../hooks/use-input-capture.tsx";
 import {
-	useIsCapturing,
-	useKeysCaptured,
-} from "../hooks/use-input-capture.tsx";
+	HintProvider,
+	useHintItems,
+	useHints,
+	type HintSpec,
+} from "../hooks/use-hints.tsx";
 import { Hint, ScrollBox } from "../components/index.ts";
 import { NAV, type RouteId } from "./routes.ts";
 import { NavRail } from "./NavRail.tsx";
@@ -86,6 +94,34 @@ function Page({ route }: { route: RouteId }) {
 	}
 }
 
+/**
+ * The shell's own hints — the keys that work on every screen.
+ *
+ * `when: "idle"` is what makes this list correct while a text field is focused:
+ * every character shortcut stands down, because it would silently do nothing.
+ * `Esc` stays — no field consumes it — and it is all the shell has left, since
+ * moving through a form is the *page's* keyboard, not the shell's. A page's own
+ * hints layer on top of these; see `use-hints.tsx`.
+ */
+function globalHints(ellipsis: string, canBack: boolean): HintSpec[] {
+	return [
+		{ keys: ["1", ellipsis, "5"], label: "navigate", when: "idle" },
+		{ keys: "Esc", label: canBack ? "back" : "quit" },
+		{ keys: "t", label: "theme", when: "idle" },
+		{ keys: "q", label: "quit", when: "idle" },
+	];
+}
+
+/** The bottom hint strip: every contribution in the tree, merged and filtered. */
+function HintBar() {
+	const items = useHintItems();
+	return (
+		<box paddingX={1} flexShrink={0}>
+			<Hint items={items} />
+		</box>
+	);
+}
+
 /** The chrome + page host, inside the {@link RouterProvider}. */
 function AppShell() {
 	const renderer = useRenderer();
@@ -94,10 +130,11 @@ function AppShell() {
 	const { icons } = useIcons();
 	const { route, navigate, back, canBack } = useRouter();
 	// `captured()` is a getter, not a boolean: the handler below closes over this
-	// render, and the capture can change without one. `typing` is the reactive
-	// mirror, used only to relabel the hint strip.
+	// render, and the capture can change without one. (The hint strip's own
+	// reaction to typing lives in `use-hints.tsx`, not here.)
 	const captured = useKeysCaptured();
-	const typing = useIsCapturing();
+
+	useHints(globalHints(icons.ellipsis, canBack), { scope: "global" });
 
 	useKeyboard((key) => {
 		// Esc first: it works even while a text field is capturing, because it can
@@ -174,28 +211,9 @@ function AppShell() {
 				)}
 			</box>
 
-			{/* Bottom hint strip. While a field is capturing keys the shell's
-			    character shortcuts are inactive, so it advertises the keys that
-			    still work instead of ones that would silently do nothing. */}
-			<box paddingX={1} flexShrink={0}>
-				<Hint
-					items={
-						typing
-							? [
-									{ keys: "Tab", label: "next field" },
-									{ keys: "Enter", label: "confirm" },
-									{ keys: "Esc", label: canBack ? "back" : "quit" },
-								]
-							: [
-									{ keys: ["1", icons.ellipsis, "5"], label: "navigate" },
-									{ keys: "Enter", label: "open" },
-									{ keys: "Esc", label: canBack ? "back" : "quit" },
-									{ keys: "t", label: "theme" },
-									{ keys: "q", label: "quit" },
-								]
-					}
-				/>
-			</box>
+			{/* The one hint strip in the app: the shell's global keys plus whatever
+			    the active page contributed, merged in `use-hints.tsx`. */}
+			<HintBar />
 		</box>
 	);
 }
@@ -220,8 +238,11 @@ export function AppRouter() {
 			params={{ serverId: "first-paper-server" }}
 		>
 			{/* The input capture the shell reads is provided in `App.tsx`, above both
-			    this router and the setup wizard. */}
-			<AppShell />
+			    this router and the setup wizard. The hint registry sits here instead:
+			    the strip is the shell's chrome, and the wizard draws its own footer. */}
+			<HintProvider>
+				<AppShell />
+			</HintProvider>
 		</RouterProvider>
 	);
 }

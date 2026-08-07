@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-07 (Server page split into nine tabs)_
+_Last updated: 2026-08-07 (global hint provider — one strip, contributed to from anywhere)_
 
 ---
 
@@ -557,6 +557,31 @@ _Last updated: 2026-08-07 (Server page split into nine tabs)_
     characters instead of navigating, and pointing a runtime descriptor at a live pid showed real CPU
     (99% of 8 cores), RSS against the 4G heap, threads, a 3 h uptime and the session min/avg/peak
     summary, with the action bar flipping to Stop/Restart. No stderr in any run.
+
+- **Global hint provider — one strip for the whole app (this session, user request).** "The hints are
+  showing in two places. Create a provider to update the global hints rendered from `Router.tsx`."
+  - `src/hooks/use-hints.tsx` — `HintProvider` + `useHints(items, {scope, active})` +
+    `useHintItems()` + the pure, exported `composeHints`. Scopes `context`/`page`/`global`, merge by
+    key signature (most specific wins the key), and a `when` (`always`/`idle`/`typing`) that drops
+    character shortcuts while an input capture is held. Two contexts so contributors don't re-render.
+  - `src/app/Router.tsx` — mounts `HintProvider` inside `RouterProvider`, registers the shell's
+    global hints, and renders the single `HintBar`. Its own typing/idle branch is gone (the provider
+    owns that rule now), and the global set no longer claims `Enter open` (a page's key) or a typing
+    `Tab` (the page's keyboard, not the shell's).
+  - **`<Hint>` removed from every page**: Dashboard (and its bottom border row), Console, Server,
+    Settings (its action bar keeps only the save-error text), ServerCreate (which also lost the
+    duplicate key list in its `PageHeader` subtitle — that screen had *three* copies). The setup
+    wizard keeps its own footer: it renders outside the router and has no strip to merge into.
+  - Hints now follow the **focus ring**, not just the route — Settings shows `←→ group` only on the
+    tab bar and `Ctrl+S save` only when a save is possible; the Server page swaps to
+    `Enter send command` while the Console tab's command line holds the ring.
+  - `src/hooks/use-hints.test.ts` — 7 tests (189 total, 20 files) over scope order, key-signature
+    de-duplication, chord equivalence, the typing filter, and a suppressed hint freeing its key.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 189/189; `bunx biome check src` clean bar three
+    pre-existing warnings. Driven under **tmux** at 120×36 against a sandbox `$HOME` — one strip on
+    every screen, the Dashboard/Server/Settings/Create keys merging ahead of the shell's, `Esc cancel`
+    replacing `Esc back` on the create form, and the character shortcuts disappearing the moment a
+    text field or the console command line takes the capture. No stderr in any run.
 
 ## In progress
 

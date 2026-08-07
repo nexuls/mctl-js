@@ -15,15 +15,10 @@
 
 import { useState } from "react";
 import { useKeyboard } from "@opentui/react";
-import {
-	Button,
-	Input,
-	Select,
-	Checkbox,
-	Hint,
-} from "../../components/index.ts";
+import { Button, Input, Select, Checkbox } from "../../components/index.ts";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
+import { useHints } from "../../hooks/use-hints.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import { useMctl } from "../../hooks/use-mctl.tsx";
 import { useConfig } from "../../hooks/use-config.ts";
@@ -77,6 +72,20 @@ export function ServerCreate() {
 	const busy =
 		job !== undefined && (job.state === "queued" || job.state === "running");
 	const invalid = name.trim() === "" || id === "";
+
+	// The shell draws these in its strip. `Esc` is relabelled from the shell's
+	// "back" to what leaving this page actually means — the same key, so the more
+	// specific label wins the slot rather than adding a second one. While a job is
+	// running the form is inert, so only the escape hatch is advertised.
+	useHints(
+		busy
+			? [{ keys: "Esc", label: "cancel" }]
+			: [
+					{ keys: "Tab", label: "next field" },
+					{ keys: "Enter", label: "create" },
+					{ keys: "Esc", label: "cancel" },
+				],
+	);
 
 	const submit = async () => {
 		if (!context || invalid || busy) return;
@@ -134,11 +143,9 @@ export function ServerCreate() {
 		<box flexDirection="column" flexGrow={1} paddingX={1}>
 			<PageHeader
 				title="New server"
-				subtitle={
-					busy
-						? "creating…"
-						: `Tab moves ${icons.separator} Enter creates ${icons.separator} Esc cancels`
-				}
+				// The keys are in the shell's hint strip; repeating them here was the
+				// third copy of the same three shortcuts on one screen.
+				subtitle={busy ? "creating…" : "Fills in from your defaults"}
 			/>
 
 			<Input
@@ -235,16 +242,6 @@ export function ServerCreate() {
 					</Button>
 				</box>
 			)}
-
-			<box marginTop={1}>
-				<Hint
-					items={[
-						{ keys: "Tab", label: "next field" },
-						{ keys: "Enter", label: "create" },
-						{ keys: "Esc", label: "cancel" },
-					]}
-				/>
-			</box>
 		</box>
 	);
 }

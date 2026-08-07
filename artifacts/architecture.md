@@ -365,7 +365,8 @@ exit. Both call identical core services.
 
 **TUI router — `app/routes.ts` + `hooks/use-router.tsx` + `app/Router.tsx`.** No URL: an in-memory
 `RouterProvider` holds the active route, its params, and a back-stack; pages navigate via `useRouter`.
-`Router.tsx` is the shell (top bar + `NavRail` + page host + hint strip) and owns the global keyboard
+`Router.tsx` is the shell (top bar + `NavRail` + page host + the app's single hint strip, fed by
+`hooks/use-hints.tsx` — see § Keyboard hints) and owns the global keyboard
 (digits 1–6 → routes, `Esc` = back-else-quit, `q` quit, `t` theme). Adding a screen = one `NAV` row +
 one entry in the `Page` switch. The event bus (started in `renderApp`, injected via `EventBusProvider`)
 drives the data hooks (`use-servers`/`use-config`/`use-jobs`), which re-run the core read path
@@ -390,6 +391,24 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > `serverId` param, so a bare digit shortcut could not address them. They are reached from the
 > Dashboard's server table (`Enter` / `c` / `n`) and from the detail page's action bar. **There is no
 > Servers screen** — the table lives on the Dashboard (§ Dashboard below).
+
+## Keyboard hints — `hooks/use-hints.tsx` + the shell's strip
+
+There is **one** hint strip in the app, drawn by `Router.tsx`. Pages do not render their own — before
+this hook they did, so the shell's strip and the page's strip both listed `Esc` and could disagree
+about what it meant. A page now *registers* its shortcuts and the shell renders the merged result.
+
+Contributions carry a **scope** (`context` → `page` → `global`, most specific first) and merge by
+**key signature, not label**: the most specific contribution owns a key, which is how `ServerCreate`
+relabels the shell's `Esc → back` as `Esc → cancel` without adding a second entry. They also carry a
+`when` (`always` | `idle` | `typing`): while an input capture is held the shell's character shortcuts
+are inert, so `idle` hints are dropped — the typing rule lives here rather than being re-implemented
+in each page's strip, which is what the old shell did for itself only.
+
+Two contexts, deliberately: `register` is stable, so a page that only contributes never re-renders
+when the strip changes; only the strip subscribes to the merged list. `composeHints` is pure and
+exported, so the merge rules are unit-tested without a renderer. Like `useIcons`, the hook is inert
+rather than throwing outside a provider — the setup wizard draws its own footer outside the shell.
 
 ## Notifications — `components/Toast.tsx` + `hooks/use-toast.tsx`
 

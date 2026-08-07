@@ -29,7 +29,8 @@ import { useRouter } from "../../hooks/use-router.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import type { Server } from "../../types/server.ts";
 import type { ServerInsight, ServerSize } from "../../core/server/inspect.ts";
-import { Hint, Table, type TableColumn } from "../../components/index.ts";
+import { Table, type TableColumn } from "../../components/index.ts";
+import { useHints } from "../../hooks/use-hints.tsx";
 import { formatBytes, formatDuration } from "../../lib/format.ts";
 import {
 	cpuText,
@@ -344,6 +345,20 @@ export function Dashboard() {
 
 	const open = (server: Server) => navigate("server", { serverId: server.id });
 
+	// The shell draws the strip; this page only says what its own keys do. `n` is
+	// listed even with an empty list (it is how the first server gets made) while
+	// the row keys are registered only once there is a row to act on.
+	useHints(
+		servers.length === 0
+			? [{ keys: "n", label: "new server", when: "idle" }]
+			: [
+					{ keys: `${icons.arrowUp}${icons.arrowDown}/jk`, label: "move" },
+					{ keys: "Enter", label: "details" },
+					{ keys: "c", label: "console", when: "idle" },
+					{ keys: "n", label: "new server", when: "idle" },
+				],
+	);
+
 	useKeyboard((key) => {
 		// `n` works with an empty list — it is how the first server gets made.
 		if (key.name === "n") {
@@ -618,22 +633,6 @@ export function Dashboard() {
 					)
 				}
 			/>
-
-			<box
-				flexShrink={0}
-				border={["top"]}
-				borderColor={colors.border}
-				paddingX={1}
-			>
-				<Hint
-					items={[
-						{ keys: "↑↓/jk", label: "move" },
-						{ keys: "Enter", label: "details" },
-						{ keys: "c", label: "console" },
-						{ keys: "n", label: "new server" },
-					]}
-				/>
-			</box>
 		</box>
 	);
 }

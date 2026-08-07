@@ -39,7 +39,8 @@ import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useMctl } from "../../hooks/use-mctl.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
-import { Button, Dialog, Hint, ScrollBox } from "../../components/index.ts";
+import { useHints } from "../../hooks/use-hints.tsx";
+import { Button, Dialog, ScrollBox } from "../../components/index.ts";
 import { Tabs } from "../../components/Tabs.tsx";
 import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
 import {
@@ -106,6 +107,28 @@ export function ServerDetail() {
 		...actions,
 		...(tab === "console" ? [CONSOLE_ID] : []),
 	]);
+
+	// Hints follow the ring, not the page: while the Console tab's command line
+	// holds the focus, ←/→ belong to the text field rather than the tab bar and
+	// Enter sends a command instead of pressing a button, so the page advertises a
+	// different set. Both are registered unconditionally with an `active` flag —
+	// hooks cannot live behind the early returns below.
+	const onConsole = tab === "console" && ring.isFocused(CONSOLE_ID);
+	useHints(
+		[
+			{ keys: "Tab", label: "next control" },
+			{ keys: [icons.arrowLeft, icons.arrowRight], label: "switch tab" },
+			{ keys: "Enter", label: "activate" },
+		],
+		{ active: !onConsole },
+	);
+	useHints(
+		[
+			{ keys: "Enter", label: "send command" },
+			{ keys: "Tab", label: "leave console" },
+		],
+		{ scope: "context", active: onConsole },
+	);
 
 	/**
 	 * Run a lifecycle action, reporting the outcome as a toast.
@@ -310,17 +333,6 @@ export function ServerDetail() {
 					{body}
 				</ScrollBox>
 			)}
-
-			<box paddingX={1} flexShrink={0}>
-				<Hint
-					items={[
-						{ keys: "Tab", label: "next control" },
-						{ keys: [icons.arrowLeft, icons.arrowRight], label: "switch tab" },
-						{ keys: "Enter", label: "activate" },
-						{ keys: "Esc", label: "back" },
-					]}
-				/>
-			</box>
 
 			<Dialog
 				open={confirmDelete}

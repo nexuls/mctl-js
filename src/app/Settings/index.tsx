@@ -32,7 +32,6 @@ import {
 	Button,
 	Checkbox,
 	FormGroup,
-	Hint,
 	Input,
 	RadioGroup,
 	ScrollBox,
@@ -46,6 +45,7 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
+import { useHints } from "../../hooks/use-hints.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
 import { resolveRootPaths } from "../../core/config/index.ts";
 import { alpha } from "../../lib/colors.ts";
@@ -264,6 +264,18 @@ export function Settings() {
 
 	const invalid = Object.keys(issues).length > 0;
 	const canSave = dirty && !invalid && !saving;
+
+	// ←/→ only reach the tab bar while the ring is on it; anywhere else they are
+	// the text cursor, so the hint follows the ring rather than the page. Ctrl+S is
+	// listed only when it would do something — a disabled key advertised as live is
+	// the one thing worse than an unadvertised one.
+	useHints([
+		...(ring.isFocused(TABS_ID)
+			? [{ keys: [icons.arrowLeft, icons.arrowRight], label: "group" }]
+			: []),
+		{ keys: "Tab", label: "next field" },
+		...(canSave ? [{ keys: "Ctrl+S", label: "save" }] : []),
+	]);
 
 	/**
 	 * Save and report the outcome as a toast. The page header still carries the
@@ -595,18 +607,14 @@ export function Settings() {
 				paddingTop={0}
 				paddingX={1}
 			>
+				{/* The keys live in the shell's strip now; this row keeps only what is
+				    specific to a save that failed. */}
 				{saveError ? (
 					<text fg={colors.error} truncate wrapMode="none">
 						{saveError}
 					</text>
 				) : (
-					<Hint
-						items={[
-							{ keys: ["←", "→"], label: "group" },
-							{ keys: "Tab", label: "next field" },
-							{ keys: "Ctrl+S", label: "save" },
-						]}
-					/>
+					<box />
 				)}
 				<box flexDirection="row" gap={2} flexShrink={0} alignItems="center">
 					<Button
