@@ -146,21 +146,28 @@ export function Columns({
 	wide,
 	left,
 	right,
+	paddingX = 1,
 }: {
 	wide: boolean;
 	left: ReactNode;
 	right: ReactNode;
+	paddingX?: number;
 }) {
 	if (!wide) {
 		return (
-			<box flexDirection="column">
+			<box flexDirection="column" flexGrow={1} paddingX={paddingX}>
 				{left}
 				{right}
 			</box>
 		);
 	}
 	return (
-		<box flexDirection="row" gap={1} alignItems="flex-start">
+		<box
+			flexDirection="row"
+			gap={1}
+			alignItems="flex-start"
+			paddingX={paddingX}
+		>
 			<box flexDirection="column" flexGrow={1} flexBasis={0}>
 				{left}
 			</box>

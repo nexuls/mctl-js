@@ -199,7 +199,7 @@ export function ServerDetail() {
 	})();
 
 	return (
-		<box flexDirection="column" flexGrow={1}>
+		<box flexDirection="column" flexGrow={1} paddingX={0}>
 			{/* Identity + lifecycle, pinned above the tabs: which server this is and
 			    what it is doing must not scroll away, and the actions belong to the
 			    whole page rather than to any one tab. */}
@@ -302,11 +302,11 @@ export function ServerDetail() {
 			    top of its own scroll rather than inheriting the previous tab's
 			    offset. */}
 			{TAB_OWNS_SCROLL.has(tab) ? (
-				<box key={tab} flexGrow={1} flexDirection="column" paddingX={1}>
+				<box key={tab} flexGrow={1} flexDirection="column">
 					{body}
 				</box>
 			) : (
-				<ScrollBox key={tab} flexGrow={1} paddingX={1}>
+				<ScrollBox key={tab} flexGrow={1}>
 					{body}
 				</ScrollBox>
 			)}
