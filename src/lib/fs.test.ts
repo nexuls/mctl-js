@@ -72,6 +72,8 @@ describe("dirSize", () => {
 		await file(join(root, "keep.txt"), 10);
 		await file(join(root, "cache", "big.bin"), 999);
 
-		expect((await dirSize(root, { exclude: new Set(["cache"]) })).bytes).toBe(10);
+		expect((await dirSize(root, { exclude: new Set(["cache"]) })).bytes).toBe(
+			10,
+		);
 	});
 });

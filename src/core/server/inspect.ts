@@ -163,7 +163,15 @@ async function readContent(
 			countJsonArray(join(dir, ROSTER_FILES.whitelisted)),
 			countJsonArray(join(dir, ROSTER_FILES.banned)),
 		]);
-	return { mods, plugins, datapacks, knownPlayers: known, ops, whitelisted, banned };
+	return {
+		mods,
+		plugins,
+		datapacks,
+		knownPlayers: known,
+		ops,
+		whitelisted,
+		banned,
+	};
 }
 
 /**

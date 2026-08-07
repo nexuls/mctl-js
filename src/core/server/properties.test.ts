@@ -51,9 +51,9 @@ describe("parseProperties", () => {
 	});
 
 	test("joins a backslash-continued line", () => {
-		expect(parseProperties("resource-pack=http://example\\\n  .com/pack.zip")).toEqual(
-			{ "resource-pack": "http://example.com/pack.zip" },
-		);
+		expect(
+			parseProperties("resource-pack=http://example\\\n  .com/pack.zip"),
+		).toEqual({ "resource-pack": "http://example.com/pack.zip" });
 	});
 
 	test("keeps an empty value rather than dropping the key", () => {

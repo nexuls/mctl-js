@@ -16,21 +16,43 @@ import { fitCell, layoutColumns, type TableColumn } from "./Table.tsx";
 function columns(): TableColumn<unknown>[] {
 	return [
 		{ id: "caret", header: " ", width: 1, required: true, render: () => "" },
-		{ id: "id", header: "id", min: 10, flex: 3, required: true, render: () => "" },
-		{ id: "state", header: "state", width: 12, required: true, render: () => "" },
-		{ id: "players", header: "players", width: 7, priority: 90, render: () => "" },
+		{
+			id: "id",
+			header: "id",
+			min: 10,
+			flex: 3,
+			required: true,
+			render: () => "",
+		},
+		{
+			id: "state",
+			header: "state",
+			width: 12,
+			required: true,
+			render: () => "",
+		},
+		{
+			id: "players",
+			header: "players",
+			width: 7,
+			priority: 90,
+			render: () => "",
+		},
 		{ id: "cpu", header: "cpu", width: 5, priority: 85, render: () => "" },
 		{ id: "kind", header: "kind", width: 8, priority: 70, render: () => "" },
-		{ id: "runtime", header: "runtime", width: 10, priority: 30, render: () => "" },
+		{
+			id: "runtime",
+			header: "runtime",
+			width: 10,
+			priority: 30,
+			render: () => "",
+		},
 		{ id: "java", header: "java", width: 4, priority: 20, render: () => "" },
 	];
 }
 
 /** Total cells a resolved layout occupies, gaps included. */
-function occupied(
-	resolved: ReturnType<typeof layoutColumns>,
-	gap = 1,
-): number {
+function occupied(resolved: ReturnType<typeof layoutColumns>, gap = 1): number {
 	return (
 		resolved.reduce((sum, c) => sum + c.width, 0) +
 		gap * Math.max(0, resolved.length - 1)

@@ -252,9 +252,9 @@ export function pingServer(
 			if (!jsonLength) return finish(undefined);
 
 			const start = length.size + id.size + jsonLength.size;
-			const text = buffer.subarray(start, start + jsonLength.value).toString(
-				"utf8",
-			);
+			const text = buffer
+				.subarray(start, start + jsonLength.value)
+				.toString("utf8");
 
 			let parsed: unknown;
 			try {

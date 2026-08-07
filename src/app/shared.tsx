@@ -65,7 +65,10 @@ export function uptimeOf(server: Server): number | undefined {
 }
 
 /** CPU share as a percentage of one core, e.g. `"212%"`. */
-export function cpuText(usage: ProcessUsage | undefined, empty: string): string {
+export function cpuText(
+	usage: ProcessUsage | undefined,
+	empty: string,
+): string {
 	return usage ? `${Math.round(usage.cpuPercent)}%` : empty;
 }
 

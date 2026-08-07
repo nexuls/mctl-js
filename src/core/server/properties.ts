@@ -216,9 +216,7 @@ function str(
  * Minecraft's documented defaults for anything missing. Pure; exported so the
  * mapping can be tested without a server directory.
  */
-export function readProperties(
-	raw: Record<string, string>,
-): ServerProperties {
+export function readProperties(raw: Record<string, string>): ServerProperties {
 	const gamemodeRaw = str(raw, "gamemode", "survival").trim();
 	const difficultyRaw = str(raw, "difficulty", "easy").trim();
 	const hardcore = bool(raw, "hardcore", false);

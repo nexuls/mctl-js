@@ -115,7 +115,9 @@ describe("pingServer", () => {
 	test("resolves undefined on a garbage payload rather than throwing", async () => {
 		const port = await listen((socket) => {
 			socket.once("data", () =>
-				socket.write(Buffer.concat([varint(6), varint(0x00), Buffer.from("]not{")])),
+				socket.write(
+					Buffer.concat([varint(6), varint(0x00), Buffer.from("]not{")]),
+				),
 			);
 		});
 		expect(await pingServer("127.0.0.1", port, 500)).toBeUndefined();
