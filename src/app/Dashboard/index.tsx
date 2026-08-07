@@ -164,7 +164,7 @@ function Detail({
 	const { colors } = useTheme();
 	return (
 		<box flexDirection="row" gap={1}>
-			<text fg={colors.muted}>{label.padEnd(9)}</text>
+			<text fg={colors.muted}>{label.padEnd(10)}</text>
 			<text fg={color ?? colors.foreground}>{value}</text>
 		</box>
 	);

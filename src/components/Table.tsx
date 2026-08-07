@@ -293,7 +293,7 @@ export function Table<T>({
 	// The ref is attached on every render path (there is only one), so the
 	// measurement can never be gated behind the branch it decides — the trap that
 	// once froze `Select` into a dropdown forever.
-	const outer = (width ?? (measured || terminalWidth)) - 1;
+	const outer = (width ?? (measured || terminalWidth)) - 3;
 	// A scrollbox draws its scrollbar *inside* its own width, so the rows would
 	// be one cell narrower than the header — and only once the list grew past the
 	// viewport, which is a misalignment that appears out of nowhere. The cell is
@@ -308,7 +308,14 @@ export function Table<T>({
 				const key = keyOf(row);
 				const selected = key === selectedKey;
 				return (
-					<box key={key} flexDirection="column" flexShrink={0} marginBottom={1}>
+					<box
+						key={key}
+						flexDirection="column"
+						flexShrink={0}
+						border
+						borderColor={selected ? colors.primary : colors.border}
+						borderStyle={"rounded"}
+					>
 						<box
 							flexDirection="row"
 							gap={gap}
@@ -353,10 +360,10 @@ export function Table<T>({
 				<box
 					flexDirection="row"
 					gap={gap}
-					border={["bottom"]}
-					borderColor={colors.border}
+					border={rows.length === 0 ? ["bottom"] : undefined}
+					borderColor={rows.length === 0 ? colors.border : undefined}
 					flexShrink={0}
-					paddingX={1}
+					paddingX={2}
 					paddingRight={scrollRows ? SCROLLBAR_RESERVE : 1}
 				>
 					{resolved.map(({ column, width: cellWidth }) => (
