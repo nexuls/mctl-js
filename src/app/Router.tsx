@@ -58,6 +58,10 @@ const OWN_SCROLL: ReadonlySet<RouteId> = new Set<RouteId>([
 	// above the scrolling rows — a table whose header scrolls away is unreadable
 	// the moment the list is longer than the screen.
 	"dashboard",
+	// The server page pins an identity header, a lifecycle action bar and its tab
+	// bar above one scrolling tab body — and its Console tab pins a command line
+	// of its own, which needs a definite height the shell's scrollbox cannot give.
+	"server",
 ]);
 
 /** The active page component for a route. */
@@ -210,7 +214,11 @@ function titleFor(route: RouteId): string {
  */
 export function AppRouter() {
 	return (
-		<RouterProvider initialRoute="dashboard">
+		// Temporarily hardcode the first server as the initial route
+		<RouterProvider
+			initialRoute="server"
+			params={{ serverId: "first-paper-server" }}
+		>
 			{/* The input capture the shell reads is provided in `App.tsx`, above both
 			    this router and the setup wizard. */}
 			<AppShell />

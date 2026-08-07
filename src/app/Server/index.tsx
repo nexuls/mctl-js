@@ -1,20 +1,27 @@
 /**
  * Server — the detail page for one server, addressed by the router's `serverId`
- * param and re-derived live via {@link useServer} + {@link useServerInsight}. It
- * owns the lifecycle actions (start, stop, restart, console, delete) and is the
- * **exhaustive** view of a server: everything MCTL can learn about it without
- * asking the user for credentials.
+ * param and re-derived live via {@link useServer} + {@link useServerInsight}.
+ *
+ * **A tabbed multi-screen page.** One server carries far more than a screen of
+ * information, and the tabs (`tabs.ts`) split it by the question being asked:
+ * Overview / Console / Players / World / Content / Backups / Performance /
+ * Network / Settings. This container owns everything the tabs share — the
+ * identity header, the lifecycle action bar, the tab bar, the focus ring and the
+ * delete confirmation — and each tab under `tabs/` renders one screen from the
+ * `server` + `insight` + `size` it is handed. Adding a screen is one row in
+ * `SERVER_TABS`, one file, and one `case` below (the union makes a missing case
+ * a type error).
  *
  * Page-layer (AGENTS.md § 3): renders view models and calls `RuntimeManager` /
  * `ServerManager` through {@link useMctl}; no I/O of its own. The buttons are
  * exactly the CLI's `start`/`stop`/`restart`/`delete`, calling the same services
  * — the two front-ends are projections of one core.
  *
- * **Why the detail lives here and not on the Dashboard.** The dashboard answers
- * "what is happening across the fleet" and has one row per server to say it in;
- * this page has the whole screen, so it carries the long tail — every
- * `server.properties` rule, the player rosters, the mod counts, the join
- * address, the on-disk footprint.
+ * **The page owns its scrolling** (its route is in `OWN_SCROLL`): the header,
+ * action bar and tab bar are pinned chrome, and only the active tab's body
+ * scrolls. The Console tab is hosted without a scrollbox because it already
+ * pins a command line under a scrolling pane of its own — never nest one page
+ * scrollbox inside another.
  *
  * **Delete is guarded by a two-step confirmation**, and even then only removes
  * the registry entry: erasing worlds from a TUI keystroke is not something MCTL
@@ -22,9 +29,8 @@
  * (AGENTS.md § Secrets and user data).
  */
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { TextAttributes } from "@opentui/core";
-import { useTerminalDimensions } from "@opentui/react";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { useServer } from "../../hooks/use-servers.ts";
 import { useServerInsight } from "../../hooks/use-server-insights.ts";
@@ -32,475 +38,74 @@ import { useRouter } from "../../hooks/use-router.tsx";
 import { useFocusRing } from "../../hooks/use-focus-ring.ts";
 import { useMctl } from "../../hooks/use-mctl.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
-import type { Server } from "../../types/server.ts";
-import type { ServerInsight, ServerSize } from "../../core/server/inspect.ts";
 import { useIcons } from "../../hooks/use-icons.tsx";
-import { Button, Dialog, Hint, ProgressBar } from "../../components/index.ts";
+import { Button, Dialog, Hint, ScrollBox } from "../../components/index.ts";
+import { Tabs } from "../../components/Tabs.tsx";
+import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
 import {
-	formatBytes,
-	formatDuration,
-	parseMemorySize,
-} from "../../lib/format.ts";
-import {
-	PageHeader,
-	serverStateColor,
-	serverStateIcon,
-	uptimeOf,
-	yesNo,
-} from "../shared.tsx";
-
-/** Terminal width at or above which the panels sit in two columns. */
-const TWO_COLUMN_WIDTH = 96;
-
-/** Label column width inside a panel, so every row's values line up. */
-const LABEL_WIDTH = 13;
-
-/** A `label: value` detail row. */
-function Detail({
-	label,
-	value,
-	color,
-}: {
-	label: string;
-	value: string;
-	color?: string;
-}) {
-	const { colors } = useTheme();
-	return (
-		<box flexDirection="row" gap={1}>
-			<text fg={colors.muted}>{label.padEnd(LABEL_WIDTH)}</text>
-			<text fg={color ?? colors.foreground}>{value}</text>
-		</box>
-	);
-}
-
-/** A bordered, titled section of the page. */
-function Panel({
-	title,
-	accent,
-	children,
-}: {
-	title: string;
-	accent?: string;
-	children: ReactNode;
-}) {
-	const { colors } = useTheme();
-	return (
-		<box
-			flexDirection="column"
-			border
-			borderStyle="rounded"
-			borderColor={colors.border}
-			title={` ${title} `}
-			titleColor={accent ?? colors.secondary}
-			paddingX={1}
-			marginBottom={1}
-			flexGrow={1}
-		>
-			{children}
-		</box>
-	);
-}
-
-/**
- * A metered row: a label, a bar, and a readout. Used where a number only means
- * something against a ceiling — players against slots, memory against the heap
- * the JVM was given.
- */
-function Meter({
-	label,
-	value,
-	max,
-	readout,
-	variant,
-}: {
-	label: string;
-	value: number;
-	max: number;
-	readout: string;
-	variant: "primary" | "success" | "info" | "warning";
-}) {
-	const { colors } = useTheme();
-	return (
-		<box flexDirection="row" gap={1} alignItems="center">
-			<text fg={colors.muted}>{label.padEnd(LABEL_WIDTH)}</text>
-			<ProgressBar
-				value={max > 0 ? Math.min(value, max) : 0}
-				max={max > 0 ? max : 1}
-				width={18}
-				style="smooth"
-				variant={variant}
-				readout="none"
-			/>
-			<text fg={colors.foreground}>{readout}</text>
-		</box>
-	);
-}
-
-/** Human-readable Java field. */
-function javaLabel(server: Server, empty: string): string {
-	if (server.java === undefined) return empty;
-	return typeof server.java === "number"
-		? String(server.java)
-		: `${server.java.pinned} (pinned)`;
-}
+	DEFAULT_SERVER_TAB,
+	SERVER_TABS,
+	serverTab,
+	type ServerTabId,
+} from "./tabs.ts";
+import type { ServerTabProps } from "./panels.tsx";
+import { OverviewTab } from "./tabs/Overview.tsx";
+import { ConsoleTab } from "./tabs/Console.tsx";
+import { PlayersTab } from "./tabs/Players.tsx";
+import { WorldTab } from "./tabs/World.tsx";
+import { ContentTab } from "./tabs/Content.tsx";
+import { BackupsTab } from "./tabs/Backups.tsx";
+import { PerformanceTab } from "./tabs/Performance.tsx";
+import { NetworkTab } from "./tabs/Network.tsx";
+import { SettingsTab } from "./tabs/Settings.tsx";
 
 /** Which lifecycle action is currently in flight, for the button labels. */
 type Pending = "start" | "stop" | "restart" | undefined;
 
-/** Live status: where it is, how long it has been there, what it answers. */
-function StatusPanel({
-	server,
-	insight,
-}: {
-	server: Server;
-	insight?: ServerInsight;
-}) {
-	const { colors } = useTheme();
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	const uptime = uptimeOf(server);
-	return (
-		<Panel title="Status" accent={serverStateColor(colors, server.state)}>
-			<Detail
-				label="state"
-				value={`${icons[serverStateIcon(server.state)]} ${server.state}`}
-				color={serverStateColor(colors, server.state)}
-			/>
-			<Detail
-				label="uptime"
-				value={uptime === undefined ? empty : formatDuration(uptime)}
-			/>
-			<Detail
-				label="pid"
-				value={server.session ? String(server.session.pid) : empty}
-			/>
-			<Detail
-				label="started"
-				value={server.session?.startedAt ?? empty}
-			/>
-			<Detail
-				label="join address"
-				value={insight?.address.joinAddress ?? empty}
-			/>
-			<Detail
-				label="bind"
-				value={
-					insight?.address.bindIp
-						? insight.address.bindIp
-						: "all interfaces"
-				}
-			/>
-			<Detail label="port" value={String(insight?.address.port ?? empty)} />
-			<Detail
-				label="responding"
-				value={
-					insight?.status
-						? `yes (${insight.status.latencyMs} ms)`
-						: server.state === "running"
-							? "not yet"
-							: empty
-				}
-			/>
-			<Detail
-				label="advertises"
-				value={insight?.status?.versionName ?? empty}
-			/>
-		</Panel>
-	);
-}
+/** Ring id of the tab bar. Always first, so ←/→ switch tabs on arrival. */
+const TABS_ID = "__tabs";
 
-/** CPU, memory and threads of the server process. */
-function ResourcesPanel({
-	server,
-	insight,
-}: {
-	server: Server;
-	insight?: ServerInsight;
-}) {
-	const { colors } = useTheme();
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	const usage = insight?.usage;
-	const heapBytes = parseMemorySize(server.memory);
+/** Ring id of the Console tab's command line. */
+const CONSOLE_ID = "__console";
 
-	return (
-		<Panel title="Resources">
-			{usage ? (
-				<>
-					<Meter
-						label="cpu"
-						value={usage.cpuPercent}
-						max={100 * usage.cores}
-						readout={`${Math.round(usage.cpuPercent)}% of ${usage.cores} cores`}
-						variant="info"
-					/>
-					<Meter
-						label="memory"
-						value={usage.rssBytes}
-						max={heapBytes ?? usage.rssBytes}
-						readout={
-							heapBytes
-								? `${formatBytes(usage.rssBytes)} / ${server.memory} heap`
-								: formatBytes(usage.rssBytes)
-						}
-						variant="primary"
-					/>
-					<Detail
-						label="threads"
-						value={usage.threads === undefined ? empty : String(usage.threads)}
-					/>
-					<Detail
-						label="of machine"
-						value={`${usage.memoryPercent.toFixed(1)}% of system memory`}
-					/>
-				</>
-			) : (
-				<text fg={colors.muted}>
-					No process to sample — the server is not running.
-				</text>
-			)}
-			<Detail label="heap" value={server.memory} />
-			<Detail label="java" value={javaLabel(server, empty)} />
-			{/* Said out loud rather than left as a mysterious gap: these are the
-			    numbers people expect next to CPU, and none of them can be read from
-			    outside the JVM. TPS/MSPT need an RCON `/tps` (Phase 4/5) or a mod,
-			    and heap *occupancy* needs JMX. */}
-			<Detail
-				label="tps / mspt"
-				value="needs RCON — not available yet"
-				color={colors.muted}
-			/>
-		</Panel>
-	);
-}
-
-/** Who is online now, and who the server knows about. */
-function PlayersPanel({ insight }: { insight?: ServerInsight }) {
-	const { colors } = useTheme();
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	const status = insight?.status;
-	const max = status?.playersMax ?? insight?.properties?.maxPlayers ?? 0;
-	const content = insight?.content ?? {};
-
-	return (
-		<Panel title="Players">
-			<Meter
-				label="online"
-				value={status?.playersOnline ?? 0}
-				max={max}
-				readout={`${status ? status.playersOnline : empty} / ${max || empty}`}
-				variant="success"
-			/>
-			{status && status.sample.length > 0 ? (
-				<Detail
-					label="here now"
-					value={status.sample.map((p) => p.name).join(", ")}
-					color={colors.success}
-				/>
-			) : null}
-			{status && status.playersOnline > status.sample.length ? (
-				<text fg={colors.muted}>
-					{" "}
-					The server sends only a sample of names, not the whole list.
-				</text>
-			) : null}
-			<Detail
-				label="known"
-				value={
-					content.knownPlayers === undefined
-						? empty
-						: `${content.knownPlayers} (recent)`
-				}
-			/>
-			<Detail
-				label="operators"
-				value={content.ops === undefined ? empty : String(content.ops)}
-			/>
-			<Detail
-				label="whitelisted"
-				value={
-					content.whitelisted === undefined
-						? empty
-						: `${content.whitelisted} (${
-								insight?.properties?.whitelist ? "enforced" : "not enforced"
-							})`
-				}
-			/>
-			<Detail
-				label="banned"
-				value={content.banned === undefined ? empty : String(content.banned)}
-			/>
-		</Panel>
-	);
-}
-
-/** Everything `server.properties` says about how the world plays. */
-function WorldPanel({ insight }: { insight?: ServerInsight }) {
-	const { colors } = useTheme();
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	const properties = insight?.properties;
-
-	if (!properties) {
-		return (
-			<Panel title="World & rules">
-				<text fg={colors.muted}>
-					No server.properties yet — Minecraft writes it on the first run.
-				</text>
-			</Panel>
-		);
-	}
-
-	return (
-		<Panel title="World & rules">
-			<Detail label="motd" value={insight?.status?.motd || properties.motd} />
-			<Detail label="level" value={properties.levelName} />
-			<Detail label="generator" value={properties.levelType} />
-			<Detail
-				label="seed"
-				value={properties.levelSeed === "" ? "random" : properties.levelSeed}
-			/>
-			<Detail
-				label="difficulty"
-				value={
-					properties.hardcore
-						? `${properties.difficulty} (hardcore)`
-						: properties.difficulty
-				}
-				color={properties.hardcore ? colors.error : undefined}
-			/>
-			<Detail label="gamemode" value={properties.gamemode} />
-			<Detail label="pvp" value={yesNo(properties.pvp, empty)} />
-			<Detail
-				label="online mode"
-				value={
-					properties.onlineMode ? "yes" : "no (unauthenticated players allowed)"
-				}
-				color={properties.onlineMode ? undefined : colors.warning}
-			/>
-			<Detail label="whitelist" value={yesNo(properties.whitelist, empty)} />
-			<Detail
-				label="distances"
-				value={`view ${properties.viewDistance} · sim ${properties.simulationDistance}`}
-			/>
-			<Detail
-				label="spawn guard"
-				value={`${properties.spawnProtection} blocks`}
-			/>
-			<Detail label="flight" value={yesNo(properties.allowFlight, empty)} />
-			<Detail label="nether" value={yesNo(properties.allowNether, empty)} />
-			<Detail
-				label="command blk"
-				value={yesNo(properties.commandBlocks, empty)}
-			/>
-			<Detail
-				label="rcon"
-				value={
-					properties.rconEnabled
-						? `enabled on ${properties.rconPort}`
-						: "disabled"
-				}
-			/>
-			<Detail label="query" value={yesNo(properties.queryEnabled, empty)} />
-		</Panel>
-	);
-}
-
-/** What the server directory holds and how much room it takes. */
-function StoragePanel({
-	insight,
-	size,
-}: {
-	insight?: ServerInsight;
-	size?: ServerSize;
-}) {
-	const { colors } = useTheme();
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	const content = insight?.content ?? {};
-	const measuring = `measuring${icons.ellipsis}`;
-
-	return (
-		<Panel title="Storage & content">
-			<Detail
-				label="total"
-				value={
-					size
-						? `${size.truncated ? "≥ " : ""}${formatBytes(size.totalBytes)}`
-						: measuring
-				}
-			/>
-			<Detail
-				label="world"
-				value={size ? formatBytes(size.worldBytes) : measuring}
-			/>
-			<Detail
-				label="files"
-				value={size ? String(size.files) : measuring}
-				color={colors.muted}
-			/>
-			<Detail
-				label="mods"
-				value={content.mods === undefined ? empty : String(content.mods)}
-			/>
-			<Detail
-				label="plugins"
-				value={content.plugins === undefined ? empty : String(content.plugins)}
-			/>
-			<Detail
-				label="datapacks"
-				value={
-					content.datapacks === undefined ? empty : String(content.datapacks)
-				}
-			/>
-		</Panel>
-	);
-}
-
-/** The `mctl.json` side: what MCTL itself was told about this server. */
-function ConfigurationPanel({ server }: { server: Server }) {
-	const { icons } = useIcons();
-	const empty = icons.emptyValue;
-	return (
-		<Panel title="Configuration">
-			<Detail label="id" value={server.id} />
-			<Detail label="name" value={server.name} />
-			<Detail label="kind" value={server.kind} />
-			<Detail label="minecraft" value={server.minecraftVersion} />
-			<Detail label="loader" value={server.loaderVersion ?? empty} />
-			<Detail label="runtime" value={server.runtime} />
-			<Detail label="network" value={server.network} />
-			<Detail label="path" value={server.path} />
-		</Panel>
-	);
-}
+/**
+ * Tabs that manage their own vertical scrolling and are therefore hosted in a
+ * plain box — the same rule the shell applies to pages (`OWN_SCROLL` in
+ * `Router.tsx`), for the same reason: an inner scrollbox needs a definite
+ * height, which a surrounding scrollbox cannot give it.
+ */
+const TAB_OWNS_SCROLL: ReadonlySet<ServerTabId> = new Set<ServerTabId>([
+	"console",
+]);
 
 export function ServerDetail() {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { params, navigate } = useRouter();
-	const { width: terminalWidth } = useTerminalDimensions();
 	const toast = useToast();
 	const { context } = useMctl();
 	const id = params.serverId ?? "";
 	const { data: server, loading, refresh } = useServer(id);
 	const { insight, size } = useServerInsight(server);
+	const [tab, setTab] = useState<ServerTabId>(DEFAULT_SERVER_TAB);
 	const [pending, setPending] = useState<Pending>();
 	const [confirmDelete, setConfirmDelete] = useState(false);
 
-	// The action bar's buttons only honour Enter/Space while `focused`, so the page
-	// owns a ring over them — without it the actions would be mouse-only, which is
+	// The tab bar and the action buttons only honour keys while `focused`, so the
+	// page owns a ring over them — without it both would be mouse-only, which is
 	// not acceptable in a terminal UI. The ring's membership follows the *probed*
-	// state, because that is what decides whether Stop+Restart or Start is on
-	// screen; `useFocusRing` clamps its index, so the set changing under it (a
-	// server stopping in another instance) is safe.
+	// state (Stop+Restart vs Start) and the active tab (the console adds its
+	// command line); `useFocusRing` clamps its index, so a set that changes under
+	// it — a server stopped by another instance — is safe.
 	const actions =
 		server?.state === "running"
-			? ["stop", "restart", "console", "remove"]
-			: ["start", "console", "remove"];
-	const ring = useFocusRing(actions);
+			? ["stop", "restart", "remove"]
+			: ["start", "remove"];
+	const ring = useFocusRing([
+		TABS_ID,
+		...actions,
+		...(tab === "console" ? [CONSOLE_ID] : []),
+	]);
 
 	/**
 	 * Run a lifecycle action, reporting the outcome as a toast.
@@ -545,7 +150,7 @@ export function ServerDetail() {
 
 	if (loading) {
 		return (
-			<box flexDirection="column" flexGrow={1}>
+			<box flexDirection="column" flexGrow={1} paddingX={1}>
 				<PageHeader title={id} subtitle="reading…" />
 			</box>
 		);
@@ -553,7 +158,7 @@ export function ServerDetail() {
 
 	if (!server) {
 		return (
-			<box flexDirection="column" flexGrow={1}>
+			<box flexDirection="column" flexGrow={1} paddingX={1}>
 				<PageHeader title={id} subtitle="not found" />
 				<text fg={colors.muted}>
 					No server with id <span fg={colors.error}>{id}</span>. Press{" "}
@@ -563,28 +168,52 @@ export function ServerDetail() {
 		);
 	}
 
-	// Two columns when the terminal can carry them, one when it cannot. The
-	// panels are grouped by how they are read, not by size: the live picture on
-	// the left, the durable configuration on the right.
-	const wide = terminalWidth >= TWO_COLUMN_WIDTH;
-	const left = (
-		<>
-			<StatusPanel server={server} insight={insight} />
-			<ResourcesPanel server={server} insight={insight} />
-			<PlayersPanel insight={insight} />
-		</>
-	);
-	const right = (
-		<>
-			<WorldPanel insight={insight} />
-			<StoragePanel insight={insight} size={size} />
-			<ConfigurationPanel server={server} />
-		</>
-	);
+	const tabProps: ServerTabProps = { server, insight, size };
+	const body = (() => {
+		switch (tab) {
+			case "overview":
+				return <OverviewTab {...tabProps} />;
+			case "console":
+				return (
+					<ConsoleTab
+						{...tabProps}
+						focused={ring.isFocused(CONSOLE_ID)}
+						onFocused={() => ring.setFocus(CONSOLE_ID)}
+					/>
+				);
+			case "players":
+				return <PlayersTab {...tabProps} />;
+			case "world":
+				return <WorldTab {...tabProps} />;
+			case "content":
+				return <ContentTab {...tabProps} />;
+			case "backups":
+				return <BackupsTab {...tabProps} />;
+			case "performance":
+				return <PerformanceTab {...tabProps} />;
+			case "network":
+				return <NetworkTab {...tabProps} />;
+			case "settings":
+				return <SettingsTab {...tabProps} />;
+		}
+	})();
 
 	return (
-		<box flexDirection="column" flexGrow={1} paddingX={1}>
-			<box flexDirection="row" gap={2} alignItems="center">
+		<box flexDirection="column" flexGrow={1}>
+			{/* Identity + lifecycle, pinned above the tabs: which server this is and
+			    what it is doing must not scroll away, and the actions belong to the
+			    whole page rather than to any one tab. */}
+			{/* `flexShrink={0}` on both pinned rows is load-bearing, not decoration:
+			    the tab body below them is `flexGrow`, so on a short terminal yoga
+			    shrinks whatever it may — and a 1-row action bar shrinks to *nothing*,
+			    silently removing the lifecycle buttons at small sizes. */}
+			<box
+				flexDirection="row"
+				gap={2}
+				alignItems="center"
+				paddingX={1}
+				flexShrink={0}
+			>
 				<text fg={colors.foreground} attributes={TextAttributes.BOLD}>
 					{server.name}
 				</text>
@@ -598,9 +227,9 @@ export function ServerDetail() {
 			</box>
 
 			{/* Action bar. Which of start/stop is offered follows the *probed* state,
-          so a server another instance started shows "Stop" here without a
-          refresh keystroke. */}
-			<box flexDirection="row" gap={1} marginBottom={1}>
+			    so a server another instance started shows "Stop" here without a
+			    refresh keystroke. */}
+			<box flexDirection="row" gap={1} paddingX={1} flexShrink={0}>
 				{server.state === "running" ? (
 					<>
 						<Button
@@ -642,16 +271,6 @@ export function ServerDetail() {
 				<Button
 					size="small"
 					kind="ghost"
-					variant="info"
-					focused={ring.isFocused("console")}
-					onFocused={() => ring.setFocus("console")}
-					onClick={() => navigate("console", { serverId: server.id })}
-				>
-					Console
-				</Button>
-				<Button
-					size="small"
-					kind="ghost"
 					variant="neutral"
 					disabled={server.state === "running"}
 					focused={ring.isFocused("remove")}
@@ -662,26 +281,41 @@ export function ServerDetail() {
 				</Button>
 			</box>
 
-			{wide ? (
-				<box flexDirection="row" gap={1} alignItems="flex-start">
-					<box flexDirection="column" flexGrow={1} flexBasis={0}>
-						{left}
-					</box>
-					<box flexDirection="column" flexGrow={1} flexBasis={0}>
-						{right}
-					</box>
+			<Tabs
+				items={SERVER_TABS.map((entry) => ({
+					id: entry.id,
+					label: entry.label,
+				}))}
+				activeId={tab}
+				onChange={(next) => setTab(next as ServerTabId)}
+				focused={ring.isFocused(TABS_ID)}
+				onFocused={() => ring.setFocus(TABS_ID)}
+				initials={server.id}
+				paddingX={1}
+			/>
+
+			<box paddingX={1} flexShrink={0}>
+				<text fg={colors.muted}>{serverTab(tab).description}</text>
+			</box>
+
+			{/* `key={tab}` remounts the body on a switch, so each tab starts at the
+			    top of its own scroll rather than inheriting the previous tab's
+			    offset. */}
+			{TAB_OWNS_SCROLL.has(tab) ? (
+				<box key={tab} flexGrow={1} flexDirection="column" paddingX={1}>
+					{body}
 				</box>
 			) : (
-				<box flexDirection="column">
-					{left}
-					{right}
-				</box>
+				<ScrollBox key={tab} flexGrow={1} paddingX={1}>
+					{body}
+				</ScrollBox>
 			)}
 
-			<box marginTop={1}>
+			<box paddingX={1} flexShrink={0}>
 				<Hint
 					items={[
-						{ keys: "Tab", label: "next action" },
+						{ keys: "Tab", label: "next control" },
+						{ keys: [icons.arrowLeft, icons.arrowRight], label: "switch tab" },
 						{ keys: "Enter", label: "activate" },
 						{ keys: "Esc", label: "back" },
 					]}
@@ -698,7 +332,7 @@ export function ServerDetail() {
 						Remove <span fg={colors.primary}>{server.id}</span> from MCTL?
 					</text>
 					{/* Said plainly, because "delete" in most tools means the files go
-              too. Erasing worlds is `mctl delete --files --yes` only. */}
+					    too. Erasing worlds is `mctl delete --files --yes` only. */}
 					<text fg={colors.muted}>
 						Its directory and worlds stay on disk at {server.path}. Only the
 						registry entry is removed.
