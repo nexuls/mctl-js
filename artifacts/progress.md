@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-08 (the `console` route removed — the console is a Server page tab only)_
+_Last updated: 2026-08-08 (the Players tab became a real screen: rosters, per-player detail, actions)_
 
 ---
 
@@ -595,6 +595,45 @@ _Last updated: 2026-08-08 (the `console` route removed — the console is a Serv
     depth, so only `Server/tabs/Console.tsx`'s import specifier changed.
   - Verified: `bunx tsc --noEmit` clean; `bun test` 189/189; `bun run format` clean.
 
+- **The Players tab became a real screen (this session, user request).** "Display all players
+  together in list or grid format, online first then offline, banned below; add ban / kick / shadow
+  ban / teleport / feed / kill; show every worthwhile stat; a random head per player, hidden on
+  small screens; responsive and modern."
+  - **`src/lib/nbt.ts`** — a read-only NBT decoder (no writer: MCTL never modifies world data).
+    Gzip/zlib detected by magic number; 64-bit tags decode to `bigint`; `nbtGet`/`nbtNumber`/
+    `nbtString` for the version-varying shapes. `src/lib/fs.ts` gained `readBytesIfExists` and
+    `fileMtime`.
+  - **`src/core/server/players.ts`** — `readPlayers(server, {online, onlineCount, levelName})`
+    merges `usercache.json`, the four roster files, `<world>/stats/<uuid>.json` and
+    `<world>/playerdata/<uuid>.dat` with the ping sample into `PlayerProfile[]` (online first, then
+    last seen). Detail reads capped at 64 files; `onlineUnnamed` reports connected players the
+    sample did not name.
+  - **`src/core/server/player-admin.ts`** — the action catalogue (`PLAYER_ACTIONS`, 15 actions with
+    `applies` / `needsRunning` / argument), the pure `commandFor`, and `runPlayerAction`. Everything
+    is a console command through `RuntimeManager.exec`; MCTL never edits the server's roster files.
+  - **Shadow ban** is an MCTL-side marker: `MctlJson.shadowBans` (new `ShadowBan` schema),
+    `EditServerOptions.shadowBans`, and `ServerManager.shadowBans(id)`. It enforces nothing —
+    `TODO(phase-5)` in `player-admin.ts`, and both the dialog and the toast say so.
+  - **`src/hooks/use-players.ts`** — 5 s self-chaining poll keyed on the online sample, plus `act`.
+  - **UI:** `app/Server/tabs/Players.tsx` rewritten (summary strip → Online / Offline / Banned /
+    Banned addresses card grids, health + hunger meters, playtime/kills/deaths, badges on the card's
+    bottom border) and `app/Server/PlayerActionsDialog.tsx` added (two-stage menu → argument).
+    `MinecraftHead` gained `skinFor(seed)` — deterministic, so a head does not change face on every
+    poll. The tab joins the container's focus ring as `PLAYERS_ID`.
+  - Tests (**217 total, 23 files**, +28): `lib/nbt.test.ts` (every tag type, gzip, the empty-list
+    trap, truncation), `core/server/player-admin.test.ts` (every command's wording, `gamemode`'s
+    reversed argument order, `applies`), `core/server/players.test.ts` (the five-source merge
+    against a real temp directory with real gzipped NBT, unit rescaling, a name-only ban folding in,
+    a non-default level name, a malformed entry).
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 217/217; `bunx biome check src` clean bar the
+    three pre-existing warnings. Driven under **tmux** at 140×44, 74×40 and 52×30 against a
+    fabricated `$HOME` (8 players, real gzipped player data, a real list-ping responder on a live
+    pid): cards/badges/bars render, heads drop below 84 cells and the grid falls to one column at
+    52, the action menu filters by `applies`, a shadow ban round-tripped through `mctl.json` and
+    came back as a badge, typing a reason containing `5` did not navigate (input capture), and a
+    kick failed with the foreground runtime's real `SessionNotOwnedError`. Killing the fake server
+    moved every player to Offline with the "not answering a status ping yet" note.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
@@ -627,6 +666,15 @@ _Last updated: 2026-08-08 (the `console` route removed — the console is a Serv
 - **The Backups and Network tabs are honest scaffolding**, not features: Backups shows the configured
   policy and says archives arrive in Phase 4; Network shows the direct picture and says tunnels/DNS
   do. Both have a `TODO(phase-4)` naming the provider call that fills them in.
+- **Shadow ban is recorded but not enforced.** `mctl.json.shadowBans` is an MCTL-side marker —
+  Minecraft has no shadow ban, so nothing happens on the server. Real enforcement needs the
+  RCON/plugin subsystem (`TODO(phase-5)` in `core/server/player-admin.ts`).
+- **Player actions require the server to be running**, because they are console commands. Under the
+  foreground runtime `exec` additionally only works **from the owning instance** — a second MCTL
+  gets `SessionNotOwnedError`, which the tab surfaces as a toast. The tmux runtime (Phase 3) is
+  what removes that.
+- **Per-player ping and current session length are unavailable** and are named as such on the
+  Players tab; both need RCON or a plugin.
 - **Content counts jars; it does not list them.** A real mod/plugin list needs the Modrinth/CurseForge
   integration (`TODO(phase-5)`).
 

@@ -200,6 +200,27 @@ protocol the vanilla multiplayer screen speaks, so it needs no credentials and w
 server kind. TPS/MSPT, per-server network traffic, and JVM heap occupancy are deliberately absent:
 none is obtainable from outside the JVM, and the UI says so rather than showing a guess.
 
+**Players — `core/server/players.ts` + `core/server/player-admin.ts`.** The third read path beside
+discovery and inspection, split read/write on the same line `discover.ts` and `manager.ts` are.
+`readPlayers(server, {online})` merges five sources into one `PlayerProfile[]`: `usercache.json`,
+the four roster files, `<world>/stats/<uuid>.json` (lifetime counters), `<world>/playerdata/<uuid>.dat`
+(the player's body at last logout — **gzipped NBT**, decoded by the read-only `lib/nbt.ts`), and the
+live ping's name sample. Merging is by uuid *or* lower-cased name, because a ban may carry only a
+name and a player-data file only a uuid. Detail reads are capped (online first, then most recent) so
+a server with thousands of player files still polls in bounded time.
+
+`player-admin.ts` is the write side, and **every action is a console command** sent through
+`RuntimeManager.exec` — MCTL never edits `ops.json`, `whitelist.json` or `banned-players.json`
+itself, both because `mctl.json` is the only file it owns in a server directory and because a
+running server rewrites those rosters from memory. The consequence is stated in the model rather
+than discovered at runtime: `PlayerActionDef.needsRunning` gates each action and the UI disables
+what cannot work. `commandFor` is pure and exported so the exact wording of each command is
+unit-tested. The one action with no command behind it is **shadow ban**, which Minecraft has no
+concept of; it is recorded in `mctl.json.shadowBans` as an MCTL-side marker and enforces nothing
+(`TODO(phase-5)`). Per-player ping and current session length are not obtainable outside the
+server at all, so the UI names them as absent — the same rule the Resources panel follows for
+TPS.
+
 ## Provider system — `core/registry/provider-registry.ts`
 
 Dynamically registered modules, not compile-time wiring. `ProviderRegistry` is an **instance**, not a
@@ -522,6 +543,15 @@ work when the ring is not on the command line.
 
 Two rules the pty found: a pinned 1-row bar needs `flexShrink={0}` beside a `flexGrow` body (yoga
 shrinks it to nothing on a short terminal), and every `Detail` label must fit `LABEL_WIDTH`.
+
+The **Players** tab is the one screen with its own data source and its own writes: it reads through
+`hooks/use-players.ts` (over `core/server/players.ts`) rather than the shared `insight`, and runs
+moderation actions through `core/server/player-admin.ts`. It renders one fixed-width card per
+player — online, then offline, then banned — in a hand-chunked grid whose column count comes from
+the terminal width, dropping the `MinecraftHead` portraits below 84 cells. Like the console's
+command line, its grid joins the container's focus ring only while its tab is active, so the tab
+bar keeps ←/→ the rest of the time. `PlayerActionsDialog` is the two-stage modal (menu, then a
+single argument field) that turns a selection into one `runPlayerAction` call.
 
 What is not measurable is named rather than omitted — TPS/MSPT, heap occupancy and per-process
 network I/O on Performance; Phase-4 tunnels on Network; Phase-4 archives on Backups. The Settings tab

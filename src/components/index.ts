@@ -88,6 +88,8 @@ export {
 export {
 	MinecraftHead,
 	SKINS,
+	SKIN_IDS,
+	skinFor,
 	type MinecraftSkin,
 	type MinecraftHeadProps,
 } from "./MinecraftHead.tsx";

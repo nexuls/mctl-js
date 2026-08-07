@@ -5,6 +5,67 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The Players tab became a real screen (2026-08-08, user request)
+
+- **Per-player data comes from three places the server writes, none of them a roster count.**
+  `core/server/players.ts` (`readPlayers`) merges five sources into one `PlayerProfile[]`:
+  `usercache.json` + the four roster files (ops/whitelist/banned-players/banned-ips),
+  `<world>/stats/<uuid>.json` (playtime, deaths, kills, distance, blocks mined), and
+  `<world>/playerdata/<uuid>.dat` (**gzipped NBT** — health, hunger, XP, game mode, dimension,
+  position), plus the live ping sample for "who is online".
+  - **`lib/nbt.ts` is a new leaf helper** — a read-only NBT decoder (no writer, deliberately: MCTL
+    never modifies world data). Gzip/zlib is detected by **magic number**, not by the caller.
+    64-bit tags decode to `bigint` (a Paper `LastSeen` is a ms timestamp and does not survive a
+    double); `nbtNumber` narrows at the point of use.
+  - **A `TAG_List` of `TAG_End` is how an empty list is written** and its declared length must not
+    be trusted — the first thing that breaks a naive decoder on a real inventory.
+  - Stat units are not what they look like: `play_time` is **ticks** (÷20 for seconds), every
+    `*_one_cm` is **centimetres** (their *sum* is total distance travelled), and `damage_dealt` is
+    **tenths** of a half-heart. `play_one_minute` is the pre-1.13 name of `play_time` and also
+    counts ticks.
+  - **Detail reads are capped at 64 files** (online players first, then most recent), because a
+    long-lived public server has thousands of `playerdata` files and each is a read + a gunzip.
+    `PlayerRoster.detailsTruncated` says so in the UI.
+- **Merging is by uuid *or* lower-cased name, and must never re-key.** `banned-players.json` can
+  carry a name with no uuid (an offline-mode ban), and a `playerdata` file carries a uuid with no
+  name — one player, two identifications. A later source may *adopt* a uuid the first lacked, but
+  the map key stays put or earlier references break.
+- **Every action is a console command; MCTL never edits the server's rosters.** Two reasons, both
+  load-bearing: `mctl.json` is the only file MCTL owns in a server directory, and **a running
+  server holds those rosters in memory and rewrites them**, so an edit underneath it is simply
+  overwritten. Consequence: **actions need the server running**, `PlayerActionDef.needsRunning`
+  says which, and the UI disables the rest rather than failing them.
+  - `feed`/`heal` are **not Minecraft commands** (they are Essentials'), so they are expressed as
+    `effect give … saturation` / `instant_health` and work on a plugin-free vanilla server.
+  - **`gamemode <mode> <player>` — the argument order is reversed** relative to every other command
+    here. Pinned by a test; getting it backwards targets a player named "creative".
+  - Commands are emitted **without** a leading `/` (a console takes bare commands).
+- **Shadow ban is an MCTL-side marker, not a feature — Minecraft has no such thing.** Recorded in
+  `mctl.json.shadowBans` (`ServerManager.editServer({shadowBans})` + `.shadowBans(id)` to read),
+  it changes the badge on a card and **nothing on the server**. The dialog and the success toast
+  both say so. `TODO(phase-5)`: real enforcement needs RCON or a plugin.
+- **What is genuinely unavailable and is *stated* rather than faked:** per-player ping and current
+  session length. The list ping publishes neither; `status.latencyMs` is MCTL's own round trip and
+  the summary labels it `"… ms to MCTL"` for exactly that reason.
+- **A gap on a `flexWrap="wrap"` row is a cross-axis gap too.** The summary strip left a blank line
+  between its wrapped rows at 52 cells until the gap came off and each item carried its own
+  trailing separator.
+- **The card grid is chunked by hand**, not left to wrap: cards are fixed-width, columns are
+  `floor((width - 4) / (cardWidth + 1))`, and **heads are dropped below 84 cells** (a head is 8
+  cells — a quarter of a card). Four body lines is exactly the head's height, so a card with a head
+  and one without are the same height and the grid stays even. Name rides `title`, badges ride
+  `bottomTitle` — neither costs a body row.
+- **The tab joins the container's focus ring (`PLAYERS_ID`)**, same shape as the console's command
+  line, so ←/→ reach the tab bar whenever the grid does not hold focus. When it *does*, the tab
+  registers `←→` as a **context hint with the same key signature** the container uses for "switch
+  tab", which replaces that entry instead of contradicting it.
+- **`skinFor(seed)` (FNV-1a over uuid) is deterministic, not random.** The roster re-reads every
+  five seconds; a genuinely random head would change face on every poll and read as a glitch.
+- Verified under tmux at 140/74/52 columns against a fabricated `$HOME` (8 players, real gzipped
+  NBT, a real list-ping responder): cards, badges, bars, the action menu's `applies` filtering, a
+  shadow ban written to `mctl.json` and reappearing as a badge, and a kick correctly failing with
+  the foreground runtime's `SessionNotOwnedError`.
+
 ## The `console` route is gone (2026-08-08, user request)
 
 - **A server's console is reachable only from the Server page's Console tab.** `RouteId` no longer

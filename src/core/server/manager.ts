@@ -37,6 +37,7 @@ import {
 	MctlJson,
 	MCTL_JSON_VERSION,
 	type Server,
+	type ShadowBan,
 } from "../../types/server.ts";
 import type { EventBus } from "../events/bus.ts";
 import { publish } from "../events/log.ts";
@@ -118,6 +119,13 @@ export interface EditServerOptions {
 	network?: string;
 	/** Pin a Java major, or `null` to clear the pin and resolve again. */
 	javaPin?: number | null;
+	/**
+	 * Replace MCTL's shadow-ban markers wholesale. The whole list is passed
+	 * because it is read-modify-written by the caller
+	 * (`core/server/player-admin.ts`), which is where the add/remove semantics
+	 * belong; an edit here stays a plain field write.
+	 */
+	shadowBans?: ShadowBan[];
 }
 
 /** Options for {@link ServerManager.deleteServer}. */
@@ -303,6 +311,17 @@ export class ServerManager {
 			next.network = patch.network;
 			changed.push("network");
 		}
+		if (
+			patch.shadowBans !== undefined &&
+			JSON.stringify(patch.shadowBans) !==
+				JSON.stringify(current.shadowBans ?? [])
+		) {
+			// An empty list is written as an absent key rather than `[]`, so a server
+			// that has never had a mark keeps a clean file.
+			if (patch.shadowBans.length === 0) delete next.shadowBans;
+			else next.shadowBans = patch.shadowBans;
+			changed.push("shadowBans");
+		}
 		if (patch.javaPin !== undefined) {
 			if (patch.javaPin === null) {
 				delete next.java;
@@ -324,6 +343,31 @@ export class ServerManager {
 		if (!updated)
 			throw new ServerOperationError(id, `server "${id}" vanished during edit`);
 		return updated;
+	}
+
+	/**
+	 * Read a server's shadow-ban markers from its `mctl.json`.
+	 *
+	 * Exposed here rather than read directly by the caller so every access to
+	 * `mctl.json` still goes through this manager: `player-admin.ts` needs the
+	 * current list before it can write the next one.
+	 *
+	 * @throws {ServerOperationError} when the server is missing or unavailable.
+	 */
+	async shadowBans(id: string): Promise<ShadowBan[]> {
+		const { paths } = this.#deps;
+		const server = await getServer(id, paths.serversDir);
+		if (!server) throw new ServerOperationError(id, `no such server: ${id}`);
+		if (!server.available) {
+			throw new ServerOperationError(
+				id,
+				`server "${id}" is unavailable (${server.path} is missing)`,
+			);
+		}
+		const current = MctlJson.parse(
+			await readJsonIfExists(mctlJsonPath(server.path)),
+		);
+		return current.shadowBans ?? [];
 	}
 
 	/**

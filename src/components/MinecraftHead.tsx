@@ -315,6 +315,31 @@ export const SKINS: Record<MinecraftSkin, Skin> = {
 	},
 };
 
+/** Every skin id, in a fixed order so {@link skinFor} is stable across runs. */
+export const SKIN_IDS = Object.keys(SKINS) as MinecraftSkin[];
+
+/**
+ * Pick a skin from an arbitrary seed — a player's uuid or name.
+ *
+ * **Deterministic, not random.** The Players tab wants each player to have a
+ * distinct-looking head, but a genuinely random pick would hand the same player
+ * a new face on every poll (the tab re-reads every five seconds), which reads as
+ * a glitch. Hashing the seed gives the same variety with none of the flicker,
+ * and the same player looks the same in every MCTL instance.
+ *
+ * FNV-1a: one multiply and one xor per character, no dependency, and well enough
+ * distributed that two adjacent names do not collide.
+ */
+export function skinFor(seed: string): MinecraftSkin {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < seed.length; i += 1) {
+		hash ^= seed.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	const index = Math.abs(hash) % SKIN_IDS.length;
+	return SKIN_IDS[index] as MinecraftSkin;
+}
+
 /** Upper half block: fg fills the top pixel of the cell, bg the bottom pixel. */
 const HALF_BLOCK = "▀";
 

@@ -47,6 +47,23 @@ export const JavaPin = z.union([
 export type JavaPin = z.infer<typeof JavaPin>;
 
 /**
+ * One MCTL-side shadow-ban marker. Keyed by name because that is what a console
+ * command takes and what a roster file always carries; the uuid is recorded when
+ * known so a rename does not lose the mark.
+ */
+export const ShadowBan = z.object({
+	/** Player name at the time the mark was made. */
+	name: z.string().min(1),
+	/** Player uuid, when MCTL knew it. */
+	uuid: z.string().optional(),
+	/** ISO-8601 time the mark was made. */
+	at: z.string(),
+	/** Free-text reason, shown in the UI. */
+	reason: z.string().optional(),
+});
+export type ShadowBan = z.infer<typeof ShadowBan>;
+
+/**
  * `mctl.json` — the single MCTL-owned file inside a server directory and the
  * authoritative source for that server's configuration. Everything else (mods,
  * players, port, live state, world size) is derived from disk or RCON at display
@@ -85,6 +102,17 @@ export const MctlJson = z.looseObject({
 	network: z.string().default("direct"),
 	/** ISO-8601 creation timestamp, written at create time (Phase 2). */
 	createdAt: z.string().optional(),
+	/**
+	 * Players MCTL has marked as shadow-banned on this server.
+	 *
+	 * **Minecraft has no shadow ban**, so unlike every other player action this
+	 * one has no console command behind it: it is an MCTL-side *marker*, recorded
+	 * here because `mctl.json` is the only file MCTL owns inside a server
+	 * directory. It changes what the UI shows and nothing on the server itself;
+	 * enforcing it needs a plugin, which is `TODO(phase-5)` in
+	 * `core/server/player-admin.ts`.
+	 */
+	shadowBans: z.array(ShadowBan).optional(),
 });
 export type MctlJson = z.infer<typeof MctlJson>;
 

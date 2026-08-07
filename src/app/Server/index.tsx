@@ -70,6 +70,13 @@ const TABS_ID = "__tabs";
 const CONSOLE_ID = "__console";
 
 /**
+ * Ring id of the Players tab's card grid. Like the console's command line, it
+ * joins the ring only while its tab is active — so ←/→ still reach the tab bar
+ * whenever the grid does not hold the focus.
+ */
+const PLAYERS_ID = "__players";
+
+/**
  * Tabs that manage their own vertical scrolling and are therefore hosted in a
  * plain box — the same rule the shell applies to pages (`OWN_SCROLL` in
  * `Router.tsx`), for the same reason: an inner scrollbox needs a definite
@@ -106,6 +113,7 @@ export function ServerDetail() {
 		TABS_ID,
 		...actions,
 		...(tab === "console" ? [CONSOLE_ID] : []),
+		...(tab === "players" ? [PLAYERS_ID] : []),
 	]);
 
 	// Hints follow the ring, not the page: while the Console tab's command line
@@ -205,7 +213,9 @@ export function ServerDetail() {
 					/>
 				);
 			case "players":
-				return <PlayersTab {...tabProps} />;
+				return (
+					<PlayersTab {...tabProps} focused={ring.isFocused(PLAYERS_ID)} />
+				);
 			case "world":
 				return <WorldTab {...tabProps} />;
 			case "content":

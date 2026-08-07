@@ -60,6 +60,36 @@ export async function readTextIfExists(
 }
 
 /**
+ * Read a file's raw bytes, or `undefined` when it does not exist. The binary
+ * twin of {@link readTextIfExists}, for formats that are not text — Minecraft's
+ * gzipped NBT player data is the first of them. Any error other than absence
+ * propagates.
+ */
+export async function readBytesIfExists(
+	path: string,
+): Promise<Uint8Array | undefined> {
+	try {
+		return new Uint8Array(await readFile(path));
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+		throw err;
+	}
+}
+
+/**
+ * Last-modification time of a file in epoch milliseconds, or `undefined` when it
+ * cannot be stat'd. Never throws — callers use this to decorate a listing, where
+ * an unreadable entry must degrade to "unknown" rather than fail the whole read.
+ */
+export async function fileMtime(path: string): Promise<number | undefined> {
+	try {
+		return (await stat(path)).mtimeMs;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
  * Parse a JSON file into `unknown`, or `undefined` when the file is absent.
  * Returns raw parsed data — the caller is responsible for Zod validation.
  * Throws `SyntaxError` on malformed JSON (a corrupt file is a real error).
