@@ -43,12 +43,7 @@ import { useHints } from "../../hooks/use-hints.tsx";
 import { Button, Dialog, ScrollBox } from "../../components/index.ts";
 import { Tabs } from "../../components/Tabs.tsx";
 import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
-import {
-	DEFAULT_SERVER_TAB,
-	SERVER_TABS,
-	serverTab,
-	type ServerTabId,
-} from "./tabs.ts";
+import { DEFAULT_SERVER_TAB, SERVER_TABS, type ServerTabId } from "./tabs.ts";
 import type { ServerTabProps } from "./panels.tsx";
 import { OverviewTab } from "./tabs/Overview.tsx";
 import { ConsoleTab } from "./tabs/Console.tsx";
@@ -84,6 +79,7 @@ const PLAYERS_ID = "__players";
  */
 const TAB_OWNS_SCROLL: ReadonlySet<ServerTabId> = new Set<ServerTabId>([
 	"console",
+	"players",
 ]);
 
 export function ServerDetail() {
@@ -335,10 +331,6 @@ export function ServerDetail() {
 				// initials={server.id}
 				paddingX={1}
 			/>
-
-			<box paddingX={1} flexShrink={0}>
-				<text fg={colors.muted}>{serverTab(tab).description}</text>
-			</box>
 
 			{/* `key={tab}` remounts the body on a switch, so each tab starts at the
 			    top of its own scroll rather than inheriting the previous tab's

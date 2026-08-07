@@ -34,6 +34,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import {
 	MinecraftHead,
 	ProgressBar,
+	ScrollBox,
 	skinFor,
 } from "../../../components/index.ts";
 import { useHints } from "../../../hooks/use-hints.tsx";
@@ -266,14 +267,40 @@ function PlayerCard({
 }
 
 /** A group heading with its count, drawn as a quiet rule across the tab. */
-function SectionHeading({ label, count }: { label: string; count: number }) {
+function Section({
+	label,
+	count,
+	children,
+}: {
+	label: string;
+	count: number;
+	children?: React.ReactNode;
+}) {
 	const { colors } = useTheme();
 	return (
-		<box flexDirection="row" gap={1} marginTop={1} alignItems="center">
-			<text fg={colors.primary} attributes={TextAttributes.BOLD}>
-				{label}
-			</text>
-			<text fg={colors.muted}>{count}</text>
+		<box
+			flexDirection="column"
+			border
+			borderColor={colors.border}
+			borderStyle="rounded"
+			paddingX={1}
+		>
+			<box
+				flexDirection="row"
+				gap={1}
+				alignItems="center"
+				backgroundColor={colors.background}
+				paddingX={1}
+				position="absolute"
+				top={-1}
+				left={2}
+			>
+				<text fg={colors.primary} attributes={TextAttributes.BOLD}>
+					{label}
+				</text>
+				<text fg={colors.muted}>{count}</text>
+			</box>
+			{children}
 		</box>
 	);
 }
@@ -460,7 +487,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 			    Each item carries its own trailing separator and the row has **no**
 			    gap: a gap on a wrapping row is a *cross*-axis gap too, which inserts
 			    a blank line between the wrapped rows on a narrow terminal. */}
-			<box flexDirection="row" flexWrap="wrap">
+			<box flexDirection="row" flexWrap="wrap" paddingBottom={1}>
 				{summary.map((item, position) => (
 					<text key={item.id} fg={item.fg}>
 						{position === summary.length - 1
@@ -476,59 +503,65 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 				</box>
 			) : null}
 
-			<SectionHeading label="Online" count={online.length} />
-			{online.length > 0 ? (
-				grid(online, "online")
-			) : (
-				<EmptyNote>
-					{running
-						? status
-							? status.playersOnline > 0
-								? "This server does not publish player names in its status response."
-								: "Nobody is connected."
-							: "The server is not answering a status ping yet."
-						: "The server is not running, so there is no live player list."}
-				</EmptyNote>
-			)}
-			{roster.onlineUnnamed > 0 ? (
-				<EmptyNote>
-					{`${roster.onlineUnnamed} more online — the server sends only a sample of names.`}
-				</EmptyNote>
-			) : null}
+			<ScrollBox
+				flexGrow={1}
+				enableAccel
+				contentOptions={{
+					flexDirection: "column",
+					gap: 1,
+				}}
+			>
+				<Section label="Online" count={online.length}>
+					{online.length > 0 ? (
+						grid(online, "online")
+					) : (
+						<EmptyNote>
+							{running
+								? status
+									? status.playersOnline > 0
+										? "This server does not publish player names in its status response."
+										: "Nobody is connected."
+									: "The server is not answering a status ping yet."
+								: "The server is not running, so there is no live player list."}
+						</EmptyNote>
+					)}
+					{roster.onlineUnnamed > 0 ? (
+						<EmptyNote>
+							{`${roster.onlineUnnamed} more online — the server sends only a sample of names.`}
+						</EmptyNote>
+					) : null}
+				</Section>
 
-			<SectionHeading label="Offline" count={offline.length} />
-			{offline.length > 0 ? (
-				grid(offline, "offline")
-			) : (
-				<EmptyNote>
-					No other players on record. The server writes these files only for
-					players it has actually seen.
-				</EmptyNote>
-			)}
+				<Section label="Offline" count={offline.length}>
+					{offline.length > 0 ? (
+						grid(offline, "offline")
+					) : (
+						<EmptyNote>
+							No other players on record. The server writes these files only for
+							players it has actually seen.
+						</EmptyNote>
+					)}
+				</Section>
 
-			{banned.length > 0 ? (
-				<>
-					<SectionHeading label="Banned" count={banned.length} />
-					{grid(banned, "banned")}
-				</>
-			) : null}
+				{banned.length > 0 ? (
+					<Section label="Banned" count={banned.length}>
+						{grid(banned, "banned")}
+					</Section>
+				) : null}
 
-			{roster.bannedIps.length > 0 ? (
-				<>
-					<SectionHeading
-						label="Banned addresses"
-						count={roster.bannedIps.length}
-					/>
-					{roster.bannedIps.map((ban) => (
-						<box key={ban.ip} flexDirection="row" gap={1}>
-							<text fg={colors.error}>{ban.ip.padEnd(18)}</text>
-							<text fg={colors.muted}>
-								{`${ban.created ?? empty} ${icons.separator} ${ban.reason ?? "no reason given"}`}
-							</text>
-						</box>
-					))}
-				</>
-			) : null}
+				{roster.bannedIps.length > 0 ? (
+					<Section label="Banned addresses" count={roster.bannedIps.length}>
+						{roster.bannedIps.map((ban) => (
+							<box key={ban.ip} flexDirection="row" gap={1}>
+								<text fg={colors.error}>{ban.ip.padEnd(18)}</text>
+								<text fg={colors.muted}>
+									{`${ban.created ?? empty} ${icons.separator} ${ban.reason ?? "no reason given"}`}
+								</text>
+							</box>
+						))}
+					</Section>
+				) : null}
+			</ScrollBox>
 
 			<box marginTop={1} flexDirection="column">
 				{roster.detailsTruncated ? (
