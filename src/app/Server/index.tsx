@@ -232,76 +232,85 @@ export function ServerDetail() {
 			    silently removing the lifecycle buttons at small sizes. */}
 			<box
 				flexDirection="row"
-				gap={2}
+				justifyContent="space-between"
 				alignItems="center"
-				paddingX={1}
 				flexShrink={0}
+				border={["bottom"]}
+				borderColor={colors.border}
 			>
-				<text fg={colors.foreground} attributes={TextAttributes.BOLD}>
-					{server.name}
-				</text>
-				<text fg={serverStateColor(colors, server.state)}>
-					{icons[serverStateIcon(server.state)]} {server.state}
-				</text>
-				<text fg={colors.muted}>
-					{server.kind} {server.minecraftVersion}
-					{server.loaderVersion ? ` · ${server.loaderVersion}` : ""}
-				</text>
-			</box>
+				<box
+					flexDirection="row"
+					gap={2}
+					alignItems="center"
+					paddingX={1}
+					flexShrink={0}
+				>
+					<text fg={colors.foreground} attributes={TextAttributes.BOLD}>
+						{server.name}
+					</text>
+					<text fg={serverStateColor(colors, server.state)}>
+						{icons[serverStateIcon(server.state)]} {server.state}
+					</text>
+					<text fg={colors.muted}>
+						{server.kind} {server.minecraftVersion}
+						{server.loaderVersion ? ` · ${server.loaderVersion}` : ""}
+					</text>
+				</box>
 
-			{/* Action bar. Which of start/stop is offered follows the *probed* state,
+				{/* Action bar. Which of start/stop is offered follows the *probed* state,
 			    so a server another instance started shows "Stop" here without a
 			    refresh keystroke. */}
-			<box flexDirection="row" gap={1} paddingX={1} flexShrink={0}>
-				{server.state === "running" ? (
-					<>
+				<box flexDirection="row" paddingX={1} flexShrink={0}>
+					{server.state === "running" ? (
+						<>
+							<Button
+								size="small"
+								kind="ghost"
+								variant="error"
+								disabled={pending !== undefined}
+								focused={ring.isFocused("stop")}
+								onFocused={() => ring.setFocus("stop")}
+								onClick={() => void act("stop")}
+							>
+								{pending === "stop" ? "Stopping…" : "Stop"}
+							</Button>
+							<Button
+								size="small"
+								kind="ghost"
+								variant="warning"
+								disabled={pending !== undefined}
+								focused={ring.isFocused("restart")}
+								onFocused={() => ring.setFocus("restart")}
+								onClick={() => void act("restart")}
+							>
+								{pending === "restart" ? "Restarting…" : "Restart"}
+							</Button>
+						</>
+					) : (
 						<Button
 							size="small"
 							kind="ghost"
-							variant="error"
-							disabled={pending !== undefined}
-							focused={ring.isFocused("stop")}
-							onFocused={() => ring.setFocus("stop")}
-							onClick={() => void act("stop")}
+							variant="success"
+							disabled={pending !== undefined || !server.available}
+							focused={ring.isFocused("start")}
+							onFocused={() => ring.setFocus("start")}
+							onClick={() => void act("start")}
 						>
-							{pending === "stop" ? "Stopping…" : "Stop"}
+							{pending === "start" ? "Starting…" : "Start"}
 						</Button>
-						<Button
-							size="small"
-							kind="ghost"
-							variant="warning"
-							disabled={pending !== undefined}
-							focused={ring.isFocused("restart")}
-							onFocused={() => ring.setFocus("restart")}
-							onClick={() => void act("restart")}
-						>
-							{pending === "restart" ? "Restarting…" : "Restart"}
-						</Button>
-					</>
-				) : (
+					)}
 					<Button
 						size="small"
 						kind="ghost"
-						variant="success"
-						disabled={pending !== undefined || !server.available}
-						focused={ring.isFocused("start")}
-						onFocused={() => ring.setFocus("start")}
-						onClick={() => void act("start")}
+						variant="neutral"
+						disabled={server.state === "running"}
+						focused={ring.isFocused("remove")}
+						onFocused={() => ring.setFocus("remove")}
+						onClick={() => setConfirmDelete(true)}
 					>
-						{pending === "start" ? "Starting…" : "Start"}
+						Remove
 					</Button>
-				)}
-				<Button
-					size="small"
-					kind="ghost"
-					variant="neutral"
-					disabled={server.state === "running"}
-					focused={ring.isFocused("remove")}
-					onFocused={() => ring.setFocus("remove")}
-					onClick={() => setConfirmDelete(true)}
-				>
-					Remove
-				</Button>
+				</box>
 			</box>
 
 			<Tabs
@@ -313,7 +322,7 @@ export function ServerDetail() {
 				onChange={(next) => setTab(next as ServerTabId)}
 				focused={ring.isFocused(TABS_ID)}
 				onFocused={() => ring.setFocus(TABS_ID)}
-				initials={server.id}
+				// initials={server.id}
 				paddingX={1}
 			/>
 
