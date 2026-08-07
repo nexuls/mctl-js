@@ -851,6 +851,11 @@ delete entries that stop being true. Newest-relevant first.
 - Precedence when artifacts disagree: `plan.md` > `architecture.md` > `progress.md`. Code beats all.
 - User wants `plan.md` **rich and detailed** (the Rust plan was the depth benchmark), not blunt bullet
   lists — concrete interfaces, tables, diagrams.
+- **Run `bun run format` (Biome) once at the end of a session**, after all edits have settled — not per
+  file. Asked for on 2026-08-07 because unformatted diffs produced formatting-only commits (`bdf2faa`).
+- **Commit meaningful units as you go, don't push unless asked** (2026-08-07, supersedes the old
+  "don't commit unless asked"). Message style is the existing history's: `feat:`/`fix:`/`refactor:`/
+  `chore:` + short capitalised summary, no trailing period; check `git log --oneline` first.
 
 ## Component library (2026-07-25)
 

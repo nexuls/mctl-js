@@ -148,6 +148,12 @@ without reading upstream API docs or Minecraft wiki pages.
 - If the request conflicts with `plan.md` or `architecture.md`, say so in a sentence, then follow the
   user's instruction and record the deviation in `memory.md`.
 
+**Formatting**
+
+- **When all edits are done, run `bun run format`** (Biome). Once per session, at the end — not after
+  every file. A diff handed back unformatted forces a formatting-only follow-up commit, which is noise
+  in the history (`bdf2faa format` is the mistake we are not repeating).
+
 **Verification before claiming completion**
 
 - Type-check and run the app: `bunx tsc --noEmit` (once a `tsconfig` build is meaningful) and
@@ -174,8 +180,21 @@ without reading upstream API docs or Minecraft wiki pages.
 
 **Git**
 
-- Do not commit or push unless asked. Conventional commit prefixes (`feat:`, `fix:`, `chore:`) match the
-  existing history.
+- **Commit as you go.** Each meaningful, coherent unit of work gets its own commit — don't let a session
+  end as one giant undifferentiated blob, and don't commit half-working intermediate states either.
+  Format (`bun run format`) and type-check before committing.
+- **Commit messages follow the existing history**: a conventional prefix (`feat:`, `fix:`, `refactor:`,
+  `chore:`), then a short capitalised summary of *what changed for the user*, no trailing period. Look
+  at `git log --oneline` before writing one. Real examples:
+
+  ```
+  feat: Server inspection + a responsive Table; richer Dashboard and Server pages
+  refactor: Dashboard absorbed the Servers screen
+  fix: Drag-selection made opt-in
+  ```
+
+  A body is optional; add one only when the *why* isn't obvious from the summary.
+- Do not `push` unless asked.
 
 **End of session**
 
