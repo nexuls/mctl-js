@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { Server } from "../../types/server.ts";
-import { readPlayers } from "./players.ts";
+import { readPlayers, resolvePlayerDirs } from "./players.ts";
 
 let dir: string;
 
@@ -239,6 +239,65 @@ describe("readPlayers", () => {
 		expect(
 			roster.players.find((p) => p.name === "Notch")?.state,
 		).toBeUndefined();
+	});
+
+	// Minecraft 26.1 regrouped the per-player files under `<world>/players/`.
+	// Reading only the pre-26.1 paths is what made a modern server's Players tab
+	// render every card as "no player data" with a dash for every counter.
+	describe("the 26.1+ <world>/players/ layout", () => {
+		beforeEach(async () => {
+			await mkdir(join(dir, "world", "players", "data"), { recursive: true });
+			await mkdir(join(dir, "world", "players", "stats"), { recursive: true });
+			await rm(join(dir, "world", "playerdata"), { recursive: true });
+			await rm(join(dir, "world", "stats"), { recursive: true });
+			await writeFile(
+				join(dir, "world", "players", "data", `${NOTCH}.dat`),
+				playerDataFile(),
+			);
+			await writeFile(
+				join(dir, "world", "players", "stats", `${NOTCH}.json`),
+				JSON.stringify({
+					stats: { "minecraft:custom": { "minecraft:deaths": 3 } },
+				}),
+			);
+		});
+
+		test("player data and stats are found under players/", async () => {
+			const roster = await readPlayers(server());
+			const notch = roster.players.find((p) => p.name === "Notch");
+			expect(notch?.state?.food).toBe(13);
+			expect(notch?.stats?.deaths).toBe(3);
+			// The file itself is proof of a join, so it also carries "last seen".
+			expect(notch?.lastSeen).toBeGreaterThan(0);
+		});
+
+		test("`.dat_old` siblings are not mistaken for players", async () => {
+			// The server writes one beside every save; picking it up would double
+			// every card and key the copy by a uuid ending in "_old".
+			await writeFile(
+				join(dir, "world", "players", "data", `${JEB}.dat_old`),
+				playerDataFile(),
+			);
+			const roster = await readPlayers(server());
+			expect(roster.players.map((p) => p.name).sort()).toEqual([
+				"Griefer",
+				"Notch",
+				"jeb_",
+			]);
+		});
+	});
+
+	test("resolvePlayerDirs falls back to the legacy paths when players/ is absent", async () => {
+		expect(await resolvePlayerDirs(join(dir, "world"))).toEqual({
+			statsDir: join(dir, "world", "stats"),
+			dataDir: join(dir, "world", "playerdata"),
+		});
+		// A world that was never booted has neither layout; the legacy paths are
+		// the fallback and simply read as empty.
+		expect(await resolvePlayerDirs(join(dir, "nothing-here"))).toEqual({
+			statsDir: join(dir, "nothing-here", "stats"),
+			dataDir: join(dir, "nothing-here", "playerdata"),
+		});
 	});
 
 	test("a malformed roster entry costs that entry, not the whole file", async () => {

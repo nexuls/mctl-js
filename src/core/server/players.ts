@@ -16,6 +16,8 @@
  * | `ops.json` / `whitelist.json` / `banned-players.json` / `banned-ips.json` | the four rosters the server rewrites live |
  * | `<world>/stats/<uuid>.json` | lifetime counters: playtime, deaths, kills, distance |
  * | `<world>/playerdata/<uuid>.dat` | the player's *body* at last logout: health, hunger, XP, position, game mode (gzipped NBT) |
+ *
+ * Those last two moved — see {@link resolvePlayerDirs}. Their *contents* did not.
  * | a live list ping's sample | who is on right now |
  *
  * **What is genuinely unavailable, and is therefore absent rather than guessed:**
@@ -34,6 +36,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import {
 	fileMtime,
+	pathExists,
 	readBytesIfExists,
 	readDirIfExists,
 	readJsonIfExists,
@@ -425,6 +428,45 @@ async function readPlayerData(
 	};
 }
 
+/** Where a world keeps its per-player files. */
+export interface PlayerDirs {
+	/** Directory holding `<uuid>.json` lifetime counters. */
+	statsDir: string;
+	/** Directory holding `<uuid>.dat` gzipped NBT player data. */
+	dataDir: string;
+}
+
+/**
+ * Locate a world's per-player directories, across both layouts Minecraft has
+ * used.
+ *
+ * Minecraft **26.1** regrouped the per-player files under a single `players/`
+ * directory inside the world:
+ *
+ * | | ≤ 25.x (and every 1.x) | ≥ 26.1 |
+ * |---|---|---|
+ * | player data | `<world>/playerdata/` | `<world>/players/data/` |
+ * | statistics  | `<world>/stats/`      | `<world>/players/stats/` |
+ * | advancements| `<world>/advancements/` | `<world>/players/advancements/` |
+ *
+ * The file *formats* are unchanged, so only the paths are version-dependent.
+ * Detection is by directory existence rather than by parsing the server's
+ * version: `mctl.json` records what MCTL installed, not what the world was last
+ * opened with, and a world carried across an upgrade keeps whichever layout the
+ * server that wrote it used. An absent world (never booted) resolves to the
+ * legacy paths, which then simply read as empty.
+ */
+export async function resolvePlayerDirs(worldDir: string): Promise<PlayerDirs> {
+	const modern = join(worldDir, "players");
+	if (await pathExists(join(modern, "data"))) {
+		return { statsDir: join(modern, "stats"), dataDir: join(modern, "data") };
+	}
+	return {
+		statsDir: join(worldDir, "stats"),
+		dataDir: join(worldDir, "playerdata"),
+	};
+}
+
 /** A profile under construction, keyed while the sources are merged. */
 type Draft = Omit<PlayerProfile, "key"> & { key: string };
 
@@ -442,8 +484,8 @@ type Draft = Omit<PlayerProfile, "key"> & { key: string };
  *   server echoed and the rosters are whatever Mojang resolved.
  * @param options.onlineCount the ping's total connected count, used to report
  *   how many players the sample failed to name.
- * @param options.levelName the world directory holding `stats/` and
- *   `playerdata/`; defaults to `"world"`.
+ * @param options.levelName the world directory holding the per-player files
+ *   (see {@link resolvePlayerDirs}); defaults to `"world"`.
  */
 export async function readPlayers(
 	server: Server,
@@ -464,8 +506,7 @@ export async function readPlayers(
 
 	const dir = server.path;
 	const worldDir = join(dir, options.levelName ?? "world");
-	const statsDir = join(worldDir, "stats");
-	const dataDir = join(worldDir, "playerdata");
+	const { statsDir, dataDir } = await resolvePlayerDirs(worldDir);
 
 	const [usercache, ops, whitelist, bans, ipBans, shadowBans, dataFiles] =
 		await Promise.all([

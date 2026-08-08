@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-08 (player cards fitted to the row instead of a fixed width)_
+_Last updated: 2026-08-08 (Players tab fixed for the Minecraft 26.1+ world layout)_
 
 ---
 
@@ -650,9 +650,29 @@ _Last updated: 2026-08-08 (player cards fitted to the row instead of a fixed wid
     ban) — 3 columns of 43 filling all 131 available cells at 140, 3 at 100, 2 at 84 and 83 (where
     the heads drop), 2 at 70, 1 at 60, with no card overflowing or wrapping at any width.
 
+- **Fix: the Players tab showed no player data on a Minecraft 26.x server (this session, user
+  report).** Every card read `seen —` / `— played` / `no player data`.
+  - **Cause:** Minecraft **26.1** regrouped the world's per-player directories under `players/` —
+    `<world>/playerdata` → `<world>/players/data`, `<world>/stats` → `<world>/players/stats`
+    (`advancements` moved too). `core/server/players.ts` only knew the pre-26.1 paths, so the stats
+    and NBT reads found nothing. **File formats are unchanged**; `lib/nbt.ts` and `readStats` needed
+    no edit.
+  - **Fix:** exported `resolvePlayerDirs(worldDir)` in `core/server/players.ts`, which picks the
+    layout by **directory existence** (`<world>/players/data`) rather than by version string — see
+    `memory.md` for why the version is not a reliable discriminator. `readPlayers` calls it.
+  - Tests (**220 total, 23 files**, +3): a 26.1+-layout fixture reading state, stats and `lastSeen`;
+    `.dat_old` siblings not being mistaken for players; and the legacy/never-booted fallbacks of
+    `resolvePlayerDirs`.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 220/220; a direct `readPlayers` call against the
+    user's real 26.2 Paper server returned playtime, deaths, health, hunger, game mode, position and
+    distance for both players; and the app driven under **tmux** at 120×40 rendered the Offline cards
+    with real values (`seen 6m ago` / `6m played` / `1 deaths` / `lvl 0 · survival`), no stderr.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
+- **Uncommitted, not mine:** `src/app/Server/tabs.ts` has `DEFAULT_SERVER_TAB` flipped from
+  `"overview"` to `"players"` — a debugging convenience from the user, left in place.
 
 ## Next up (Phase 3)
 

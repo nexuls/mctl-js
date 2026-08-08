@@ -5,6 +5,32 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Minecraft 26.1 moved the per-player files (2026-08-08, real defect)
+
+- **The Players tab showed every card as "no player data" on a 26.2 server.** Minecraft **26.1**
+  regrouped the world's per-player directories under a single `players/`:
+
+  | | ≤ 25.x (and every 1.x) | ≥ 26.1 |
+  |---|---|---|
+  | player data | `<world>/playerdata/` | `<world>/players/data/` |
+  | statistics | `<world>/stats/` | `<world>/players/stats/` |
+  | advancements | `<world>/advancements/` | `<world>/players/advancements/` |
+
+  The **file formats are unchanged** — the NBT decoder and the stats reader needed nothing. Only the
+  paths are version-dependent, and `core/server/players.ts` hardcoded the old two.
+- **`resolvePlayerDirs(worldDir)` (exported, in `players.ts`) detects the layout by directory
+  existence, not by version.** `mctl.json.minecraftVersion` records what MCTL *installed*, not what
+  last opened the world, and a world carried across an upgrade keeps whichever layout wrote it — so
+  the version string is not a reliable discriminator. A never-booted world resolves to the legacy
+  paths and reads as empty, which is the same answer either way.
+  - **How to apply:** any future read of a per-player file goes through `resolvePlayerDirs`, never
+    `join(worldDir, "playerdata")`. `<world>/datapacks/` did **not** move (`inspect.ts` is fine).
+- **`.dat_old` is why `readDirIfExists(dataDir, ".dat")` must keep its extension filter.** The server
+  writes one beside every save; a looser match doubles every card and keys the copy by a uuid ending
+  in `_old`. Pinned by a test.
+- Verified against the user's real 26.2 Paper server: both players now render playtime, deaths,
+  health, hunger, game mode, position and distance, and "seen" resolves off the data file's mtime.
+
 ## The Players tab became a real screen (2026-08-08, user request)
 
 - **Per-player data comes from three places the server writes, none of them a roster count.**
