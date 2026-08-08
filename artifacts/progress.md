@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-08 (the Players tab became a real screen: rosters, per-player detail, actions)_
+_Last updated: 2026-08-08 (player cards fitted to the row instead of a fixed width)_
 
 ---
 
@@ -633,6 +633,22 @@ _Last updated: 2026-08-08 (the Players tab became a real screen: rosters, per-pl
     came back as a badge, typing a reason containing `5` did not navigate (input capture), and a
     kick failed with the foreground runtime's real `SessionNotOwnedError`. Killing the fake server
     moved every player to Offline with the "not answering a status ping yet" note.
+
+- **Player cards are fitted to the row, not fixed-width (this session, user request).** "Instead of
+  using fixed width, calculate to fit. Like if 2 column, make the width 50% and so on."
+  - `app/Server/tabs/Players.tsx` — `CARD_WIDTH_WITH_HEAD`/`CARD_WIDTH_PLAIN` replaced by
+    `CARD_MIN_WIDTH_WITH_HEAD` (36, nine less without a head) plus the pure `fitCards(available,
+    minimum)`, which takes as many columns as fit at the minimum and then gives every card an equal
+    share of the row. `CARD_MAX_WIDTH` (60) stops a lone card stretching across a wide terminal;
+    leftover cells are left unused rather than making one card in a row wider than its neighbours.
+  - `available` is now the **measured** interior of a `Section` — the section wraps its children in a
+    box it measures with `useBoxWidth` and reports through a new `onWidth` prop, because only the
+    layout engine knows what the shell frame, tab padding, section border and scrollbar took. The old
+    `width - 4` terminal estimate survives as `SECTION_CHROME = 9`, used only until the first layout.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` 217/217; `bun run format` clean. Driven under
+    **tmux** at 140/100/84/83/70/60 columns against a fabricated `$HOME` (12 players, one op, one
+    ban) — 3 columns of 43 filling all 131 available cells at 140, 3 at 100, 2 at 84 and 83 (where
+    the heads drop), 2 at 70, 1 at 60, with no card overflowing or wrapping at any width.
 
 ## In progress
 

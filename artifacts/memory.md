@@ -50,11 +50,22 @@ delete entries that stop being true. Newest-relevant first.
 - **A gap on a `flexWrap="wrap"` row is a cross-axis gap too.** The summary strip left a blank line
   between its wrapped rows at 52 cells until the gap came off and each item carried its own
   trailing separator.
-- **The card grid is chunked by hand**, not left to wrap: cards are fixed-width, columns are
-  `floor((width - 4) / (cardWidth + 1))`, and **heads are dropped below 84 cells** (a head is 8
-  cells — a quarter of a card). Four body lines is exactly the head's height, so a card with a head
-  and one without are the same height and the grid stays even. Name rides `title`, badges ride
-  `bottomTitle` — neither costs a body row.
+- **The card grid is chunked by hand**, not left to wrap, and cards are **fitted, not fixed**: the
+  pure `fitCards(available, minimum)` takes as many columns as fit at the minimum
+  (`CARD_MIN_WIDTH_WITH_HEAD = 36`, nine less without a head) and then widens every card to an equal
+  share of the row — two columns are half each, three a third. **Heads are dropped below 84 cells**
+  (a head is 8 cells). Four body lines is exactly the head's height, so a card with a head and one
+  without are the same height and the grid stays even. Name rides `title`, badges ride `bottomTitle`.
+  - **`available` is the *measured* interior of a `Section`, not the terminal width.** `Section`
+    wraps its children in a box it measures with `useBoxWidth` and reports through `onWidth`; only
+    the layout engine knows what the shell frame, the tab padding, the section border and the
+    scrollbar already took. The terminal-derived `width - SECTION_CHROME` is a deliberately narrow
+    first-frame fallback (measuring returns 0 until yoga's first pass — a reported 0 is ignored).
+    Every section is the same width, so only the always-rendered *Online* one reports.
+  - **Leftover cells are left unused rather than handed to one card**: a row where one card is a
+    cell wider than its neighbours reads as a rendering fault. Verified under tmux at 140/100/84/83/
+    70/60 — 3 columns of 43 exactly filling 131 cells at 140, 2 at 84, 1 at 60, no overflow at any
+    width.
 - **The tab joins the container's focus ring (`PLAYERS_ID`)**, same shape as the console's command
   line, so ←/→ reach the tab bar whenever the grid does not hold focus. When it *does*, the tab
   registers `←→` as a **context hint with the same key signature** the container uses for "switch

@@ -23,12 +23,16 @@
  *    disables it leaves connected players unnamed — said out loud rather than
  *    letting the cards pass for the full list.
  *
- * **Responsiveness is layout, not reflow.** The card grid picks its column count
- * from the measured width, and the heads — the widest thing on a card — are
- * dropped below {@link HEAD_MIN_WIDTH}, which narrows every card by nine cells.
+ * **Responsiveness is layout, not reflow.** The card grid fits its cards to the
+ * measured width of a section's interior: as many columns as fit at
+ * {@link CARD_MIN_WIDTH_WITH_HEAD}, then every card widened to an equal share of
+ * what is actually there, so two columns are half the row each and three a third.
+ * The heads — the widest thing on a card — are dropped below
+ * {@link HEAD_MIN_WIDTH}, which narrows the minimum by nine cells.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { BoxRenderable } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import {
@@ -36,6 +40,7 @@ import {
 	ProgressBar,
 	ScrollBox,
 	skinFor,
+	useBoxWidth,
 } from "../../../components/index.ts";
 import { useHints } from "../../../hooks/use-hints.tsx";
 import { useIcons } from "../../../hooks/use-icons.tsx";
@@ -55,9 +60,63 @@ import { PlayerActionsDialog } from "../PlayerActionsDialog.tsx";
  */
 const HEAD_MIN_WIDTH = 84;
 
-/** Card width with a head, and without one. */
-const CARD_WIDTH_WITH_HEAD = 40;
-const CARD_WIDTH_PLAIN = 31;
+/**
+ * The narrowest a card may be drawn, with a head and without one. These decide
+ * the **column count** only — the cards are then stretched to fill the row, so
+ * these are a floor, not the width anything actually renders at.
+ *
+ * With a head: 4 cells of border and padding, 9 for the head and its gap, and
+ * ~23 for the longest body line (`12.4k kills · 12.4k deaths`). Below that the
+ * kill/death line starts to clip. Without a head the floor drops by exactly the
+ * head's nine cells.
+ */
+const CARD_MIN_WIDTH_WITH_HEAD = 36;
+const CARD_MIN_WIDTH_PLAIN = CARD_MIN_WIDTH_WITH_HEAD - 9;
+
+/**
+ * The widest a card is stretched to. A single card spread across a 130-cell
+ * terminal is four lines of text in a field of whitespace; past this the grid
+ * leaves the surplus empty instead.
+ */
+const CARD_MAX_WIDTH = 60;
+
+/** Cells between two cards in a row, matching the row's `gap`. */
+const CARD_GAP = 1;
+
+/**
+ * Interior width assumed for a section while its real width is unmeasured — the
+ * terminal less the shell frame, the tab's padding, the section's border and
+ * padding, and the scrollbar. Deliberately an *under*estimate: erring narrow
+ * costs a column for one frame, erring wide wraps a card onto its own line and
+ * breaks the grid's alignment before the measurement lands.
+ */
+const SECTION_CHROME = 9;
+
+/**
+ * How wide each card is drawn, and how many fit, in a row `available` cells
+ * wide. Pure so the arithmetic can be reasoned about on its own: as many columns
+ * as fit at `minimum`, then the leftover shared out equally between them.
+ *
+ * Every card in every row gets the **same** width — the few cells that do not
+ * divide evenly are left unused at the right edge rather than making one card in
+ * the row a cell wider than its neighbours, which reads as a rendering fault.
+ */
+function fitCards(
+	available: number,
+	minimum: number,
+): { columns: number; cardWidth: number } {
+	// `+ CARD_GAP` on both sides: n columns cost n widths and n-1 gaps, which is
+	// (width + gap) per column with one gap's worth of slack added back.
+	const columns = Math.max(
+		1,
+		Math.floor((available + CARD_GAP) / (minimum + CARD_GAP)),
+	);
+	const share = Math.floor((available - (columns - 1) * CARD_GAP) / columns);
+	return {
+		columns,
+		cardWidth: Math.max(minimum, Math.min(CARD_MAX_WIDTH, share)),
+	};
+}
 
 /** Minecraft's default health and hunger ceilings, both in half-units. */
 const DEFAULT_MAX_HEALTH = 20;
@@ -266,17 +325,36 @@ function PlayerCard({
 	);
 }
 
-/** A group heading with its count, drawn as a quiet rule across the tab. */
+/**
+ * A group heading with its count, drawn as a quiet rule across the tab.
+ *
+ * It also **reports the width of its interior** through `onWidth`: that number —
+ * not the terminal's — is what the card grid divides into columns, because only
+ * the layout engine knows what the shell frame, the tab padding, this border and
+ * the scrollbar have already taken. Every section is the same width, so the tab
+ * can let them all report to one setter.
+ */
 function Section({
 	label,
 	count,
+	onWidth,
 	children,
 }: {
 	label: string;
 	count: number;
+	onWidth?: (width: number) => void;
 	children?: React.ReactNode;
 }) {
 	const { colors } = useTheme();
+	const contentRef = useRef<BoxRenderable>(null);
+	const measured = useBoxWidth(contentRef);
+
+	// 0 means "yoga has not laid this out yet" (see `useBoxWidth`), which is not a
+	// width — reporting it would collapse the grid to one column for a frame.
+	useEffect(() => {
+		if (measured > 0) onWidth?.(measured);
+	}, [measured, onWidth]);
+
 	return (
 		<box
 			flexDirection="column"
@@ -300,7 +378,11 @@ function Section({
 				</text>
 				<text fg={colors.muted}>{count}</text>
 			</box>
-			{children}
+			{/* The measured wrapper is unconditional — a ref attached on only one
+			    render path is never installed (see `useBoxWidth`). */}
+			<box ref={contentRef} flexDirection="column">
+				{children}
+			</box>
 		</box>
 	);
 }
@@ -373,11 +455,15 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 	];
 
 	const showHead = width >= HEAD_MIN_WIDTH;
-	const cardWidth = showHead ? CARD_WIDTH_WITH_HEAD : CARD_WIDTH_PLAIN;
-	// `- 4` is the tab body's own padding plus the shell frame; erring narrow
-	// costs a column, erring wide wraps a card onto its own line and breaks the
-	// grid's alignment.
-	const columns = Math.max(1, Math.floor((width - 4) / (cardWidth + 1)));
+	// The sections all report the same interior width; until one of them has been
+	// laid out, fall back to a conservative guess off the terminal.
+	const [sectionWidth, setSectionWidth] = useState(0);
+	const available =
+		sectionWidth > 0 ? sectionWidth : Math.max(1, width - SECTION_CHROME);
+	const { columns, cardWidth } = fitCards(
+		available,
+		showHead ? CARD_MIN_WIDTH_WITH_HEAD : CARD_MIN_WIDTH_PLAIN,
+	);
 
 	// Keep the selection alive across polls, and seed it on the first roster. The
 	// effect is keyed on the *keys*, not on `ordered`: the roster is rebuilt every
@@ -458,7 +544,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 				<box
 					key={row.map((player) => player.key).join("|")}
 					flexDirection="row"
-					gap={1}
+					gap={CARD_GAP}
 				>
 					{row.map((player) => (
 						<PlayerCard
@@ -511,7 +597,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 					gap: 1,
 				}}
 			>
-				<Section label="Online" count={online.length}>
+				<Section label="Online" count={online.length} onWidth={setSectionWidth}>
 					{online.length > 0 ? (
 						grid(online, "online")
 					) : (
