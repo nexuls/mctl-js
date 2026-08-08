@@ -221,6 +221,22 @@ concept of; it is recorded in `mctl.json.shadowBans` as an MCTL-side marker and 
 server at all, so the UI names them as absent — the same rule the Resources panel follows for
 TPS.
 
+**Skins — `core/skins/` + `lib/png.ts` + `types/skin.ts`.** A player's head is fetched, not
+invented. `resolveHeadSkin({name, uuid})` walks a fixed **fallback chain — Mojang → TLauncher →
+Ely.by** — and turns the first skin PNG it gets into a `HeadSkin`: the same palette-plus-8×8-grid
+shape the built-in faces are written in, so `MinecraftHead` renders both through one path. The order
+is not a search but a division of labour: Mojang is authoritative for licensed accounts and the
+other two serve their own offline-mode launcher users, whom Mojang cannot answer for.
+
+The head is a **crop**, not a render — every skin layout puts the face at (8,8)–(16,16) with its hat
+overlay at (40,8)–(48,16), which is already the 8×8 grid the terminal draws — so `lib/png.ts` (a
+leaf decoder with no dependency) is the only image machinery involved. Failure is not an error
+anywhere in this path: an unreachable source, a rate limit, an undecodable PNG and "no source knows
+this player" all resolve to `undefined`, and the caller falls back to the deterministic built-in
+`skinFor` picks. Both hits **and misses** are cached under `~/.cache/mctl/skins/` — two of the three
+sources decline nearly every lookup, and an uncached miss would put the Players tab's five-second
+poll straight into every source's rate limiter.
+
 ## Provider system — `core/registry/provider-registry.ts`
 
 Dynamically registered modules, not compile-time wiring. `ProviderRegistry` is an **instance**, not a
@@ -548,7 +564,10 @@ The **Players** tab is the one screen with its own data source and its own write
 `hooks/use-players.ts` (over `core/server/players.ts`) rather than the shared `insight`, and runs
 moderation actions through `core/server/player-admin.ts`. It renders one fixed-width card per
 player — online, then offline, then banned — in a hand-chunked grid whose column count comes from
-the terminal width, dropping the `MinecraftHead` portraits below 84 cells. Like the console's
+the terminal width, dropping the `MinecraftHead` portraits below 84 cells. Those portraits are the
+player's **real skin**, fetched through `hooks/use-player-heads.ts` over `core/skins/` (§ Skins
+above); a card renders its built-in fallback face immediately and swaps when a real one arrives, so
+the grid never waits on the network. Like the console's
 command line, its grid joins the container's focus ring only while its tab is active, so the tab
 bar keeps ←/→ the rest of the time. `PlayerActionsDialog` is the two-stage modal (menu, then a
 single argument field) that turns a selection into one `runPlayerAction` call.

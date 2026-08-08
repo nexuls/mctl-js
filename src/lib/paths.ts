@@ -75,6 +75,17 @@ export function apiCacheDir(): string {
 	return join(cacheDir(), "api");
 }
 
+/**
+ * Cached player head faces, one small JSON per player (see `core/skins/`).
+ *
+ * Disposable like everything else under the cache root: a wipe costs one round
+ * of refetching, and a player whose skin cannot be fetched simply falls back to
+ * a built-in face.
+ */
+export function skinCacheDir(): string {
+	return join(cacheDir(), "skins");
+}
+
 // ── State: ~/.local/state/mctl (XDG_STATE_HOME) — DURABLE, not disposable ─────
 
 /** Root of durable local state: registry, event log, runtime descriptors. */

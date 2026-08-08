@@ -17,6 +17,7 @@
 import { type BoxRenderable, FrameBufferRenderable, RGBA } from "@opentui/core";
 import { useRenderer } from "@opentui/react";
 import { useEffect, useId, useRef } from "react";
+import { HEAD_SIZE, type HeadSkin } from "../types/skin.ts";
 
 /** The available head skins. */
 export type MinecraftSkin =
@@ -34,16 +35,11 @@ export type MinecraftSkin =
 	| "sheep";
 
 /**
- * A skin is a colour palette keyed by single-char pixel codes plus an 8×8 face
- * grid (top row first) whose characters index that palette.
+ * The built-in faces, written in the same {@link HeadSkin} shape
+ * `core/skins/` produces from a real skin PNG — a palette keyed by single-char
+ * pixel codes plus an 8×8 grid of those codes, top row first.
  */
-interface Skin {
-	palette: Record<string, string>;
-	/** 8 rows of 8 chars each; every char must be a key in {@link Skin.palette}. */
-	face: string[];
-}
-
-export const SKINS: Record<MinecraftSkin, Skin> = {
+export const SKINS: Record<MinecraftSkin, HeadSkin> = {
 	steve: {
 		palette: {
 			A: "#2b1e0d",
@@ -355,13 +351,16 @@ const rgba = (hex: string): RGBA => {
 };
 
 /** Paint an 8×8 skin face into an 8×4 cell buffer using half blocks. */
-function drawHead(fb: FrameBufferRenderable["frameBuffer"], skin: Skin): void {
-	for (let cy = 0; cy < 4; cy++) {
+function drawHead(
+	fb: FrameBufferRenderable["frameBuffer"],
+	skin: HeadSkin,
+): void {
+	for (let cy = 0; cy < HEAD_SIZE / 2; cy++) {
 		// The two pixel rows stacked into this cell row. Faces are a fixed 8×8, so
 		// both indices are always in bounds.
 		const topRow = skin.face[cy * 2] as string;
 		const botRow = skin.face[cy * 2 + 1] as string;
-		for (let cx = 0; cx < 8; cx++) {
+		for (let cx = 0; cx < HEAD_SIZE; cx++) {
 			const top = skin.palette[topRow[cx] as string] as string;
 			const bot = skin.palette[botRow[cx] as string] as string;
 			fb.setCell(cx, cy, HALF_BLOCK, rgba(top), rgba(bot));
@@ -369,10 +368,31 @@ function drawHead(fb: FrameBufferRenderable["frameBuffer"], skin: Skin): void {
 	}
 }
 
+/**
+ * A stable string identifying a face by its **content**.
+ *
+ * A fetched face is a fresh object every time its owner re-renders — the Players
+ * tab rebuilds its roster every five seconds — so keying the draw effect on the
+ * object's identity would tear down and recreate every frame buffer on screen
+ * several times a minute for a picture that never changed. Exported so the rule
+ * is testable without a renderer.
+ */
+export function faceSignature(skin: MinecraftSkin | HeadSkin): string {
+	if (typeof skin === "string") return `builtin:${skin}`;
+	const palette = Object.keys(skin.palette)
+		.sort()
+		.map((code) => `${code}${skin.palette[code]}`)
+		.join("");
+	return `${skin.face.join("")}|${palette}`;
+}
+
 /** Props for {@link MinecraftHead}. */
 export interface MinecraftHeadProps {
-	/** Which skin to draw. Defaults to `"steve"`. */
-	skin?: MinecraftSkin;
+	/**
+	 * The face to draw: a built-in skin id, or a {@link HeadSkin} extracted from
+	 * a real player's skin texture by `core/skins/`. Defaults to `"steve"`.
+	 */
+	skin?: MinecraftSkin | HeadSkin;
 }
 
 /**
@@ -389,23 +409,27 @@ export function MinecraftHead({ skin = "steve" }: MinecraftHeadProps) {
 	// Unique per instance so multiple heads on screen don't collide on buffer id.
 	const bufferId = useId();
 
+	const face = typeof skin === "string" ? SKINS[skin] : skin;
+	const signature = faceSignature(skin);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `face` is keyed by `signature` (see faceSignature).
 	useEffect(() => {
 		const host = hostRef.current;
 		if (!host) return;
 
 		const canvas = new FrameBufferRenderable(renderer, {
 			id: `mc-head-${bufferId}`,
-			width: 8,
-			height: 4,
+			width: HEAD_SIZE,
+			height: HEAD_SIZE / 2,
 		});
-		drawHead(canvas.frameBuffer, SKINS[skin]);
+		drawHead(canvas.frameBuffer, face);
 		host.add(canvas);
 
 		return () => {
 			host.remove(canvas);
 			canvas.destroy();
 		};
-	}, [renderer, skin, bufferId]);
+	}, [renderer, signature, bufferId]);
 
-	return <box ref={hostRef} width={8} height={4} />;
+	return <box ref={hostRef} width={HEAD_SIZE} height={HEAD_SIZE / 2} />;
 }

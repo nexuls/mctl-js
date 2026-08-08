@@ -5,6 +5,62 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Player heads are real skins now (2026-08-08, user request)
+
+- **`core/skins/` fetches a player's actual skin and crops the head; `skinFor` is the fallback,
+  not the source.** The chain is **Mojang → TLauncher → Ely.by**, in that order, and it is a
+  *fallback chain, not a search*: Mojang is authoritative for a licensed account, and the other two
+  only know their own (offline-mode launcher) users — exactly the population Mojang cannot answer
+  for. An offline-mode server has players in all three groups at once.
+  - **A miss is the normal answer, not an error.** Two of three sources 404 on nearly every lookup,
+    so `SkinSource.fetchSkin` returns `undefined` and never throws. **Ely.by rate-limits hard** —
+    it served a skin on the first request of the session and then `500`d every request for minutes.
+    Treat any non-200 as "not my player" and move on.
+  - **Mojang is two hops and needs the *name* fallback, not just the uuid.** `sessionserver`
+    `/session/minecraft/profile/<uuid>` returns `204` for an **offline-mode uuid** (a locally
+    derived v3 uuid Mojang has never seen), so the source also resolves the name through
+    `api.mojang.com/users/profiles/minecraft/<name>`. Verified: a fabricated uuid for a name that
+    *is* a real account still resolved its skin. The skin URL arrives base64'd inside a `textures`
+    property and is spelled `http://textures.minecraft.net/...` — the same host serves https.
+  - No `SKIN` in the textures payload means a default Steve/Alex; MCTL draws its own built-in
+    rather than fetching Mojang's copy.
+- **Misses are cached, and that is the load-bearing part.** The Players tab re-reads every 5 s; with
+  no negative entry, twenty offline-mode players would be 60 upstream requests per poll and all
+  three sources would start refusing MCTL. `~/.cache/mctl/skins/<sha256(key)>.json` holds the
+  resolved face for 24 h and an absence for 6 h; in-flight lookups are deduped by key. Measured:
+  first lookup ~3.7 s, cached 3 ms, cached miss 0 ms.
+- **The head is a *crop*, not a downscale.** Every skin — legacy 64×32 and modern 64×64 alike — puts
+  the front of the head at (8,8)–(16,16) and its hat overlay at (40,8)–(48,16), which is already
+  exactly the 8×8 grid `MinecraftHead` renders. HD skins (128×128, …) are the same layout at an
+  integer scale and sample the **centre** of each scale×scale block: nearest neighbour, never an
+  average, because Minecraft art is flat colour blocks and averaging smears the eyes into mud.
+  - **The hat layer is a mask, not a blend** (`alpha >= 128` wins outright). Real skins use 254 for
+    "opaque"; blending would render no skin the way its author drew it.
+  - **A test fixture skin must have a *transparent* hat layer.** An all-opaque synthetic texture
+    renders every face as a black square, which is how the first four head tests failed.
+- **`lib/png.ts` is a hand-rolled decoder, no dependency.** ~150 lines for inflate + unfilter +
+  expand covers every colour type and bit depth; **Adam7 interlacing throws** rather than decoding
+  wrongly. Cross-checked byte-for-byte against an independent Python implementation on jeb_'s real
+  skin. `Buffer.concat` over multiple `IDAT` chunks is required — real encoders split them.
+- **`HeadSkin` (palette + 8×8 code grid) lives in `types/skin.ts`** and is now the single face
+  shape: the built-ins in `SKINS` and a fetched face are the same type, so `MinecraftHead` takes
+  `MinecraftSkin | HeadSkin`. Zod-validated on the way out of the cache — a face referencing a
+  missing palette code would paint `undefined` into the frame buffer. 64 pixels ⇒ at most 64
+  distinct colours ⇒ the 64-char code alphabet is exactly enough (pinned by a test).
+- **`faceSignature()` is exported for one reason: the draw effect must key on face *content*.** A
+  fetched face is a fresh object every poll, so keying on identity rebuilds every frame buffer on
+  screen several times a minute. Palette keys are sorted into the signature — code order is an
+  artefact of extraction order, not of the picture.
+  - **This cannot be tested through the renderer.** `createRoot(renderer).render()` called twice
+    *remounts* the component (`useId` goes `_r_0_` → `_r_1_`), so a "did not rebuild" assertion
+    fails for reasons that have nothing to do with the component. Test the pure signature instead.
+- **`usePlayerHeads` never blocks a card.** A card draws its built-in face immediately and swaps
+  when a real one arrives; lookups are capped at 64 players, 4 concurrent, attempted once per
+  session, and skipped entirely below the 84-cell head threshold.
+- The user's working tree keeps a **dev shortcut**: `Router.tsx` boots straight to
+  `server/first-paper-server` and `DEFAULT_SERVER_TAB` is `"players"`. A sandbox `$HOME` used for a
+  pty run must name its server `first-paper-server` or the app opens on "not found".
+
 ## Minecraft 26.1 moved the per-player files (2026-08-08, real defect)
 
 - **The Players tab showed every card as "no player data" on a 26.2 server.** Minecraft **26.1**

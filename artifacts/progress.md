@@ -3,11 +3,45 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-08 (Players tab fixed for the Minecraft 26.1+ world layout)_
+_Last updated: 2026-08-08 (player heads render the player's real Minecraft skin)_
 
 ---
 
 ## Done
+
+- **Player heads are real skins (this session, user request).** "Fetch the head from the API, prefer
+  8×8, convert it to the Head Skin type, then render it. Official Minecraft first, then TLauncher,
+  then Ely.by; fall back to the defaults."
+  - **`src/lib/png.ts`** — a hand-rolled, read-only PNG decoder (inflate → unfilter → expand to
+    RGBA). Every colour type, bit depths 1–16, `tRNS`, multiple `IDAT`s; Adam7 interlacing throws.
+    No new dependency. `src/lib/png.test.ts` — 14 tests over a minimal in-test encoder.
+  - **`src/types/skin.ts`** — `HeadSkin` (palette + 8×8 code grid) + `HeadSkinSchema` + `HEAD_SIZE`.
+    Now the single face shape: `components/MinecraftHead.tsx`'s built-in `SKINS` are typed as
+    `HeadSkin` and the component accepts `MinecraftSkin | HeadSkin`.
+  - **`src/core/skins/`** — `head.ts` (`headSkinFromPng`/`headSkinFromImage`: crop (8,8)–(16,16),
+    composite the hat overlay as a mask, nearest-neighbour centre sampling for HD skins),
+    `sources.ts` (`SKIN_SOURCES` = Mojang → TLauncher → Ely.by, each returning bytes or
+    `undefined`, never throwing), `index.ts` (`resolveHeadSkin` + the hit/miss disk cache under
+    `~/.cache/mctl/skins/` + in-flight dedupe). `src/lib/paths.ts` gained `skinCacheDir()`.
+    `src/core/skins/head.test.ts` — 11 tests.
+  - **`src/hooks/use-player-heads.ts`** — `usePlayerHeads(players, enabled)`: display order, 64
+    players max, 4 concurrent, once per session, inert below the 84-cell head threshold.
+  - **`src/components/MinecraftHead.tsx`** — exported `faceSignature` so the draw effect keys on
+    face *content* (a fetched face is a fresh object every poll).
+    `src/components/MinecraftHead.test.tsx` — 5 tests against real rendered spans.
+  - **`src/app/Server/tabs/Players.tsx`** — `PlayerCard` takes a `head`, falling back to `skinFor`.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` **250/250** (+25); `bun run format` clean.
+    The decoder cross-checked byte-for-byte against an independent Python implementation on jeb_'s
+    real skin. End-to-end in a sandbox `$HOME`: Mojang resolved jeb_'s skin (first lookup 3.7 s,
+    cached 3 ms), a nonexistent name resolved to a cached miss (0 ms), eight concurrent asks made
+    one lookup. Under **tmux at 140×40** against a fabricated server with five `usercache.json`
+    players: four heads resolved through Mojang (including one whose uuid was fake but whose *name*
+    is a real account, proving the name fallback) and the fifth fell back to a built-in; jeb_'s skin
+    tone and eye colour verified in the raw escape sequences. At 70×30 the heads drop as before.
+  - **Known upstream flakiness:** Ely.by served one skin then answered `500` for every subsequent
+    request — treated as a miss, as designed. No TLauncher hit was observed in testing (its endpoint
+    is live and 404s for names it does not own), so **that source is wired and reached but not
+    confirmed against a real TLauncher account**.
 
 - Repo scaffolded from `create-tui`: Bun + `@opentui/core` + `@opentui/react` + React 19.
 - `opentui` skill available and vendored under `.claude/skills/opentui/`.

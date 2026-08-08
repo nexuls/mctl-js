@@ -44,12 +44,14 @@ import {
 } from "../../../components/index.ts";
 import { useHints } from "../../../hooks/use-hints.tsx";
 import { useIcons } from "../../../hooks/use-icons.tsx";
+import { usePlayerHeads } from "../../../hooks/use-player-heads.ts";
 import { usePlayers } from "../../../hooks/use-players.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
 import { useToast } from "../../../hooks/use-toast.tsx";
 import { formatDuration } from "../../../lib/format.ts";
 import { commandFor, playerAction } from "../../../core/server/player-admin.ts";
 import type { PlayerProfile } from "../../../core/server/players.ts";
+import type { HeadSkin } from "../../../types/skin.ts";
 import { EmptyNote, type ServerTabProps } from "../panels.tsx";
 import { PlayerActionsDialog } from "../PlayerActionsDialog.tsx";
 
@@ -191,6 +193,7 @@ function PlayerCard({
 	kind,
 	selected,
 	showHead,
+	head,
 	width,
 	onSelect,
 	onActivate,
@@ -199,6 +202,8 @@ function PlayerCard({
 	kind: CardKind;
 	selected: boolean;
 	showHead: boolean;
+	/** The player's real face, once one has been fetched. */
+	head: HeadSkin | undefined;
 	width: number;
 	onSelect: () => void;
 	onActivate: () => void;
@@ -315,8 +320,10 @@ function PlayerCard({
 			paddingX={1}
 			onMouseDown={() => (selected ? onActivate() : onSelect())}
 		>
+			{/* The player's own face when one has been fetched, else the deterministic
+			    built-in `skinFor` picks. The card never waits on the network. */}
 			{showHead ? (
-				<MinecraftHead skin={skinFor(player.uuid ?? player.name)} />
+				<MinecraftHead skin={head ?? skinFor(player.uuid ?? player.name)} />
 			) : null}
 			<box flexDirection="column" flexGrow={1} overflow="hidden">
 				{lines}
@@ -455,6 +462,10 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 	];
 
 	const showHead = width >= HEAD_MIN_WIDTH;
+	// Real faces, fetched in display order and arriving whenever they arrive. Not
+	// looked up at all when the terminal is too narrow to draw a head — there is
+	// nothing to show them in.
+	const heads = usePlayerHeads(ordered, showHead);
 	// The sections all report the same interior width; until one of them has been
 	// laid out, fall back to a conservative guess off the terminal.
 	const [sectionWidth, setSectionWidth] = useState(0);
@@ -553,6 +564,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 							kind={kind}
 							selected={player.key === selectedKey}
 							showHead={showHead}
+							head={heads.get(player.key)}
 							width={cardWidth}
 							onSelect={() => setSelectedKey(player.key)}
 							onActivate={() => {
