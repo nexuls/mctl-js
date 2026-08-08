@@ -175,14 +175,14 @@ export function PlayerActionsDialog({
 			{/* `alignItems` is load-bearing: a Button sizes to its label, and the
 			    column's default stretch/centre makes a list of them read as a ragged
 			    stack rather than a menu. */}
-			<box flexDirection="column" alignItems="flex-start">
+			<box flexDirection="row" flexWrap="wrap" alignItems="flex-start">
 				{available.map((action, position) => {
 					const blocked = action.needsRunning && !running;
 					return (
 						<box key={action.id} flexDirection="column">
 							<Button
-								size="small"
-								kind="ghost"
+								size="medium"
+								kind="outline"
 								variant={toneVariant(action.tone)}
 								disabled={blocked}
 								focused={position === index}
