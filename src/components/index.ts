@@ -26,6 +26,7 @@ export {
 	thresholdVariant,
 } from "./ProgressBar.tsx";
 export { Breadcrumb, type Crumb, type BreadcrumbProps } from "./Breadcrumb.tsx";
+export { AnsiText, type AnsiTextProps, ansiColor } from "./AnsiText.tsx";
 export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
 export { ScrollBox, type ScrollBoxProps } from "./ScrollBox.tsx";

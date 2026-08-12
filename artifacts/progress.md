@@ -3,11 +3,27 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-12 (Phase 3: loaders, installers, tmux runtime, install resume)_
+_Last updated: 2026-08-13 (console ANSI rendering)_
 
 ---
 
 ## Done
+
+- **The Console tab renders ANSI (2026-08-13, user-reported defect).** A modded server's output
+  (NeoForge/Forge run log4j with a colouring console appender) reached the frame buffer with its
+  escape bytes intact and drew as literal `[32m` mid-line.
+  - **`src/lib/ansi.ts`** — new leaf helper: `parseAnsi` (SGR → styled spans, everything else
+    dropped), `stripAnsi`, `needsParse`, `xterm256Hex`. Handles the bare `CSI m` reset, carriage
+    returns (armed, not applied — the capture stores CRLF and `> stop\r\r`), and tab expansion to
+    8-column stops.
+  - **`src/components/AnsiText.tsx`** — new component: maps a palette index onto the theme's
+    semantic roles and renders `<span>` children; plain lines take a string fast path. Exported from
+    the components barrel alongside the pure `ansiColor`.
+  - **`src/app/Server/tabs/Console.tsx`** — rows became a memoised `ConsoleLine`; `lineColor` now
+    classifies the stripped text and is only the default for uncoloured runs.
+  - Tests: `lib/ansi.test.ts` (17) + `components/AnsiText.test.tsx` (4, rendered frames). Suite is
+    **324 pass / 1 pre-existing fail** (`nerd.heartFull`, see memory.md); `bunx tsc --noEmit` clean;
+    verified in a tmux pty against the user's real NeoForge capture.
 
 - **Phase 3 — loaders, installers, runtimes (this session).** All four roadmap bullets landed.
   - **Types.** `InstallStrategy` gained `loaderJar` (a meta service's pre-built launcher) and

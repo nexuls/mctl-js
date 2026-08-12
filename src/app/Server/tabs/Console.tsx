@@ -9,8 +9,9 @@
  */
 
 import type { ServerTabProps } from "../panels.tsx";
-import { useEffect, useState } from "react";
-import { Input, ScrollBox } from "../../../components/index.ts";
+import { memo, useEffect, useState } from "react";
+import { AnsiText, Input, ScrollBox } from "../../../components/index.ts";
+import { stripAnsi } from "../../../lib/ansi.ts";
 import { useConsole } from "../../../hooks/use-console.ts";
 import { useCaptureKeys } from "../../../hooks/use-input-capture.tsx";
 import { useIcons } from "../../../hooks/use-icons.tsx";
@@ -42,16 +43,66 @@ export function ConsoleTab({ server, focused, onFocused }: ConsoleTabProps) {
  * reliable signal available without parsing the whole line. Anything MCTL cannot
  * classify (a JVM warning, a stack trace) stays in the default foreground rather
  * than being guessed at.
+ *
+ * This is only the *default* colour — a line that colours itself (a modded
+ * server's log4j console appender emits ANSI) overrides it run by run, so the
+ * classification is stripped of escapes first: an escape before the `#` would
+ * otherwise defeat the crash-banner test.
  */
 export function lineColor(
 	line: string,
 	colors: { foreground: string; muted: string; warning: string; error: string },
 ): string {
-	if (/\b(ERROR|SEVERE|FATAL)\b/.test(line)) return colors.error;
-	if (/\bWARN(ING)?\b/.test(line)) return colors.warning;
-	if (/^\s*#/.test(line)) return colors.muted; // JVM crash-report banner lines
+	const plain = stripAnsi(line);
+	if (/\b(ERROR|SEVERE|FATAL)\b/.test(plain)) return colors.error;
+	if (/\bWARN(ING)?\b/.test(plain)) return colors.warning;
+	if (/^\s*#/.test(plain)) return colors.muted; // JVM crash-report banner lines
 	return colors.foreground;
 }
+
+/** Props for {@link ConsoleLine}. */
+interface ConsoleLineProps {
+	/** The raw captured line, escapes and all. */
+	line: string;
+	/** 1-based position in the buffer, shown in the gutter. */
+	number: number;
+	/** Width of the number gutter, sized to the widest number in the buffer. */
+	gutterWidth: number;
+}
+
+/**
+ * One row of the console: a right-aligned line number and the line itself.
+ *
+ * Memoised because it is not one component but up to {@link MAX_LINES} of them:
+ * a booting server appends to the buffer several times a second, and without
+ * this every existing row would re-classify and re-parse its text on each of
+ * those renders.
+ */
+const ConsoleLine = memo(function ConsoleLine({
+	line,
+	number,
+	gutterWidth,
+}: ConsoleLineProps) {
+	const { colors } = useTheme();
+	return (
+		<box flexDirection="row" width="100%">
+			<box
+				width={gutterWidth}
+				flexDirection="row"
+				justifyContent="flex-end"
+				paddingRight={2}
+			>
+				<text fg={colors.muted}>{number}</text>
+			</box>
+			<AnsiText
+				text={line}
+				fg={lineColor(line, colors)}
+				selectable
+				selectionBg={colors.secondary}
+			/>
+		</box>
+	);
+});
 
 /** Props for {@link ConsoleView}. */
 export interface ConsoleViewProps {
@@ -127,23 +178,12 @@ export function ConsoleView({
 					lines.map((line, i) => (
 						// Index keys are correct here: the buffer is append-and-drop-front,
 						// so a line's identity *is* its position in the current window.
-						<box key={i} flexDirection="row" width="100%">
-							<box
-								width={lineCount.toString().length + 3}
-								flexDirection="row"
-								justifyContent="flex-end"
-								paddingRight={2}
-							>
-								<text fg={colors.muted}>{i + 1}</text>
-							</box>
-							<text
-								fg={lineColor(line, colors)}
-								selectable
-								selectionBg={colors.secondary}
-							>
-								{line}
-							</text>
-						</box>
+						<ConsoleLine
+							key={i}
+							line={line}
+							number={i + 1}
+							gutterWidth={lineCount.toString().length + 3}
+						/>
 					))
 				)}
 			</ScrollBox>

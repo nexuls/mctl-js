@@ -628,9 +628,17 @@ case a compile error.
 
 Its route is in `OWN_SCROLL`: the chrome is pinned and only the tab body scrolls. `TAB_OWNS_SCROLL`
 applies the same rule one level down for the Console tab, which pins a command line under its own
-scrolling pane. The console itself is `app/Server/ConsoleView.tsx` and the Console tab is its **only**
-entry point; its input capture follows `focused` rather than mounting, so the tab bar's ←/→ still
-work when the ring is not on the command line.
+scrolling pane. The console itself is `ConsoleView` in `app/Server/tabs/Console.tsx` and that tab is
+its **only** entry point; its input capture follows `focused` rather than mounting, so the tab bar's
+←/→ still work when the ring is not on the command line.
+
+Its rows go through `components/AnsiText.tsx`, which renders a captured line's ANSI colouring as
+styled `<span>` children — OpenTUI paints into a frame buffer, so an escape byte left in a `<text>`
+child draws as the literal `[32m` a modded (log4j) server emits. The parsing is the leaf helper
+`lib/ansi.ts`, which yields *neutral* colours; mapping a palette index onto the theme's semantic
+roles is the component's job, so a coloured console still obeys the active theme. Rows are a memoised
+`ConsoleLine` — the buffer holds up to 2000 of them and re-renders several times a second while a
+server boots.
 
 Two rules the pty found: a pinned 1-row bar needs `flexShrink={0}` beside a `flexGrow` body (yoga
 shrinks it to nothing on a short terminal), and every `Detail` label must fit `LABEL_WIDTH`.

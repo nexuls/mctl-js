@@ -5,6 +5,43 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The console renders ANSI now (2026-08-13, real defect)
+
+User: "The ansi part of the line is not being rendered properly." Seen on
+`my-first-neoforge-server` — 62 of its 143 captured lines carry escapes.
+
+- **Modded servers colour their output; vanilla and Paper do not.** NeoForge/Forge run log4j with a
+  console appender that emits SGR, so a captured line is
+  `\x1b[32m[03:21:16] [main/INFO] …\x1b[m`. OpenTUI draws into a **frame buffer**, so escape bytes in
+  a `<text>` child are painted as the literal characters `[32m` — colour has to arrive as styled
+  child nodes (`<span fg=… attributes=…>`) instead. There is no ANSI parser in `@opentui/core`
+  (`stringToStyledText` only wraps a plain string); `ansi.d.ts` is an *emitter*, not a parser.
+- **`lib/ansi.ts` (new leaf) parses, `components/AnsiText.tsx` (new) paints.** The split is the
+  layering rule doing real work: the parser yields *neutral* colours (`{kind:"index"}` /
+  `{kind:"rgb"}`) and the component maps an index onto the **theme's semantic roles** — green→
+  `success`, yellow→`warning`, red→`error`, per log4j's default pattern. A literal `#00ff00` would be
+  the one thing on screen ignoring the user's theme. Indices 16–255 *are* fixed (the xterm cube /
+  grey ramp, `xterm256Hex`) and are used literally, as is a 24-bit colour.
+- **Three parsing facts that were each found in the real capture, not guessed:**
+  - **`CSI m` with no parameters means reset.** It is how log4j ends every coloured line; reading it
+    as "no change" leaves every following line stuck in the previous colour.
+  - **A carriage return must be *armed*, not applied.** The tmux capture stores the pty's CRLF and
+    the echo of a typed command arrives as `\x1b[m> stop\r\r`, so "a CR erases the line" blanks real
+    lines. The rule that works: the *printable text after* a CR overwrites; a CR with nothing after
+    it erases nothing. Mid-line `\r\x1b[K` (prompt redraw before a log line) then works out right.
+  - **Tabs must be expanded here** (8-column stops). OpenTUI renders `\t` as **two** cells, so a Java
+    stack trace's `\tat …` continuation lines lost their alignment. That is why the fast path is
+    `needsParse` (escape *or* tab *or* CR), not "has an escape".
+- **`lineColor` classifies the *stripped* line** — an escape before the `#` defeated the JVM
+  crash-banner test — and is only the default for runs the line does not colour itself.
+- **The console's rows are a memoised `ConsoleLine`.** Up to 2000 of them, re-rendered every 100 ms
+  while a server boots; without the memo every row re-classified and re-parsed its text each time.
+  `AnsiText` is memoised for the same reason and takes a plain-string fast path.
+- Verified under tmux at 150×45 against the user's real NeoForge capture: zero escape residue across
+  all 143 lines, INFO lines painted `#3fb950` (github-dark `success`), `> stop` intact, stack-trace
+  indentation restored. `mctl logs` in a terminal is deliberately untouched — there the escapes are
+  correct output.
+
 ## Phase 3 — loaders, installers, the tmux runtime (2026-08-12)
 
 - **A launch spec is now *data on disk*, not just a provider's answer.** `MctlJson.launch`
