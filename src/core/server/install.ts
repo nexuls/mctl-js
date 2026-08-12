@@ -15,8 +15,9 @@
  * files will eventually live.
  */
 
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { copyFile, rename, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { formatBytes } from "../../lib/format.ts";
 import { downloadFile } from "../../lib/download.ts";
 import { ensureDir, pathExists } from "../../lib/fs.ts";
@@ -55,6 +56,18 @@ export interface ExecuteInstallOptions {
 	 * and unused by every other strategy.
 	 */
 	javaPath?: string;
+	/**
+	 * A directory outside staging in which interrupted downloads are kept so a
+	 * retried install continues them instead of starting over.
+	 *
+	 * This has to be *outside* staging to work at all: a staging directory is
+	 * per-attempt and is deleted in every outcome, success or failure, which is
+	 * exactly what makes a failed create leave nothing behind — and also what
+	 * would throw away 90% of a downloaded installer. Artefacts land here, are
+	 * verified here, and are moved into the install directory only once complete.
+	 * Omitted ⇒ downloads go straight to staging and a failure restarts them.
+	 */
+	resumeDir?: string;
 	/** Job handle; progress is reported through it when present. */
 	job?: JobContext;
 }
@@ -168,7 +181,13 @@ export async function executeInstall(
 	}
 }
 
-/** Download one artefact, wiring the strategy's digests and the job's progress. */
+/**
+ * Download one artefact, wiring the strategy's digests and the job's progress.
+ *
+ * With a `resumeDir` the bytes land there first — keyed by the artefact's URL so
+ * an unrelated download can never be mistaken for a prefix of this one — and are
+ * moved into place once verified. See {@link ExecuteInstallOptions.resumeDir}.
+ */
 async function download(
 	url: string,
 	dest: string,
@@ -176,7 +195,13 @@ async function download(
 	options: ExecuteInstallOptions,
 ): Promise<void> {
 	const job = options.job;
-	await downloadFile(url, dest, {
+	const target = options.resumeDir
+		? join(options.resumeDir, resumeName(url, dest))
+		: dest;
+	if (options.resumeDir) await ensureDir(options.resumeDir);
+
+	await downloadFile(url, target, {
+		resume: options.resumeDir !== undefined,
 		sha256: strategy.sha256,
 		sha1: "sha1" in strategy ? strategy.sha1 : undefined,
 		md5: "md5" in strategy ? strategy.md5 : undefined,
@@ -191,6 +216,34 @@ async function download(
 			);
 		},
 	});
+
+	if (target !== dest) {
+		// Verified, so it is now safe to put in the install directory. `rename`
+		// within `$ROOT` is atomic; a create on another drive falls back to a copy,
+		// which is fine because the source is complete and stays put on failure.
+		await ensureDir(dirname(dest));
+		try {
+			await rename(target, dest);
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code !== "EXDEV") throw err;
+			await copyFile(target, dest);
+			await rm(target, { force: true });
+		}
+	}
+}
+
+/**
+ * A stable filename for a resumable artefact.
+ *
+ * Keyed by the **URL**, not by the destination name: two server kinds both
+ * install a `server.jar`, and resuming one against the other's partial bytes
+ * would produce a file that fails its digest check for reasons nobody could
+ * diagnose. The readable suffix is kept so the directory can be understood by a
+ * human deleting things from it.
+ */
+function resumeName(url: string, dest: string): string {
+	const digest = createHash("sha256").update(url).digest("hex").slice(0, 16);
+	return `${digest}-${basename(dest)}`;
 }
 
 /**

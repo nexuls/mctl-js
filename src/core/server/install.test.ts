@@ -11,7 +11,8 @@
  */
 
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathExists } from "../../lib/fs.ts";
@@ -21,13 +22,31 @@ import { executeInstall, InstallerFailedError } from "./install.ts";
 /** A tiny jar-shaped payload; nothing here ever opens it as a zip. */
 const INSTALLER_BYTES = "PK pretend installer";
 
+/** Bodies by path; `Range` is honoured so resume can be observed. */
+const BODIES: Record<string, string> = {
+	"/installer.jar": INSTALLER_BYTES,
+	"/server.jar": "a server jar",
+	"/other.jar": "a different jar",
+};
+
+/** Range headers the server was asked for, so a test can prove one was sent. */
+const rangesSeen: string[] = [];
+
 const server = Bun.serve({
 	port: 0,
 	fetch(request) {
-		const url = new URL(request.url);
-		if (url.pathname === "/installer.jar") return new Response(INSTALLER_BYTES);
-		if (url.pathname === "/server.jar") return new Response("a server jar");
-		return new Response("not found", { status: 404 });
+		const body = BODIES[new URL(request.url).pathname];
+		if (body === undefined) return new Response("not found", { status: 404 });
+		const range = request.headers.get("range");
+		if (!range) return new Response(body);
+		rangesSeen.push(range);
+		const from = Number(/bytes=(\d+)-/.exec(range)?.[1] ?? 0);
+		return new Response(body.slice(from), {
+			status: 206,
+			headers: {
+				"content-range": `bytes ${from}-${body.length - 1}/${body.length}`,
+			},
+		});
 	},
 });
 const base = `http://localhost:${server.port}`;
@@ -67,6 +86,60 @@ describe("executeInstall — directJar / loaderJar", () => {
 		);
 		// Nothing to record: the provider always knows how these launch.
 		expect(outcome.launch).toBeUndefined();
+	});
+});
+
+describe("executeInstall — resume", () => {
+	test("continues a partial download instead of restarting it", async () => {
+		// The scenario: a create failed after 6 of 12 bytes, its staging directory
+		// was deleted, and the user runs the same create again.
+		const resumeDir = join(dir, "partial");
+		await mkdir(resumeDir, { recursive: true });
+		const url = `${base}/server.jar`;
+		const digest = createHash("sha256").update(url).digest("hex").slice(0, 16);
+		await Bun.write(join(resumeDir, `.${digest}-server.jar.part`), "a serv");
+
+		rangesSeen.length = 0;
+		await executeInstall({ kind: "directJar", url, dest: "server.jar" }, dir, {
+			resumeDir,
+		});
+
+		expect(rangesSeen).toEqual(["bytes=6-"]);
+		expect(await Bun.file(join(dir, "server.jar")).text()).toBe("a server jar");
+	});
+
+	test("keys the partial file by URL, so two kinds' server.jar cannot collide", async () => {
+		// Every kind installs something called `server.jar`. Keyed by destination
+		// name alone, Purpur's install would resume from Paper's abandoned bytes and
+		// fail its digest check for reasons nobody could diagnose.
+		const resumeDir = join(dir, "partial2");
+		await mkdir(resumeDir, { recursive: true });
+		const other = `${base}/other.jar`;
+		const otherDigest = createHash("sha256")
+			.update(other)
+			.digest("hex")
+			.slice(0, 16);
+		await Bun.write(
+			join(resumeDir, `.${otherDigest}-server.jar.part`),
+			"junk!!",
+		);
+
+		rangesSeen.length = 0;
+		await executeInstall(
+			{ kind: "directJar", url: `${base}/server.jar`, dest: "server.jar" },
+			dir,
+			{ resumeDir },
+		);
+
+		// It did not resume from the other artefact's partial…
+		expect(rangesSeen).toEqual([]);
+		expect(await Bun.file(join(dir, "server.jar")).text()).toBe("a server jar");
+		// …and left that partial alone for its own install to continue.
+		expect(
+			await Bun.file(
+				join(resumeDir, `.${otherDigest}-server.jar.part`),
+			).exists(),
+		).toBe(true);
 	});
 });
 

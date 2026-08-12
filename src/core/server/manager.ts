@@ -12,6 +12,13 @@
  * failed create therefore leaves the servers directory exactly as it was, rather
  * than a directory containing half a jar (plan.md § Server Installation).
  *
+ * **Downloads resume; staging does not.** The staging tree is per-attempt and is
+ * deleted whatever happens, which is precisely what makes a failure clean — but
+ * it would also discard 90% of a downloaded Forge installer. So artefacts are
+ * fetched into `$ROOT/downloads/partial/` and moved into staging once verified: a
+ * retried create continues where the last one stopped, while a failed one still
+ * leaves nothing that could be mistaken for a server.
+ *
  * **Delete never removes files unless it is told to, twice.** `removeServer`
  * forgets a *location*; erasing world data requires an explicit
  * `deleteFiles: true` from a front-end that has already confirmed with the user,
@@ -496,6 +503,10 @@ export class ServerManager {
 		const outcome = await executeInstall(strategy, plan.staging, {
 			javaPath,
 			job,
+			// Downloads are parked outside staging so a failed create can be retried
+			// without re-fetching what already arrived — staging itself is deleted in
+			// every outcome, which is what keeps a failure from leaving half a server.
+			resumeDir: join(paths.downloadsDir, "partial"),
 		});
 		if (plan.eula) await writeEulaAcceptance(plan.staging);
 

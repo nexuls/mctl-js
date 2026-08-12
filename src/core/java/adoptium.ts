@@ -190,6 +190,11 @@ export async function installTemurin(
 		size: release.size,
 		onProgress: options.onProgress,
 		signal: options.signal,
+		// A JDK is ~200 MB and `downloadsDir` is stable across runs, so an
+		// interrupted fetch is continued rather than restarted. Safe because the
+		// destination name embeds the exact release, so a partial file can only ever
+		// belong to the same artefact — and a wrong digest deletes it regardless.
+		resume: true,
 	});
 
 	const home = managedJavaHome(javaDir, major);
