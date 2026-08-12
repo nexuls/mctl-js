@@ -98,6 +98,7 @@ async function buildServer(
 		minecraftVersion: cfg.minecraftVersion,
 		loaderVersion: cfg.loaderVersion,
 		java: cfg.java,
+		launch: cfg.launch,
 		memory: cfg.memory,
 		runtime: cfg.runtime,
 		network: cfg.network,

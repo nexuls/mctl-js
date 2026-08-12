@@ -21,6 +21,7 @@
 import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { RuntimeKind } from "./config.ts";
+import { LaunchSpec } from "./install.ts";
 
 /** An absolute filesystem path; a relative path in state files is always a bug. */
 const AbsolutePath = z
@@ -102,6 +103,19 @@ export const MctlJson = z.looseObject({
 	network: z.string().default("direct"),
 	/** ISO-8601 creation timestamp, written at create time (Phase 2). */
 	createdAt: z.string().optional(),
+	/**
+	 * How to launch this server, recorded when it cannot be derived from the kind
+	 * alone.
+	 *
+	 * Vanilla and Paper always launch `server.jar`, so their provider answers from
+	 * nothing and this key is absent. Forge and NeoForge do **not**: their launch
+	 * depends on files their installer generated, whose paths embed the loader
+	 * version. Recording the answer at create time is what keeps
+	 * `ServerProvider.launchSpec(dir)` free of filesystem probing and version
+	 * archaeology at every start. Absent ⇒ ask the provider (plan.md § Directory
+	 * Layout lists the launch spec among `mctl.json`'s contents).
+	 */
+	launch: LaunchSpec.optional(),
 	/**
 	 * Players MCTL has marked as shadow-banned on this server.
 	 *
@@ -199,6 +213,8 @@ export interface Server {
 	loaderVersion?: string;
 	/** Resolved Java major or explicit pin, when known. */
 	java?: JavaPin;
+	/** Recorded launch spec, when the kind's own answer is not enough. */
+	launch?: LaunchSpec;
 	/** JVM heap string, e.g. `"2G"`. */
 	memory: string;
 	/** Runtime provider id. */

@@ -453,22 +453,36 @@ export class ServerManager {
 		});
 
 		// Java is resolved *before* the download so a machine that cannot run this
-		// server fails fast, rather than after pulling 60 MB.
+		// server fails fast, rather than after pulling 60 MB. An `installer` strategy
+		// needs it for a second reason: the artefact it downloads is a *program*, and
+		// running it is part of the install — so `skipJava` cannot be honoured for
+		// those kinds, and the JDK is fetched even when the caller asked not to.
+		const needsJavaToInstall = strategy.kind === "installer";
 		let java: MctlJson["java"];
-		if (plan.javaPin !== undefined) {
-			java = { pinned: plan.javaPin };
-		} else if (!plan.skipJava) {
+		let javaPath: string | undefined;
+		if (plan.javaPin !== undefined) java = { pinned: plan.javaPin };
+
+		// An explicit pin is already the answer, so it is not re-derived (that is what
+		// pinning means). It still has to be *located* when an installer must be run
+		// with it, which is the second half of the condition.
+		if ((java === undefined && !plan.skipJava) || needsJavaToInstall) {
 			job.step("Resolving Java", undefined);
 			const requirement = await plan.provider.javaRequirement(
 				minecraftVersion,
 				plan.loaderVersion,
 			);
-			const resolution = await resolveJava(requirement, undefined, paths, {
+			const resolution = await resolveJava(requirement, java, paths, {
 				onProgress: (progress) =>
 					job.progress(progress.fraction, "downloading JDK"),
 				signal: job.signal,
 			});
-			java = resolution.installation.major;
+			javaPath = resolution.installation.javaPath;
+			// A `--no-java` create that only resolved Java because an installer forced
+			// it still records nothing: the flag's promise is that the server carries no
+			// Java field and resolves again at first start.
+			if (java === undefined && !plan.skipJava) {
+				java = resolution.installation.major;
+			}
 			if (resolution.installation.source === "managed") {
 				await publish(bus, EventType.JavaInstalled, {
 					major: resolution.installation.major,
@@ -479,7 +493,10 @@ export class ServerManager {
 		}
 
 		await ensureDir(plan.staging);
-		await executeInstall(strategy, plan.staging, job);
+		const outcome = await executeInstall(strategy, plan.staging, {
+			javaPath,
+			job,
+		});
 		if (plan.eula) await writeEulaAcceptance(plan.staging);
 
 		job.step("Writing configuration", undefined);
@@ -494,6 +511,10 @@ export class ServerManager {
 			runtime: plan.runtime,
 			network: plan.network,
 			createdAt: new Date().toISOString(),
+			// Recorded only when the install produced a layout the kind alone does not
+			// imply (Forge's generated argfile). For `server.jar` kinds this stays
+			// absent and the provider answers at every start — see `MctlJson.launch`.
+			launch: outcome.launch,
 		};
 		await writeJsonAtomic(mctlJsonPath(plan.staging), mctlJson);
 

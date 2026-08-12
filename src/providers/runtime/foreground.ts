@@ -44,6 +44,7 @@ import type {
 	ServerState,
 } from "../../types/server.ts";
 import { probe } from "../../core/session/session-manager.ts";
+import { launchCommand } from "../../core/runtime/launch.ts";
 
 const logger = log("runtime:foreground");
 
@@ -91,7 +92,7 @@ export class ForegroundRuntime implements RuntimeProvider {
 	 */
 	async start(context: LaunchContext): Promise<RuntimeSession> {
 		const { server, spec, javaPath, jvmArgs } = context;
-		const args = [...jvmArgs, "-jar", spec.jar, "nogui"];
+		const { command, args } = launchCommand(spec, javaPath, jvmArgs);
 
 		await ensureDir(consoleDir());
 		const logFile = consoleLogFile(server.id);
@@ -102,10 +103,10 @@ export class ForegroundRuntime implements RuntimeProvider {
 		await Bun.write(logFile, "");
 
 		logger.info(
-			{ id: server.id, javaPath, args, cwd: server.path },
+			{ id: server.id, command, args, cwd: server.path },
 			"starting server (foreground)",
 		);
-		const child = Bun.spawn([javaPath, ...args], {
+		const child = Bun.spawn([command, ...args], {
 			cwd: server.path,
 			stdin: "pipe",
 			stdout: "pipe",

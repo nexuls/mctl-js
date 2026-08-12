@@ -13,10 +13,18 @@
  * stream, and are `rename`d over the destination only after the digest matches.
  * A failed or mismatched download therefore never leaves a plausible-looking but
  * corrupt jar behind — the caller sees an exception and no file.
+ *
+ * **Resume.** With `resume: true` the temp file is *named after the destination*
+ * rather than randomly, so a transfer interrupted halfway can be continued with
+ * an HTTP `Range` request instead of restarting. That matters at this file's
+ * scale — a Forge installer pulls Minecraft's whole library tree and a JDK is
+ * ~200 MB — and it is the reason the digest is computed by re-reading the
+ * partial file rather than only from the live stream: the bytes already on disk
+ * were hashed by a previous process, or possibly a previous week.
  */
 
 import { createHash } from "node:crypto";
-import { rename, unlink } from "node:fs/promises";
+import { open, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { ensureDir, tempNameFor } from "./fs.ts";
 import { log } from "./logger.ts";
@@ -42,8 +50,16 @@ export interface DownloadOptions {
 	sha256?: string;
 	/** Expected hex SHA-1 digest, for origins that publish only SHA-1 (Mojang). */
 	sha1?: string;
+	/** Expected hex MD5 digest, for origins that publish only MD5 (PurpurMC). */
+	md5?: string;
 	/** Expected size in bytes, used for progress when there is no `Content-Length`. */
 	size?: number;
+	/**
+	 * Keep a partial transfer and continue it on a later call (see the module
+	 * doc). Off by default: a predictable temp name is only safe when the caller
+	 * knows two downloads of the same destination are the same artefact.
+	 */
+	resume?: boolean;
 	/** Called at most every ~100 ms, plus once at completion. */
 	onProgress?: (progress: DownloadProgress) => void;
 	/** Abort the transfer (cancels the request and removes the temp file). */
@@ -106,14 +122,20 @@ export async function downloadFile(
 	options: DownloadOptions = {},
 ): Promise<DownloadResult> {
 	await ensureDir(dirname(dest));
-	const temp = join(dirname(dest), tempNameFor(basename(dest)));
+	// A resumable transfer needs a *stable* temp name so a later call can find the
+	// partial file; a one-shot one gets a unique name so two concurrent downloads
+	// of the same destination cannot interleave into one corrupt file.
+	const temp = options.resume
+		? join(dirname(dest), `.${basename(dest)}.part`)
+		: join(dirname(dest), tempNameFor(basename(dest)));
+
+	const already = options.resume ? await fileSize(temp) : 0;
+	const headers = { ...options.headers };
+	if (already > 0) headers.Range = `bytes=${already}-`;
 
 	let response: Response;
 	try {
-		response = await fetch(url, {
-			headers: options.headers,
-			signal: options.signal,
-		});
+		response = await fetch(url, { headers, signal: options.signal });
 	} catch (err) {
 		throw new DownloadError(url, undefined, String(err));
 	}
@@ -121,50 +143,75 @@ export async function downloadFile(
 		throw new DownloadError(url, response.status, response.statusText);
 	}
 
-	const header = response.headers.get("content-length");
-	const total = header ? Number(header) : options.size;
+	// A server that ignores `Range` answers 200 with the whole body — then the
+	// partial file is worthless and the transfer starts over. Only a 206 means the
+	// bytes on disk are a genuine prefix of what is arriving now.
+	const resumed = already > 0 && response.status === 206;
+	if (already > 0 && !resumed) {
+		logger.info({ url, already }, "origin ignored Range; restarting download");
+		await removeQuietly(temp);
+	}
 
-	// Both digests are computed in the same pass: which one upstream publishes is
-	// the origin's choice (Mojang: SHA-1, PaperMC: SHA-256) and hashing twice over
-	// a stream we are already touching costs nothing measurable.
+	const header = response.headers.get("content-length");
+	const streamed = header ? Number(header) : undefined;
+	const total =
+		streamed !== undefined ? streamed + (resumed ? already : 0) : options.size;
+
+	// Every digest is computed in one pass: which one upstream publishes is the
+	// origin's choice (Mojang: SHA-1, PaperMC: SHA-256, Purpur: MD5) and hashing
+	// three times over a stream we are already touching costs nothing measurable.
 	const sha256 = createHash("sha256");
 	const sha1 = createHash("sha1");
-	const sink = Bun.file(temp).writer();
+	const md5 = createHash("md5");
+	const update = (chunk: Uint8Array) => {
+		sha256.update(chunk);
+		sha1.update(chunk);
+		md5.update(chunk);
+	};
 
+	// The bytes a previous attempt wrote were never hashed by this process, so a
+	// resumed transfer replays the partial file through the digests before the
+	// stream continues them.
 	let received = 0;
+	if (resumed) {
+		for await (const chunk of Bun.file(temp).stream() as unknown as AsyncIterable<Uint8Array>) {
+			update(chunk);
+			received += chunk.byteLength;
+		}
+		logger.info({ url, resumedAt: received }, "resuming download");
+	}
+
+	// `Bun.file().writer()` truncates, which is exactly wrong for a resumed
+	// transfer, so the sink is a plain append-mode file handle in both cases —
+	// `"a"` for a continuation, `"w"` for a fresh start.
+	const handle = await open(temp, resumed ? "a" : "w");
+
 	let lastReport = 0;
 	try {
 		for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
-			sha256.update(chunk);
-			sha1.update(chunk);
-			sink.write(chunk);
+			update(chunk);
+			await handle.write(chunk);
 			received += chunk.byteLength;
 
 			const now = Date.now();
 			if (options.onProgress && now - lastReport >= PROGRESS_INTERVAL_MS) {
 				lastReport = now;
-				// Flush periodically rather than per chunk: the sink buffers, and an
-				// unflushed multi-hundred-MB download would otherwise grow memory.
-				await sink.flush();
 				options.onProgress(progressOf(received, total));
 			}
 		}
-		await sink.end();
+		await handle.close();
 	} catch (err) {
-		// `end()` may return a number (bytes written) rather than a promise, so it
-		// is awaited rather than chained; a failure closing a doomed temp file is
-		// irrelevant next to the error we are about to throw.
-		try {
-			await sink.end();
-		} catch {
-			// Ignored on purpose — see above.
-		}
-		await removeQuietly(temp);
+		await handle.close().catch(() => {});
+		// A partial file is kept only when the caller asked for resume; otherwise it
+		// is exactly the plausible-looking corrupt artefact this module exists to
+		// prevent.
+		if (!options.resume) await removeQuietly(temp);
 		throw new DownloadError(url, undefined, String(err));
 	}
 
 	const actual256 = sha256.digest("hex");
 	const actual1 = sha1.digest("hex");
+	const actualMd5 = md5.digest("hex");
 
 	if (options.sha256 && !digestEquals(options.sha256, actual256)) {
 		await removeQuietly(temp);
@@ -173,6 +220,12 @@ export async function downloadFile(
 	if (options.sha1 && !digestEquals(options.sha1, actual1)) {
 		await removeQuietly(temp);
 		throw new ChecksumError(url, "sha1", options.sha1, actual1);
+	}
+	if (options.md5 && !digestEquals(options.md5, actualMd5)) {
+		// A mismatch always removes the partial file, resume or not: continuing a
+		// transfer whose bytes are already known to be wrong would never converge.
+		await removeQuietly(temp);
+		throw new ChecksumError(url, "md5", options.md5, actualMd5);
 	}
 
 	// Only now is the file allowed to appear at its real name. The temp file is a
@@ -196,6 +249,15 @@ function progressOf(received: number, total?: number): DownloadProgress {
 /** Case-insensitive hex digest comparison — origins differ on casing. */
 function digestEquals(expected: string, actual: string): boolean {
 	return expected.trim().toLowerCase() === actual.toLowerCase();
+}
+
+/** Size of a file in bytes, or 0 when it does not exist — never throws. */
+async function fileSize(path: string): Promise<number> {
+	try {
+		return (await stat(path)).size;
+	} catch {
+		return 0;
+	}
 }
 
 /** Best-effort temp-file cleanup; a leftover temp file must not mask the real error. */

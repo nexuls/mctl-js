@@ -15,9 +15,12 @@
  * deviation from plan.md § Runtime).
  */
 
+import { join } from "node:path";
+import { pathExists } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import type { RootPaths } from "../../lib/paths.ts";
 import type { Config } from "../../types/config.ts";
+import type { LaunchSpec } from "../../types/install.ts";
 import { EventType } from "../../types/events.ts";
 import type {
 	LaunchContext,
@@ -36,6 +39,7 @@ import type { ProviderRegistry } from "../registry/provider-registry.ts";
 import { withServerLock } from "../session/lock.ts";
 import { getServer } from "../server/discover.ts";
 import { ServerOperationError } from "../server/manager.ts";
+import { launchInputs } from "./launch.ts";
 
 const logger = log("runtime");
 
@@ -82,6 +86,32 @@ export function heapArgs(memory: string): string[] {
 	return [`-Xms${value}`, `-Xmx${value}`];
 }
 
+/**
+ * Put the heap flags where a generated launch script will read them.
+ *
+ * Forge's `run.sh` does not accept JVM arguments on its command line — it reads
+ * `user_jvm_args.txt` and splices it into its own `java` invocation. So for a
+ * `script` launch the only way to honour a server's `memory` setting is to write
+ * that file, which MCTL therefore owns for such servers. It is rewritten on every
+ * start (the setting may have changed) and comments explain its origin, because a
+ * user who opens it after hand-editing it deserves to know why their edit went
+ * away. A no-op for every other launch spec.
+ */
+async function writeScriptJvmArgs(
+	spec: LaunchSpec,
+	dir: string,
+	jvmArgs: string[],
+): Promise<void> {
+	if (spec.kind !== "script" || !spec.jvmArgsFile) return;
+	const body = [
+		"# Written by MCTL on every start, from this server's `memory` setting.",
+		"# Change it with `mctl edit <id> --memory 6G` — edits here are overwritten.",
+		...jvmArgs,
+		"",
+	].join("\n");
+	await Bun.write(join(dir, spec.jvmArgsFile), body);
+}
+
 export class RuntimeManager {
 	readonly #deps: RuntimeManagerDeps;
 
@@ -123,12 +153,21 @@ export class RuntimeManager {
 				autoInstall: options.autoInstallJava !== false,
 			});
 
+			const jvmArgs = heapArgs(server.memory);
 			const context: LaunchContext = {
 				server,
-				spec: kind.launchSpec(server.path),
+				// The recorded spec wins: for Forge and NeoForge it names files the
+				// *installer* generated, which the provider cannot re-derive without
+				// knowing the loader version and re-checking upstream's layout. A server
+				// with no recorded spec is a `server.jar` kind and the provider answers.
+				spec: server.launch ?? kind.launchSpec(server.path),
 				javaPath: java.installation.javaPath,
-				jvmArgs: heapArgs(server.memory),
+				jvmArgs,
 			};
+			await this.#verifyLaunchable(server, context.spec);
+			// A generated launch script builds its own JVM command line and reads heap
+			// flags from a file, so they are put where it will look before it runs.
+			await writeScriptJvmArgs(context.spec, server.path, jvmArgs);
 
 			const session = await runtime.start(context);
 			logger.info(
@@ -195,6 +234,29 @@ export class RuntimeManager {
 	async status(id: string): Promise<ServerState> {
 		const server = await this.#require(id);
 		return this.#deps.providers.runtime(server.runtime).status(server);
+	}
+
+	/**
+	 * Refuse to start when the files the launch spec names are not there.
+	 *
+	 * Worth its own check rather than letting the JVM report it: a missing jar
+	 * produces `Error: Unable to access jarfile server.jar`, and a missing Forge
+	 * argfile produces a JVM usage dump — neither of which tells the user that
+	 * their install is incomplete or that the directory was moved. This says so.
+	 */
+	async #verifyLaunchable(server: Server, spec: LaunchSpec): Promise<void> {
+		const missing: string[] = [];
+		for (const file of launchInputs(spec, server.path)) {
+			if (!(await pathExists(file))) missing.push(file);
+		}
+		if (missing.length > 0) {
+			throw new ServerOperationError(
+				server.id,
+				`server "${server.id}" cannot start: ${missing.join(", ")} ${
+					missing.length === 1 ? "is" : "are"
+				} missing. The install may be incomplete — re-create the server or restore its files.`,
+			);
+		}
 	}
 
 	/** Load a server, rejecting missing and unavailable ones with a clear message. */
