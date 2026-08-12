@@ -45,14 +45,12 @@ import type {
 } from "../../types/server.ts";
 import { probe } from "../../core/session/session-manager.ts";
 import { launchCommand } from "../../core/runtime/launch.ts";
+import { tailConsoleLog } from "../../core/runtime/console-log.ts";
 
 const logger = log("runtime:foreground");
 
 /** Default grace period before a stop escalates from SIGTERM to SIGKILL. */
 const DEFAULT_STOP_TIMEOUT_MS = 60_000;
-
-/** How often {@link ForegroundRuntime.logs} re-checks the capture file when following. */
-const FOLLOW_POLL_MS = 200;
 
 /** Minecraft's default port when `server.properties` says nothing. */
 const DEFAULT_PORT = 25565;
@@ -205,37 +203,8 @@ export class ForegroundRuntime implements RuntimeProvider {
 	 * than the child's pipe, so this works from any instance and can replay what
 	 * was printed before the reader attached.
 	 */
-	async *logs(server: Server, options: LogOptions = {}): AsyncIterable<string> {
-		const file = consoleLogFile(server.id);
-		const existing = (await readTextIfExists(file)) ?? "";
-		let offset = existing.length;
-
-		const lines = existing.split("\n");
-		// A trailing "" from the final newline is not a line.
-		if (lines.at(-1) === "") lines.pop();
-		const initial =
-			options.tail === undefined ? lines : lines.slice(-options.tail);
-		for (const line of initial) yield line;
-
-		if (!options.follow) return;
-
-		let carry = "";
-		while (!options.signal?.aborted) {
-			await Bun.sleep(FOLLOW_POLL_MS);
-			const text = (await readTextIfExists(file)) ?? "";
-			if (text.length < offset) {
-				// The file was truncated — a new run started. Resume from its beginning.
-				offset = 0;
-				carry = "";
-			}
-			if (text.length === offset) continue;
-			const chunk = carry + text.slice(offset);
-			offset = text.length;
-			const parts = chunk.split("\n");
-			// The last part may be a partial line; hold it until its newline arrives.
-			carry = parts.pop() ?? "";
-			for (const line of parts) yield line;
-		}
+	logs(server: Server, options: LogOptions = {}): AsyncIterable<string> {
+		return tailConsoleLog(consoleLogFile(server.id), options);
 	}
 
 	/**

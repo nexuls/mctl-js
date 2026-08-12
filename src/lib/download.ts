@@ -174,7 +174,9 @@ export async function downloadFile(
 	// stream continues them.
 	let received = 0;
 	if (resumed) {
-		for await (const chunk of Bun.file(temp).stream() as unknown as AsyncIterable<Uint8Array>) {
+		for await (const chunk of Bun.file(
+			temp,
+		).stream() as unknown as AsyncIterable<Uint8Array>) {
 			update(chunk);
 			received += chunk.byteLength;
 		}

@@ -128,10 +128,14 @@ export async function executeInstall(
 			// of these installers writes its output tree relative to the cwd, not
 			// relative to the jar. It also downloads Minecraft's own libraries, which
 			// is why the timeout is generous.
-			const result = await run(javaPath, ["-jar", strategy.dest, ...strategy.args], {
-				cwd: dir,
-				timeoutMs: INSTALLER_TIMEOUT_MS,
-			});
+			const result = await run(
+				javaPath,
+				["-jar", strategy.dest, ...strategy.args],
+				{
+					cwd: dir,
+					timeoutMs: INSTALLER_TIMEOUT_MS,
+				},
+			);
 			if (result.code !== 0) {
 				throw new InstallerFailedError(
 					strategy.dest,
@@ -140,7 +144,11 @@ export async function executeInstall(
 			}
 
 			job?.step("Verifying", undefined);
-			const launch = await resolveProduced(strategy.produces, dir, strategy.dest);
+			const launch = await resolveProduced(
+				strategy.produces,
+				dir,
+				strategy.dest,
+			);
 
 			// Only now is the installer discarded: keeping it until the output has been
 			// verified means a failed verification can be diagnosed by re-running it.

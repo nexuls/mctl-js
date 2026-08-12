@@ -58,9 +58,20 @@ export type IconMode = z.infer<typeof IconMode>;
  * Deliberately narrower than what a server may actually be: `mctl.json`'s `kind`
  * is a free string resolved against the `ProviderRegistry` at runtime, so a
  * server created by a newer MCTL still reads back. This enum only bounds the
- * picker, and grows as each provider lands (Phase 2: vanilla, paper).
+ * picker, and grows as each provider lands. Ordered as the picker offers them:
+ * plain servers, then loaders, then the proxy — which is the one entry a user
+ * choosing "a Minecraft server" does not want.
  */
-export const ServerKind = z.enum(["vanilla", "paper"]);
+export const ServerKind = z.enum([
+	"vanilla",
+	"paper",
+	"purpur",
+	"fabric",
+	"quilt",
+	"forge",
+	"neoforge",
+	"velocity",
+]);
 export type ServerKind = z.infer<typeof ServerKind>;
 
 /** Defaults applied to newly created servers (each is overridable per server). */

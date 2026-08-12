@@ -164,6 +164,13 @@ export const LaunchSpec = z.discriminatedUnion("kind", [
 		kind: z.literal("jar"),
 		/** Jar path relative to the server directory, e.g. `"server.jar"`. */
 		jar: z.string().min(1),
+		/**
+		 * Program arguments after the jar. Absent ⇒ `["nogui"]`, which is what every
+		 * Minecraft *server* wants: it suppresses Mojang's Swing console, which on a
+		 * headless machine is a crash rather than a window. A **proxy** (Velocity)
+		 * has no such console and is given an explicit empty list instead.
+		 */
+		args: z.array(z.string()).optional(),
 	}),
 	z.object({
 		/**

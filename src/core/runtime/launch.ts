@@ -46,7 +46,10 @@ export function launchCommand(
 ): LaunchCommand {
 	switch (spec.kind) {
 		case "jar":
-			return { command: javaPath, args: [...jvmArgs, "-jar", spec.jar, NOGUI] };
+			return {
+				command: javaPath,
+				args: [...jvmArgs, "-jar", spec.jar, ...(spec.args ?? [NOGUI])],
+			};
 		case "argFile":
 			// `@file` is a JVM feature (JDK 9+): the file's contents are spliced into
 			// the command line at that position. Forge's argfile carries the module

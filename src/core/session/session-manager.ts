@@ -60,11 +60,15 @@ function isPidAlive(pid: number): boolean {
  *
  * @param id server id (the descriptor is `runtime/<id>.json`).
  *
- * NOTE: for detached runtimes (tmux/docker, Phase 3/5) full liveness also means
- * "the session/container still exists"; until those providers land, the pid
- * check is the only signal and is treated as authoritative.
- * TODO(phase-3): confirm tmux session / docker container existence via the
- * owning runtime provider, not just the recorded pid.
+ * **Scope: the pid, deliberately.** For a detached runtime, full liveness also
+ * means "the session or container still exists", and that question can only be
+ * answered by the runtime that owns it — which this module must not import, or
+ * the dependency arrow reverses (AGENTS.md § 3). So the split is: `probe` gives
+ * every caller the cheap, provider-free answer, and
+ * `RuntimeProvider.status()` refines it (`providers/runtime/tmux.ts` checks
+ * `has-session` on top of this). The pid remains the *primary* signal for tmux
+ * too, because the launch line `exec`s over the shell and the recorded pid is
+ * therefore the JVM's own.
  */
 export async function probe(id: string): Promise<ProbeResult> {
 	const file = runtimeFile(id);
