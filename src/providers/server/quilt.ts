@@ -17,6 +17,15 @@
  *  - `GET /v3/versions/loader/<game>` → `[{ loader: { version, … }, … }, …]`.
  *  - `GET /v3/versions/installer` → `[{ version, url, hashes: { sha256 }, … }, …]`.
  *
+ * **`hashes.sha256` from meta is not trusted, because it is wrong.** For
+ * installer 0.15.1 meta publishes `2bd88a14…` while the artefact actually hashes
+ * to `0a229138…` — and Maven's own sidecar
+ * (`…/quilt-installer-0.15.1.jar.sha256`, which is what the repository itself
+ * validates against) agrees with the artefact, not with meta. Verified by
+ * downloading the jar three times from two clients. So the digest is read from
+ * the sidecar beside the file; if that is unreachable the install proceeds
+ * unverified rather than failing on a hash we already know to be unreliable.
+ *
  * **The installer's CLI, verified against v0.15.1** (`quilt-installer help`):
  *
  *     java -jar quilt-installer.jar install server <mc> [<loader>] \
@@ -37,7 +46,7 @@
  */
 
 import { z } from "zod";
-import { fetchJson } from "../../lib/http.ts";
+import { fetchJson, fetchText } from "../../lib/http.ts";
 import { log } from "../../lib/logger.ts";
 import type {
 	InstallRequest,
@@ -82,6 +91,31 @@ const SERVER_JAR = "quilt-server-launch.jar";
 /** Quilt spells its pre-release loaders into the version string. */
 function isPrerelease(version: string): boolean {
 	return /-(beta|alpha|rc|pre)/i.test(version);
+}
+
+/**
+ * The SHA-256 a Maven repository publishes beside an artefact.
+ *
+ * Maven repositories serve `<artefact>.sha256` (and `.sha1`) sidecars, and that
+ * is the digest the repository itself verifies uploads against — which makes it
+ * the authoritative answer for these bytes, unlike the copy in Quilt's meta
+ * service (see the module doc). `undefined` when the sidecar is missing or does
+ * not look like a digest: an unverified install is a worse outcome than a
+ * verified one and a better outcome than no install at all.
+ */
+async function mavenSha256(url: string): Promise<string | undefined> {
+	try {
+		// Sidecars hold the hex digest, sometimes followed by the filename.
+		const text = await fetchText(`${url}.sha256`);
+		const digest = text.trim().split(/\s+/)[0];
+		return digest && /^[0-9a-f]{64}$/i.test(digest) ? digest : undefined;
+	} catch (err) {
+		logger.warn(
+			{ url, err: String(err) },
+			"no sha256 sidecar; installing without digest verification",
+		);
+		return undefined;
+	}
 }
 
 export class QuiltProvider implements ServerProvider {
@@ -156,7 +190,7 @@ export class QuiltProvider implements ServerProvider {
 			kind: "installer",
 			url: installer.url,
 			dest: "quilt-installer.jar",
-			sha256: installer.hashes?.sha256,
+			sha256: await mavenSha256(installer.url),
 			size: installer.file_size,
 			args,
 			produces: { kind: "jar", jar: SERVER_JAR },

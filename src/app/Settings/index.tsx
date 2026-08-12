@@ -55,27 +55,14 @@ import type {
 	CompressionKind,
 	IconMode,
 	NetworkProvider,
-	RuntimeKind,
-	ServerKind,
 } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
 import { useSettings, type SettingsDraft } from "./use-settings.ts";
 
-/** Server kinds available today. Grows as providers land (Phase 2+). */
-const KINDS: SelectItem<ServerKind>[] = [
-	{
-		label: "Vanilla",
-		value: "vanilla",
-		description: "Mojang's official server",
-	},
-];
-
-/** Runtime providers, mirroring the wizard's Defaults step. */
-const RUNTIMES: RadioItem<RuntimeKind>[] = [
-	{ label: "foreground", value: "foreground", description: "tied to MCTL" },
-	{ label: "tmux", value: "tmux", description: "detached (Phase 3)" },
-	{ label: "docker", value: "docker", description: "containerised (Phase 5)" },
-];
+// Kinds and runtimes are shared with the setup wizard (`app/choices.ts`): this
+// page and the Defaults step set the same two config fields, and two hand-kept
+// copies of the option list is how one of them ends up a phase behind.
+import { KIND_ITEMS as KINDS, RUNTIME_ITEMS as RUNTIMES } from "../choices.ts";
 
 /** Backup providers registered today. */
 const BACKUP_PROVIDERS: SelectItem<BackupProvider>[] = [

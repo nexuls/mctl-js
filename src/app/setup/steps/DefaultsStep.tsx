@@ -3,8 +3,8 @@
  * Minecraft version, kind, JVM heap, runtime, and EULA behaviour. Each is
  * overridable per server later — this only sets the starting point.
  *
- * **Pure-UI, page-layer** (AGENTS.md § 3). Option sets mirror the config enums
- * (`ServerKind`, `RuntimeKind`); more kinds/runtimes are added in later phases.
+ * **Pure-UI, page-layer** (AGENTS.md § 3). The option sets are shared with the
+ * Settings page through `app/choices.ts`, so the two cannot drift apart.
  */
 
 import {
@@ -12,43 +12,16 @@ import {
 	Input,
 	RadioGroup,
 	Select,
-	type RadioItem,
-	type SelectItem,
 } from "../../../components/index.ts";
 import { useFocusRing } from "../../../hooks/use-focus-ring.ts";
 import { useIcons } from "../../../hooks/use-icons.tsx";
 import { StepScaffold } from "../StepScaffold.tsx";
 import { WizardFooter } from "../WizardFooter.tsx";
 import type { StepProps } from "../types.ts";
-import type { RuntimeKind, ServerKind } from "../../../types/config.ts";
-
-/** Server kinds available today. Grows as providers land (Phase 2+). */
-const KINDS: SelectItem<ServerKind>[] = [
-	{
-		label: "Vanilla",
-		value: "vanilla",
-		description: "Mojang's official server",
-	},
-];
-
-/** Runtime providers and how they relate to the MCTL process lifetime. */
-const RUNTIMES: RadioItem<RuntimeKind>[] = [
-	{
-		label: "foreground",
-		value: "foreground",
-		description: "tied to MCTL; simplest, ends when you quit",
-	},
-	{
-		label: "tmux",
-		value: "tmux",
-		description: "detached; survives closing MCTL (Phase 3)",
-	},
-	{
-		label: "docker",
-		value: "docker",
-		description: "containerised; detached (Phase 5)",
-	},
-];
+import {
+	KIND_ITEMS as KINDS,
+	RUNTIME_ITEMS as RUNTIMES,
+} from "../../choices.ts";
 
 export function DefaultsStep({ draft, setDraft, onNext, onBack }: StepProps) {
 	const { icons } = useIcons();

@@ -15,24 +15,31 @@
  *    a *named* tmux session rather than through a pipe only the parent holds.
  *    There is no `SessionNotOwnedError` here.
  *
- * **How a server is started, and why not simply `tmux new-session … java …`.**
- * The session is created empty, output capture is attached, and only then is the
- * launch command typed into it with a leading `exec`:
+ * **How a server is started.** The session is created *running the launch
+ * command*, and the output capture is attached immediately after:
  *
- *     tmux new-session -d -s mctl-<id> -c <server dir>
+ *     tmux new-session -d -s mctl-<id> -c <server dir> \
+ *          "sleep 0.2; exec '…/java' -Xms2G … -jar server.jar nogui"
  *     tmux pipe-pane -o -t mctl-<id> 'cat >> ~/.local/state/mctl/console/<id>.log'
- *     tmux send-keys -t mctl-<id> -l 'exec "…/java" -Xms2G … -jar server.jar nogui'
- *     tmux send-keys -t mctl-<id> Enter
  *
- * Two things fall out of that order, both load-bearing:
+ * Three details there are all load-bearing, and two of them were bugs first:
  *
- *  - **No output is lost.** `pipe-pane` only captures what is printed *after* it
- *    is attached, so a server launched as the session's own command would have
- *    its first lines — including an immediate crash — vanish.
- *  - **`exec` keeps the pid.** It replaces the shell in place rather than forking,
- *    so the pane's pid *is* the JVM's pid, recorded once and never re-read. Had
- *    the shell stayed, `pane_pid` would be the shell's and every liveness probe
- *    would report a dead server as running.
+ *  - **The command is given to tmux, never typed into a shell.** An earlier
+ *    version created an empty session and `send-keys`'d the command into it. That
+ *    put the launch at the mercy of the user's *interactive* shell: observed in
+ *    practice, zsh's first-run configuration wizard swallowed the keystrokes and
+ *    the pane was left holding `xec '…/java'` — the leading `e` eaten — and a
+ *    `command not found`. tmux hands the string to `/bin/sh`, so no interactive
+ *    rc file, no completion, and no prompt can ever interfere.
+ *  - **`exec` keeps the pid.** It replaces that `sh` in place rather than forking,
+ *    so the pane's pid *is* the JVM's pid. Without it `pane_pid` would be the
+ *    shell's, and every liveness probe would report a dead server as running for
+ *    as long as its parent shell lived.
+ *  - **The brief `sleep` is what makes the capture complete.** `pipe-pane` only
+ *    captures what is printed *after* it is attached, and attaching takes a few
+ *    milliseconds — so a server that fails instantly ("Unable to access jarfile")
+ *    would print its only interesting line into the void. That is exactly the case
+ *    where the console matters most, so the JVM is held back until the pipe exists.
  *
  * **Liveness is still the pid**, exactly as for every other runtime, and the
  * session is checked as well: a pane whose process died closes the window and
@@ -72,6 +79,13 @@ const DEFAULT_PORT = 25565;
 
 /** How long a `tmux` control command may take before it is considered wedged. */
 const TMUX_TIMEOUT_MS = 10_000;
+
+/**
+ * How long the launch waits before `exec`ing the JVM, so `pipe-pane` is attached
+ * first and no output can be lost. Long enough to cover two tmux round trips,
+ * short enough to be invisible next to a JVM's startup.
+ */
+const CAPTURE_GRACE_SECONDS = 0.2;
 
 /** Thrown when tmux is not installed. Carries the platform's install hint. */
 export class TmuxUnavailableError extends Error {
@@ -127,6 +141,14 @@ export class TmuxRuntime implements RuntimeProvider {
 			await this.#tmuxRun(tmux, ["kill-session", "-t", session]);
 		}
 
+		// tmux runs this string through `/bin/sh`, so every component is quoted: a
+		// server directory containing a space, or a `$` in a path, would otherwise be
+		// re-split or expanded. See the module doc for the `sleep` and the `exec`.
+		const line = `sleep ${CAPTURE_GRACE_SECONDS}; exec ${[command, ...args].map(shellQuote).join(" ")}`;
+		logger.info(
+			{ id: server.id, session, command, args, cwd: server.path },
+			"starting server (tmux)",
+		);
 		await this.#tmuxRun(tmux, [
 			"new-session",
 			"-d",
@@ -134,6 +156,7 @@ export class TmuxRuntime implements RuntimeProvider {
 			session,
 			"-c",
 			server.path,
+			line,
 		]);
 		await this.#tmuxRun(tmux, [
 			"pipe-pane",
@@ -143,16 +166,9 @@ export class TmuxRuntime implements RuntimeProvider {
 			`cat >> ${shellQuote(logFile)}`,
 		]);
 
-		const line = `exec ${[command, ...args].map(shellQuote).join(" ")}`;
-		logger.info(
-			{ id: server.id, session, command, args, cwd: server.path },
-			"starting server (tmux)",
-		);
-		// `-l` sends the text literally: without it tmux would interpret words like
-		// `Enter` or a `;` inside a JVM argument as key names or command separators.
-		await this.#tmuxRun(tmux, ["send-keys", "-t", session, "-l", line]);
-		await this.#tmuxRun(tmux, ["send-keys", "-t", session, "Enter"]);
-
+		// Read immediately: `exec` preserves the pid, so the shell's pid recorded now
+		// is the JVM's pid a moment later — and reading now means a server that dies
+		// on startup still gets a descriptor to reap rather than an unexplained throw.
 		const pid = await this.#panePid(tmux, session);
 		if (pid === undefined) {
 			await this.#tmuxRun(tmux, ["kill-session", "-t", session]);

@@ -39,11 +39,6 @@ const FIELDS = ["name", "kind", "mc", "memory", "runtime", "eula"];
 /** Ids whose control is a text input — these hold the shell's key capture. */
 const TEXT_FIELDS = new Set<string>(["name", "mc", "memory"]);
 
-/** Runtime options. Only `foreground` exists in Phase 2; tmux/docker come later. */
-const RUNTIMES: { value: RuntimeKind; label: string }[] = [
-	{ value: "foreground", label: "foreground" },
-];
-
 export function ServerCreate() {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
@@ -198,7 +193,13 @@ export function ServerCreate() {
 			/>
 			<Select
 				label="Runtime"
-				options={RUNTIMES}
+				// From the registry, like Kind above it: the runtimes this build ships
+				// are whatever `providers/index.ts` registered, and a hand-kept copy
+				// here is a list that silently stays a phase behind.
+				options={(context?.providers.runtimes() ?? []).map((provider) => ({
+					value: provider.id,
+					label: provider.displayName,
+				}))}
 				value={runtime}
 				onChange={(value) => setRuntime(value as RuntimeKind)}
 				focused={ring.isFocused("runtime")}
