@@ -480,6 +480,7 @@ export function Select<T = string>({
 	// One row per option, capped so the list scrolls instead of growing unbounded.
 	const visible = Math.min(options.length, maxVisible);
 	const height = visible * (hasDescriptions ? 2 : 1);
+	const maxOptionWidth = Math.max(...options.map((o) => o.label.length));
 
 	// One FormField for both layouts — it is what `ref` measures, so it must be
 	// mounted on every path (see useBoxWidth); branching on it would strand a
@@ -497,6 +498,7 @@ export function Select<T = string>({
 			{asTabs && !forceDropdown ? (
 				<tab-select
 					width="100%"
+					tabWidth={maxOptionWidth + 6}
 					options={tabOptions}
 					focused={focused}
 					showDescription={false}
