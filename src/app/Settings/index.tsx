@@ -43,7 +43,7 @@ import {
 } from "../../components/index.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
-import { useFocusRing } from "../../hooks/use-focus-ring.ts";
+import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
@@ -161,8 +161,17 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
  * the action bar. Conditional fields (a path input behind its override toggle)
  * appear only while they are on screen — `useFocusRing` clamps its index when the
  * list changes, so toggling one mid-cycle is safe.
+ *
+ * Revert and Save keep their places in the ring at all times but are marked
+ * disabled exactly when their buttons are, so Tab runs the fields and comes back
+ * round instead of parking on a dimmed chip that ignores Enter. A clean form has
+ * neither button live, which is the common case.
  */
-function ringIds(group: GroupId, draft: SettingsDraft): string[] {
+function ringIds(
+	group: GroupId,
+	draft: SettingsDraft,
+	actions: { canRevert: boolean; canSave: boolean },
+): FocusItem[] {
 	const fields: string[] = [];
 	for (const id of GROUP_FIELDS[group]) {
 		fields.push(id);
@@ -174,7 +183,12 @@ function ringIds(group: GroupId, draft: SettingsDraft): string[] {
 			fields.push("backupProvider", "compression");
 		}
 	}
-	return [TABS_ID, ...fields, "__revert", "__save"];
+	return [
+		TABS_ID,
+		...fields,
+		{ id: "__revert", disabled: !actions.canRevert },
+		{ id: "__save", disabled: !actions.canSave },
+	];
 }
 
 /** A read-only `label  value` row, for values that cannot be edited. */
@@ -255,15 +269,19 @@ export function Settings() {
 	const toast = useToast();
 	const [group, setGroup] = useState<GroupId>("locations");
 
-	// The ring depends on both the visible group and the override toggles, so it is
-	// rebuilt every render from the draft rather than tracked separately.
-	const ring = useFocusRing(draft ? ringIds(group, draft) : [TABS_ID]);
+	const invalid = Object.keys(issues).length > 0;
+	const canSave = dirty && !invalid && !saving;
+	const canRevert = dirty && !saving;
+
+	// The ring depends on the visible group, the override toggles and whether the
+	// action buttons are live, so it is rebuilt every render from the draft rather
+	// than tracked separately.
+	const ring = useFocusRing(
+		draft ? ringIds(group, draft, { canRevert, canSave }) : [TABS_ID],
+	);
 
 	// Suppress the shell's digit/q/t shortcuts while a text field has the ring.
 	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
-
-	const invalid = Object.keys(issues).length > 0;
-	const canSave = dirty && !invalid && !saving;
 
 	// ←/→ only reach the tab bar while the ring is on it; anywhere else they are
 	// the text cursor, so the hint follows the ring rather than the page. Ctrl+S is
@@ -621,7 +639,7 @@ export function Settings() {
 						size="small"
 						kind="ghost"
 						variant="neutral"
-						disabled={!dirty || saving}
+						disabled={!canRevert}
 						focused={ring.isFocused("__revert")}
 						onClick={revert}
 						onFocused={() => ring.setFocus("__revert")}

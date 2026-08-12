@@ -95,6 +95,10 @@ interface TabProps {
 	sepColor: string;
 	/** Whether this tab is the one on screen. */
 	active: boolean;
+	/** Whether the *bar* holds the keyboard focus ring. */
+	barFocused: boolean;
+	/** Glyph drawn in the active tab's left padding cell while the bar is focused. */
+	marker: string;
 	/** Fired when the tab is clicked. */
 	onSelect: () => void;
 }
@@ -105,11 +109,25 @@ interface TabProps {
  * hover. Hover is local presentation state, so it lives here rather than in the
  * parent (same pattern as {@link "./Button".Button}).
  *
+ * **Keyboard focus is drawn on the pill, not only under it.** A caret takes over
+ * the pill's left padding cell and the fill goes to full strength; without the
+ * ring the pill is blended back toward the page so it still reads as "this is the
+ * open tab" without claiming the keyboard. The caret replaces a padding cell
+ * rather than being inserted, so the tab's width — and therefore the rule segment
+ * aligned to it — never changes with focus.
+ *
  * This is deliberately *not* a `Button`: a Button colours its label from its own
  * variant matrix and has no kind whose resting look is *muted*, which is what a
  * tab needs so only the active one draws the eye.
  */
-function Tab({ item, sepColor, active, onSelect }: TabProps) {
+function Tab({
+	item,
+	sepColor,
+	active,
+	barFocused,
+	marker,
+	onSelect,
+}: TabProps) {
 	const { colors } = useTheme();
 	const [hovered, setHovered] = useState(false);
 
@@ -119,6 +137,13 @@ function Tab({ item, sepColor, active, onSelect }: TabProps) {
 			? colors.foreground
 			: colors.muted;
 
+	// An unfocused active pill is calmed toward the page background: side by side
+	// with a focused one the difference is unmistakable, and on its own it is still
+	// obviously a filled pill.
+	const pill = barFocused
+		? colors.primary
+		: mix(colors.primary, colors.background, 0.62);
+
 	return (
 		<>
 			<text fg={sepColor}>{"|"}</text>
@@ -126,20 +151,25 @@ function Tab({ item, sepColor, active, onSelect }: TabProps) {
 				flexDirection="row"
 				flexShrink={0}
 				width={tabWidth(item) - 1}
-				paddingLeft={TAB_PADDING_X}
+				// The left padding is drawn as a cell of text instead, so the focus
+				// caret can occupy it without widening the tab.
+				paddingLeft={0}
 				paddingRight={TAB_PADDING_X}
 				backgroundColor={
-					active
-						? colors.primary
-						: hovered
-							? alpha(colors.foreground, 0.12)
-							: undefined
+					active ? pill : hovered ? alpha(colors.foreground, 0.12) : undefined
 				}
 				onMouseDown={onSelect}
 				onMouseOver={() => setHovered(true)}
 				onMouseOut={() => setHovered(false)}
 			>
-				<text fg={ink} attributes={active ? TextAttributes.BOLD : undefined}>
+				<text fg={ink} flexShrink={0}>
+					{active && barFocused ? marker : " ".repeat(TAB_PADDING_X)}
+				</text>
+				<text
+					fg={ink}
+					flexShrink={0}
+					attributes={active ? TextAttributes.BOLD : undefined}
+				>
 					{item.label}
 				</text>
 			</box>
@@ -246,6 +276,8 @@ export function Tabs({
 						key={item.id}
 						item={item}
 						active={item.id === activeId}
+						barFocused={focused}
+						marker={" "}
 						sepColor={rule}
 						onSelect={() => {
 							onFocused?.();

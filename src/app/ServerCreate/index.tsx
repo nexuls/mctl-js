@@ -16,7 +16,7 @@
 import { useState } from "react";
 import { useKeyboard } from "@opentui/react";
 import { Button, Input, Select, Checkbox } from "../../components/index.ts";
-import { useFocusRing } from "../../hooks/use-focus-ring.ts";
+import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
@@ -33,8 +33,8 @@ import type { RuntimeKind, ServerKind } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
 import { ProgressBar } from "../../components/index.ts";
 
-/** Field ids in the focus ring, in tab order. */
-const FIELDS = ["name", "kind", "mc", "memory", "runtime", "eula", "create"];
+/** Field ids in the focus ring, in tab order. The two buttons close the ring. */
+const FIELDS = ["name", "kind", "mc", "memory", "runtime", "eula"];
 
 /** Ids whose control is a text input — these hold the shell's key capture. */
 const TEXT_FIELDS = new Set<string>(["name", "mc", "memory"]);
@@ -63,15 +63,23 @@ export function ServerCreate() {
 	const [eula, setEula] = useState(config?.defaults.eula ?? false);
 	const [job, setJob] = useState<Job>();
 
-	const ring = useFocusRing(FIELDS);
-	// While a text field owns the ring, the shell's digit/q/t shortcuts stand down
-	// so typing "2" edits the field instead of navigating to Jobs.
-	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
-
 	const id = idFromName(name);
 	const busy =
 		job !== undefined && (job.state === "queued" || job.state === "running");
 	const invalid = name.trim() === "" || id === "";
+
+	// Create is in the ring but marked disabled until the form is valid, so Tab
+	// never parks on a button that ignores Enter — it wraps back to the Name field
+	// the user still has to fill in. Cancel is always live, and is in the ring so
+	// the escape hatch is reachable by keyboard as well as by Esc.
+	const buttons: FocusItem[] = [
+		{ id: "create", disabled: invalid || busy },
+		"cancel",
+	];
+	const ring = useFocusRing([...FIELDS, ...buttons]);
+	// While a text field owns the ring, the shell's digit/q/t shortcuts stand down
+	// so typing "2" edits the field instead of navigating to Jobs.
+	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
 
 	// The shell draws these in its strip. `Esc` is relabelled from the shell's
 	// "back" to what leaving this page actually means — the same key, so the more
@@ -132,9 +140,10 @@ export function ServerCreate() {
 		}
 	};
 
-	// Enter submits from any field except the button, which owns its own Enter.
+	// Enter submits from any field except the buttons, which own their own Enter.
 	useKeyboard((key) => {
-		if (key.name !== "return" || ring.focus === "create" || busy) return;
+		if (key.name !== "return" || busy) return;
+		if (ring.focus === "create" || ring.focus === "cancel") return;
 		if (ring.focus === undefined) return;
 		void submit();
 	});
@@ -228,7 +237,7 @@ export function ServerCreate() {
 						focused={ring.isFocused("create")}
 						onFocused={() => ring.setFocus("create")}
 						onClick={() => void submit()}
-						disabled={invalid}
+						disabled={invalid || busy}
 					>
 						Create
 					</Button>
@@ -236,6 +245,8 @@ export function ServerCreate() {
 						kind="ghost"
 						variant="neutral"
 						size="small"
+						focused={ring.isFocused("cancel")}
+						onFocused={() => ring.setFocus("cancel")}
 						onClick={() => navigate("dashboard")}
 					>
 						Cancel

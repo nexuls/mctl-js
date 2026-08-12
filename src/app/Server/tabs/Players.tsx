@@ -542,7 +542,12 @@ function Section({
 	);
 }
 
-export function PlayersTab({ server, insight, focused }: ServerTabProps) {
+export function PlayersTab({
+	server,
+	insight,
+	focused,
+	onModal,
+}: ServerTabProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { width } = useTerminalDimensions();
@@ -550,6 +555,15 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 	const { roster, loading, act } = usePlayers(server, insight);
 	const [selectedKey, setSelectedKey] = useState<string>();
 	const [actionsOpen, setActionsOpen] = useState(false);
+
+	/**
+	 * Open or close the actions modal, telling the container either way: while the
+	 * dialog is up the page's ring must not also be answering Tab.
+	 */
+	const showActions = (open: boolean) => {
+		setActionsOpen(open);
+		onModal?.(open);
+	};
 
 	const empty = icons.emptyValue;
 	const status = insight?.status;
@@ -656,7 +670,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 		else if (key.name === "up" || key.name === "k") move(-columns);
 		else if (key.name === "right" || key.name === "l") move(1);
 		else if (key.name === "left" || key.name === "h") move(-1);
-		else if (key.name === "return" && selected) setActionsOpen(true);
+		else if (key.name === "return" && selected) showActions(true);
 	});
 
 	// `←→` is registered with the *same* key signature the container uses for
@@ -717,7 +731,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 							onSelect={() => setSelectedKey(player.key)}
 							onActivate={() => {
 								setSelectedKey(player.key);
-								setActionsOpen(true);
+								showActions(true);
 							}}
 						/>
 					))}
@@ -827,7 +841,7 @@ export function PlayersTab({ server, insight, focused }: ServerTabProps) {
 				open={actionsOpen}
 				player={selected}
 				running={running}
-				onClose={() => setActionsOpen(false)}
+				onClose={() => showActions(false)}
 				onRun={(action, player, argument) => void run(action, player, argument)}
 			/>
 		</box>

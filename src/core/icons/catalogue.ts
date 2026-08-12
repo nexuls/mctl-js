@@ -167,7 +167,11 @@ export const ICONS: Readonly<
 	// NOT a drumstick: every food emoji (🍖 U+1F356, 🍗) is East-Asian Wide and
 	// would take two cells, so the unicode set uses a filled/outline block pair
 	// and the nerd set the cutlery glyph's filled/outline pair.
-	foodFull: { nerd: "\u{f141f} " /* nf-fa-cutlery */, unicode: "▰", ascii: "=" },
+	foodFull: {
+		nerd: "\u{f141f} " /* nf-fa-cutlery */,
+		unicode: "▰",
+		ascii: "=",
+	},
 	foodEmpty: {
 		nerd: "\u{f1420} " /* nf-fa-square_o */,
 		unicode: "▱",

@@ -15,6 +15,7 @@
  */
 
 import { useKeyboard } from "@opentui/react";
+import { useModalOpen } from "../hooks/use-modal.tsx";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { variantColor, type Variant } from "./support.ts";
 
@@ -57,6 +58,11 @@ export function Dialog({
 	footer,
 }: DialogProps) {
 	const { colors } = useTheme();
+
+	// Tell the shell a modal owns the keyboard, so its global shortcuts — Esc
+	// included — stand down for as long as this dialog is up. Raised here rather
+	// than by each caller, so every dialog in the app gets it for free.
+	useModalOpen(open);
 
 	// Hooks must run unconditionally; the handler no-ops while closed.
 	useKeyboard((key) => {

@@ -11,7 +11,7 @@
  */
 
 import { useState } from "react";
-import type { BorderStyle } from "@opentui/core";
+import { TextAttributes, type BorderStyle } from "@opentui/core";
 import { useKeyboard, type BoxProps } from "@opentui/react";
 
 import { useTheme } from "../hooks/use-theme.tsx";
@@ -169,19 +169,33 @@ export function Button({
 		},
 	};
 
+	// A disabled button is never focusable (see `useFocusRing`), so a `focused`
+	// prop left true by a page that has not updated its ring must not make it look
+	// live. Everything below treats focus as false while disabled.
+	const hasFocus = focused && !disabled;
+
 	// Disabled is a fixed dimmed look; otherwise pick the state colours. A button
 	// is hovered when the pointer is over it *or* it holds focus, and active only
 	// while it is physically pressed.
-	const { bgColor, fgColor, borderColor } = disabled
+	const state = disabled
 		? {
 				bgColor: undefined,
 				fgColor: accentDisabled,
 				borderColor: accentDisabled,
 			}
 		: resolveState(variants[kind], {
-				hover: hovered || focused,
+				hover: hovered || hasFocus,
 				active: pressed || active,
 			});
+
+	// Keyboard focus needs a cue the mouse-hover recipe does not already spend: a
+	// borderless `ghost`/`small` chip differs from its resting state by a colour
+	// shift alone, which is invisible until you know to look for it. A faint wash
+	// of the accent behind the chip reads as "the keyboard is here" at a glance,
+	// and it is only applied when the state colours left the background empty, so a
+	// solid or pressed button keeps its own fill.
+	const { fgColor, borderColor } = state;
+	const bgColor = state.bgColor ?? (hasFocus ? alpha(accent, 0.18) : undefined);
 
 	// The chip is just the label with two cells of side padding. `small` renders
 	// as a bare, borderless line of tinted text; every other size draws a bordered
@@ -210,7 +224,12 @@ export function Button({
 			{...props}
 		>
 			{typeof children === "string" ? (
-				<text fg={fgColor}>{children}</text>
+				<text
+					fg={fgColor}
+					attributes={hasFocus ? TextAttributes.BOLD : undefined}
+				>
+					{children}
+				</text>
 			) : (
 				children
 			)}

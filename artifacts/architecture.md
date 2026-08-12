@@ -431,6 +431,34 @@ on invalidating events and hold no authoritative state — statelessness reaches
 > through that server; a route addressable on its own gave the same output two homes. **There is no
 > Servers screen** — the table lives on the Dashboard (§ Dashboard below).
 
+## Keyboard focus — `hooks/use-focus-ring.ts` + `hooks/use-modal.tsx`
+
+OpenTUI has no focus manager and delivers every key to every mounted `useKeyboard` handler, so both
+"which control is active" and "who is allowed to answer" are the app's problem. Two hooks own them.
+
+**`useFocusRing(items, {enabled})`** is the page's ring. A member is a bare id or `{id, disabled}`, and
+a **disabled member is never focused** — Tab steps over it, `setFocus` refuses it, and focus leaves a
+member that becomes disabled. That is why the flag exists instead of the caller omitting the id:
+omission renumbers the ring while the user is tabbing, and the condition is live data. A ring's
+`disabled` must be the same expression as the control's own `disabled` prop; drift between them is the
+defect the flag prevents. `enabled: false` stands a ring's keyboard down while keeping its focused id —
+the mechanism that stops a page ring moving *behind* an open modal, since only one ring may listen at
+a time.
+
+**`hooks/use-modal.tsx`** is the input capture's sibling: a counted "a modal owns the keyboard" signal,
+provided at the root in `App.tsx` and consulted by the shell. `Dialog` raises it itself, so every modal
+is covered without its caller remembering. It differs from the capture in one deliberate way — **`Esc`
+is not exempt**: a text field cannot consume Esc so the shell keeps it while typing, but a modal exists
+to consume it (before this, one Esc in a confirmation both closed the dialog and quit the app). A tab
+that owns its own modal reports it upward through `ServerTabProps.onModal`, because only the tab knows
+and only its container owns the ring.
+
+**Focus is drawn, not implied.** One vocabulary across the kit, none of it costing a row or shifting
+layout: `Tabs` puts `icons.caret` in the active pill's left padding cell (rendered as text, so the
+tab's width — and the rule segment aligned to it — never changes) and blends the pill back toward the
+background when the bar is unfocused; `Button` adds a faint accent wash plus a bold label, and ignores
+`focused` while `disabled`; `FormField` prefixes its border label with `▸`.
+
 ## Keyboard hints — `hooks/use-hints.tsx` + the shell's strip
 
 There is **one** hint strip in the app, drawn by `Router.tsx`. Pages do not render their own — before

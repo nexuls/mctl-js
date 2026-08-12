@@ -35,7 +35,7 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { useServer } from "../../hooks/use-servers.ts";
 import { useServerInsight } from "../../hooks/use-server-insights.ts";
 import { useRouter } from "../../hooks/use-router.tsx";
-import { useFocusRing } from "../../hooks/use-focus-ring.ts";
+import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
 import { useMctl } from "../../hooks/use-mctl.tsx";
 import { useToast } from "../../hooks/use-toast.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
@@ -94,6 +94,10 @@ export function ServerDetail() {
 	const [tab, setTab] = useState<ServerTabId>(DEFAULT_SERVER_TAB);
 	const [pending, setPending] = useState<Pending>();
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	// A tab can raise a modal of its own (the Players tab's action menu). While one
+	// is up it owns the keyboard, so this page's ring stands down — see `onModal`
+	// on `ServerTabProps`.
+	const [tabModal, setTabModal] = useState(false);
 
 	// The tab bar and the action buttons only honour keys while `focused`, so the
 	// page owns a ring over them — without it both would be mouse-only, which is
@@ -101,16 +105,38 @@ export function ServerDetail() {
 	// state (Stop+Restart vs Start) and the active tab (the console adds its
 	// command line); `useFocusRing` clamps its index, so a set that changes under
 	// it — a server stopped by another instance — is safe.
-	const actions =
-		server?.state === "running"
-			? ["stop", "restart", "remove"]
-			: ["start", "remove"];
-	const ring = useFocusRing([
-		TABS_ID,
-		...actions,
-		...(tab === "console" ? [CONSOLE_ID] : []),
-		...(tab === "players" ? [PLAYERS_ID] : []),
-	]);
+	//
+	// Each action carries the same `disabled` condition as its Button, so Tab
+	// steps over a button that would ignore Enter: while an action is in flight
+	// every lifecycle button is inert, Start is unusable on a server whose
+	// directory is missing, and Remove is refused while the server runs.
+	const running = server?.state === "running";
+	const busy = pending !== undefined;
+	const actions: FocusItem[] = running
+		? [
+				{ id: "stop", disabled: busy },
+				{ id: "restart", disabled: busy },
+			]
+		: [{ id: "start", disabled: busy || server?.available === false }];
+	const ring = useFocusRing(
+		[
+			TABS_ID,
+			...actions,
+			{ id: "remove", disabled: running },
+			...(tab === "console" ? [CONSOLE_ID] : []),
+			...(tab === "players" ? [PLAYERS_ID] : []),
+		],
+		// A modal takes the keyboard while it is up: with both rings listening, one
+		// Tab would move the page's focus *behind* the dialog.
+		{ enabled: !confirmDelete && !tabModal },
+	);
+
+	// The dialog's own ring, live only while the dialog is. Without it the two
+	// buttons on a destructive confirmation would be mouse-only — the one place in
+	// the app where that is least acceptable.
+	const confirmRing = useFocusRing(["confirm-cancel", "confirm-remove"], {
+		enabled: confirmDelete,
+	});
 
 	// Hints follow the ring, not the page: while the Console tab's command line
 	// holds the focus, ←/→ belong to the text field rather than the tab bar and
@@ -118,20 +144,23 @@ export function ServerDetail() {
 	// different set. Both are registered unconditionally with an `active` flag —
 	// hooks cannot live behind the early returns below.
 	const onConsole = tab === "console" && ring.isFocused(CONSOLE_ID);
+	// A modal replaces the page's keys with its own (the shell contributes those),
+	// so the page's set stands down for as long as one is up.
+	const modal = confirmDelete || tabModal;
 	useHints(
 		[
 			{ keys: "Tab", label: "next control" },
 			{ keys: [icons.arrowLeft, icons.arrowRight], label: "switch tab" },
 			{ keys: "Enter", label: "activate" },
 		],
-		{ active: !onConsole },
+		{ active: !onConsole && !modal },
 	);
 	useHints(
 		[
 			{ keys: "Enter", label: "send command" },
 			{ keys: "Tab", label: "leave console" },
 		],
-		{ scope: "context", active: onConsole },
+		{ scope: "context", active: onConsole && !modal },
 	);
 
 	/**
@@ -210,7 +239,11 @@ export function ServerDetail() {
 				);
 			case "players":
 				return (
-					<PlayersTab {...tabProps} focused={ring.isFocused(PLAYERS_ID)} />
+					<PlayersTab
+						{...tabProps}
+						focused={ring.isFocused(PLAYERS_ID)}
+						onModal={setTabModal}
+					/>
 				);
 			case "world":
 				return <WorldTab {...tabProps} />;
@@ -273,7 +306,7 @@ export function ServerDetail() {
 								size="small"
 								kind="ghost"
 								variant="error"
-								disabled={pending !== undefined}
+								disabled={busy}
 								focused={ring.isFocused("stop")}
 								onFocused={() => ring.setFocus("stop")}
 								onClick={() => void act("stop")}
@@ -284,7 +317,7 @@ export function ServerDetail() {
 								size="small"
 								kind="ghost"
 								variant="warning"
-								disabled={pending !== undefined}
+								disabled={busy}
 								focused={ring.isFocused("restart")}
 								onFocused={() => ring.setFocus("restart")}
 								onClick={() => void act("restart")}
@@ -297,7 +330,7 @@ export function ServerDetail() {
 							size="small"
 							kind="ghost"
 							variant="success"
-							disabled={pending !== undefined || !server.available}
+							disabled={busy || !server.available}
 							focused={ring.isFocused("start")}
 							onFocused={() => ring.setFocus("start")}
 							onClick={() => void act("start")}
@@ -309,10 +342,15 @@ export function ServerDetail() {
 						size="small"
 						kind="ghost"
 						variant="neutral"
-						disabled={server.state === "running"}
+						disabled={running}
 						focused={ring.isFocused("remove")}
 						onFocused={() => ring.setFocus("remove")}
-						onClick={() => setConfirmDelete(true)}
+						onClick={() => {
+							// Always open the confirmation on Cancel, never on the
+							// previous choice.
+							confirmRing.setFocus("confirm-cancel");
+							setConfirmDelete(true);
+						}}
 					>
 						Remove
 					</Button>
@@ -360,22 +398,29 @@ export function ServerDetail() {
 						Its directory and worlds stay on disk at {server.path}. Only the
 						registry entry is removed.
 					</text>
+					{/* Cancel is first in the ring, so the key that lands on arrival is the
+					    harmless one — a destructive confirmation must not open with the
+					    destructive button under Enter. */}
 					<box flexDirection="row" gap={1}>
-						<Button
-							size="small"
-							kind="solid"
-							variant="error"
-							onClick={() => void remove()}
-						>
-							Remove
-						</Button>
 						<Button
 							size="small"
 							kind="ghost"
 							variant="neutral"
+							focused={confirmRing.isFocused("confirm-cancel")}
+							onFocused={() => confirmRing.setFocus("confirm-cancel")}
 							onClick={() => setConfirmDelete(false)}
 						>
 							Cancel
+						</Button>
+						<Button
+							size="small"
+							kind="solid"
+							variant="error"
+							focused={confirmRing.isFocused("confirm-remove")}
+							onFocused={() => confirmRing.setFocus("confirm-remove")}
+							onClick={() => void remove()}
+						>
+							Remove
 						</Button>
 					</box>
 				</box>

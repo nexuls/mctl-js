@@ -35,6 +35,14 @@ export interface ServerTabProps {
 	size?: ServerSize;
 	/** True while this tab holds the page's focus ring. */
 	focused?: boolean;
+	/**
+	 * Reports that this tab has opened (or closed) a modal of its own.
+	 *
+	 * The container's focus ring must stand down while a modal is up, or one Tab
+	 * moves the page's focus *behind* the dialog — and only the tab knows its own
+	 * modal state. See `useFocusRing`'s "only one ring listens at a time".
+	 */
+	onModal?: (open: boolean) => void;
 }
 
 /** A `label: value` detail row. */

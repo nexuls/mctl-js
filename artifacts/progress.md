@@ -3,11 +3,53 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-12 (player card redesigned to the user's wireframe)_
+_Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, focus affordances)_
 
 ---
 
 ## Done
+
+- **App-wide keyboard pass (this session, user request).** "Tab cycle is not properly done
+  everywhere. Focused areas are not well highlighted (Tabs). Disabled buttons are also acquiring
+  tabs."
+  - **`src/hooks/use-focus-ring.ts`** — members are now `FocusItem = string | {id, disabled?}` and the
+    hook takes `{enabled}`. Disabled members are skipped by `next`/`prev`, refused by `setFocus`, and
+    never hold focus (including on the first render, and when a focused member becomes disabled);
+    `enabled: false` stands the ring's keyboard down without losing its focused id, so only one ring
+    answers Tab at a time.
+  - **`src/hooks/use-modal.tsx`** — **new**, the input capture's sibling: a counted modal signal
+    (`ModalProvider` mounted in `App.tsx`, `useModalOpen`, `useModalsOpen`, `useIsModalOpen`).
+    `components/Dialog.tsx` raises it for every dialog in the app; `app/Router.tsx` returns early from
+    its global keyboard while one is up — **Esc included** — and swaps its hint set for
+    `Tab / Enter / Esc close`.
+  - **Focus affordances**: `components/Tabs.tsx` (caret in the active pill's left padding cell, pill
+    blended back when unfocused), `components/Button.tsx` (accent wash + bold label when focused;
+    `focused` ignored while `disabled`), `components/Form.tsx` (`▸` before the field label).
+  - **Rings audited**: `app/Server/index.tsx` (lifecycle buttons carry their live disabled state; a
+    ring for the delete dialog with Cancel first; stands down for `confirmDelete` or a tab's modal),
+    `app/Settings/index.tsx` (Revert/Save disabled in the ring — a clean form cycles three stops, not
+    five), `app/ServerCreate/index.tsx` (Create disabled until valid, **Cancel joined the ring** — it
+    was mouse-only), `app/setup/steps/DataRootStep.tsx` + `ReviewStep.tsx` (Continue/Create).
+  - **`app/Server/PlayerActionsDialog.tsx` split into two stage components**, each mounted only while
+    showing: the menu's ring skips actions that need a running server, the argument stage's ring is
+    field → Back → run (disabled while a required argument is empty), and "every open starts at the
+    top" now falls out of the tree instead of an effect. `ServerTabProps.onModal` +
+    `tabs/Players.tsx` report the dialog upward so the container's ring stands down.
+  - **`src/hooks/use-focus-ring.test.tsx`** — **new**, 6 tests through `createTestRenderer` +
+    `createRoot` + real keypresses: cycling and wrapping, stepping over a disabled member, a disabled
+    first member, an all-disabled ring, `setFocus` refusing a disabled id, and a disabled ring
+    ignoring Tab.
+  - Verified: `bunx tsc --noEmit` clean; `bun test` **261 pass / 1 pre-existing fail** (see below);
+    `bun run format` clean. Driven under **tmux at 130x40** against the user's real config: the Server
+    page cycles tabs → Start → Remove → tabs; Settings cycles three stops clean and five once dirty
+    (Revert/Save join); the create form cycles seven stops empty and eight with a name (Create joins);
+    the player action menu opened straight onto *Shadow ban* (the only action a stopped server can
+    run); Tab inside both dialogs moved only the dialog's buttons; `5` no longer navigates behind an
+    open dialog; and one `Esc` closes a dialog **without** quitting the app.
+  - **Pre-existing failure, untouched:** `core/icons/detect.test.ts` fails on `nerd.heartFull` — four
+    nerd glyphs in `core/icons/catalogue.ts` carry a trailing space, so they are two cells and the
+    health/food meters are 20 cells wide in `nerd` mode. Fails on `master` too; left for the user to
+    decide, since the space may be deliberate.
 
 - **Player card redesigned to a wireframe (this session, user request).** Six interior rows: the
   4-row head beside `name ● status` / `<playtime> Played` / `Last Position: Overworld(x, y, z)` /

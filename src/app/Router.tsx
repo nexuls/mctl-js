@@ -28,6 +28,7 @@ import { useIcons } from "../hooks/use-icons.tsx";
 import { useQuit } from "../hooks/use-quit.ts";
 import { RouterProvider, useRouter } from "../hooks/use-router.tsx";
 import { useKeysCaptured } from "../hooks/use-input-capture.tsx";
+import { useIsModalOpen, useModalsOpen } from "../hooks/use-modal.tsx";
 import {
 	HintProvider,
 	useHintItems,
@@ -127,10 +128,32 @@ function AppShell() {
 	// render, and the capture can change without one. (The hint strip's own
 	// reaction to typing lives in `use-hints.tsx`, not here.)
 	const captured = useKeysCaptured();
+	// The same shape as the capture, and read the same way — but this one also
+	// takes Esc away from the shell, because a dialog exists to consume it.
+	const modal = useModalsOpen();
+	const modalOpen = useIsModalOpen();
 
-	useHints(globalHints(icons.ellipsis, canBack), { scope: "global" });
+	// A modal's keys are its own; advertising the shell's while one is up would
+	// promise navigation that (correctly) does nothing. What every dialog in this
+	// app does share is Tab / Enter / Esc, so that is what the strip says instead.
+	useHints(globalHints(icons.ellipsis, canBack), {
+		scope: "global",
+		active: !modalOpen,
+	});
+	useHints(
+		[
+			{ keys: "Tab", label: "next control" },
+			{ keys: "Enter", label: "activate" },
+			{ keys: "Esc", label: "close" },
+		],
+		{ scope: "global", active: modalOpen },
+	);
 
 	useKeyboard((key) => {
+		// A modal owns every key while it is up: without this, one Esc both closed
+		// the dialog and stepped the router back (or quit the app), and a digit
+		// navigated to another page behind the overlay.
+		if (modal()) return;
 		// Esc first: it works even while a text field is capturing, because it can
 		// never be part of what the user is typing.
 		if (key.name === "escape") {

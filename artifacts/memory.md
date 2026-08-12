@@ -5,6 +5,68 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Keyboard: rings skip disabled, modals own the keyboard, focus is drawn (2026-08-12, user request)
+
+User: "Tab cycle is not properly done everywhere. Focused areas are not well highlighted (Tabs).
+Disabled buttons are also acquiring tabs."
+
+- **`useFocusRing` takes `FocusItem = string | {id, disabled?}` and a `{enabled}` option.** Two rules
+  now hold everywhere:
+  - **A disabled member is never focused** — `next`/`prev` step over it, `setFocus` refuses it, and a
+    member that *becomes* disabled hands focus to the next enabled one. Expressing it as a flag rather
+    than by omitting the id is deliberate: omission renumbers the ring under the user's fingers, and
+    the disabled condition is live data (a running server, a clean form) that changes between renders.
+    An all-disabled ring reports `focus === undefined`, which is a legitimate state, not a bug.
+  - **Only one ring may listen at a time.** Every mounted ring installs a `useKeyboard` handler and
+    OpenTUI delivers a key to *all* of them, so a page ring and a dialog ring both moved on one Tab —
+    the page's focus travelled *behind* the modal. Whichever ring is not interactive passes
+    `{enabled: false}`; it keeps its focused id and only stops moving.
+  - **How to apply:** a ring member's `disabled` must be the *same expression* as its Button's
+    `disabled` prop. Drift between the two is exactly the bug this fixes.
+- **`hooks/use-modal.tsx` is the input capture's sibling, and `Dialog` raises it itself.** Same counted
+  shape (`ModalProvider` in `App.tsx` beside `InputCaptureProvider`, `useModalOpen(active)`,
+  `useModalsOpen()` getter, `useIsModalOpen()` reactive). **The difference that matters: `Esc` is NOT
+  exempt here.** A text field cannot consume Esc, so the capture leaves it to the shell; a modal
+  exists to consume it. Before this, **one Esc in a confirmation dialog closed the dialog *and* quit
+  the app** (verified in tmux), and a digit navigated to another page behind the overlay.
+  - Because `Dialog` calls `useModalOpen(open)`, every modal in the app is covered without its caller
+    remembering — put new modals in a `Dialog` rather than hand-rolling an absolute overlay.
+  - The shell swaps its whole global hint set for `Tab / Enter / Esc close` while a modal is up; a
+    page whose own hints would contradict that (the Server page's `←→ switch tab`) stands them down.
+- **A tab that owns a modal must tell its container**: `ServerTabProps.onModal` exists for the Players
+  tab's action dialog, because only the tab knows its modal state and only the container owns the ring.
+- **Focus is now *drawn*, not implied by a colour shift.** One vocabulary, three places, none of which
+  costs a row or shifts layout:
+  - `Tabs` — the active pill's **left padding cell is rendered as text**, so `icons.caret` can occupy
+    it when the bar holds the ring without changing `tabWidth` (which the rule segment beneath is
+    aligned to). Unfocused, the pill is blended toward the background (`mix(primary, background,
+    0.62)`); focused it goes to full accent. The heavy/light rule stayed.
+  - `Button` — a focused button gets an `alpha(accent, 0.18)` wash *only when the state colours left
+    the background empty*, plus a BOLD label. A borderless `ghost`/`small` chip previously differed
+    from rest by a colour shift alone, which is invisible unless you know to look.
+  - `FormField` — the label on the top border becomes `▸ Label` while focused. The accent border alone
+    was too weak on a stack of fields, and an `invalid` field is already accented in another colour.
+  - `Button` also treats `focused` as false while `disabled`, so a page that forgets to update its ring
+    cannot make a dead button look live.
+- Rings audited and given disabled members: Server (start/stop/restart/remove + its delete dialog,
+  Cancel first so Enter on arrival is the harmless one), Settings (Revert/Save — a clean form now
+  cycles three stops, not five), ServerCreate (Create, plus **Cancel joined the ring** — it was
+  mouse-only), the setup wizard's DataRoot (Continue) and Review (Create while committing), and the
+  player action menu (actions needing a running server).
+- **`PlayerActionsDialog` is now two components, one per stage.** A closed dialog has no stage mounted,
+  so "every open starts at the top of the menu" falls out of the tree instead of needing an effect to
+  reset an index — and exactly one ring listens for Tab. The menu's arrows and Tab are the same
+  movement (it is a wrapping grid, so "the one above" has no meaning).
+- **`mockInput.pressKey("tab")` types the letters t-a-b.** Use `mockInput.pressTab()`; Shift-Tab has no
+  helper — send the raw `\x1b[Z` (CSI Z), which is how terminals actually spell backtab and why the
+  hook handles both `tab+shift` and `backtab`. A ring test also needs a **settle** (render → sleep →
+  render) before reading a frame, like every other rendered-frame test here.
+- **Pre-existing, still failing, NOT keyboard-related:** `nerd.heartFull` / `heartEmpty` / `foodFull` /
+  `foodEmpty` in `core/icons/catalogue.ts` carry a **trailing space**, so they are two cells and break
+  the catalogue's single-cell invariant (`core/icons/detect.test.ts` fails on `nerd.heartFull`, on
+  `master` too). Left alone because the space may be a deliberate spacing choice for the user's Nerd
+  Font — but the health/food meters are 20 cells wide in `nerd` mode, not 10.
+
 ## The player card was redesigned to a wireframe (2026-08-12, user request)
 
 - **The card is six interior rows, always**: four beside the 4-row head (name + status, playtime,

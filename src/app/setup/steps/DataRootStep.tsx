@@ -20,13 +20,21 @@ import type { StepProps } from "../types.ts";
 
 export function DataRootStep({ draft, setDraft, onNext, onBack }: StepProps) {
 	const { colors } = useTheme();
-	const ring = useFocusRing(["root", "__back", "__next"]);
 	const usage = useDiskFree(draft.root);
 
 	// Must be absolute — the config schema rejects a relative root, so catch it here
 	// with an inline error rather than at commit time.
 	const valid = draft.root.trim().startsWith("/");
 	const showInvalid = draft.root.length > 0 && !valid;
+
+	// Continue is disabled until the path is absolute, so it is disabled in the
+	// ring too — Tab wraps back to the field that still needs fixing instead of
+	// parking on a button that does nothing.
+	const ring = useFocusRing([
+		"root",
+		"__back",
+		{ id: "__next", disabled: !valid },
+	]);
 
 	return (
 		<StepScaffold

@@ -25,6 +25,7 @@ import { ThemeProvider } from "../hooks/use-theme.tsx";
 import { IconProvider } from "../hooks/use-icons.tsx";
 import { EventBusProvider } from "../hooks/use-event-bus.tsx";
 import { InputCaptureProvider } from "../hooks/use-input-capture.tsx";
+import { ModalProvider } from "../hooks/use-modal.tsx";
 import { ToastProvider } from "../hooks/use-toast.tsx";
 import { MctlProvider } from "../hooks/use-mctl.tsx";
 import { createProviderRegistry } from "../providers/index.ts";
@@ -155,14 +156,19 @@ export async function renderApp(): Promise<void> {
               capture, and so toasts (below it) can stand their action keys down
               while a text field is being typed into. */}
 					<InputCaptureProvider>
-						<ToastProvider>
-							{/* The mutating core services. Below the bus (it rebuilds on
+						{/* Beside the capture and for the same reason: the shell has to know
+                when a Dialog owns the keyboard, or one Esc closes the dialog
+                *and* quits the app. `Dialog` raises this itself. */}
+						<ModalProvider>
+							<ToastProvider>
+								{/* The mutating core services. Below the bus (it rebuilds on
                   ConfigChanged) and below the toast layer, so a page can raise
                   a toast about a create it just started. */}
-							<MctlProvider providers={providers}>
-								<App firstRun={firstRun} />
-							</MctlProvider>
-						</ToastProvider>
+								<MctlProvider providers={providers}>
+									<App firstRun={firstRun} />
+								</MctlProvider>
+							</ToastProvider>
+						</ModalProvider>
 					</InputCaptureProvider>
 				</EventBusProvider>
 			</IconProvider>

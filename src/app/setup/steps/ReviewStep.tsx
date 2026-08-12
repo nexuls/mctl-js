@@ -53,7 +53,8 @@ export function ReviewStep({
 }: ReviewStepProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
-	const ring = useFocusRing(["__back", "__next"]);
+	// Create is inert while the commit is in flight, so the ring skips it too.
+	const ring = useFocusRing(["__back", { id: "__next", disabled: committing }]);
 	const paths = rootPaths(
 		draft.root,
 		draft.overrideServers || draft.overrideBackups

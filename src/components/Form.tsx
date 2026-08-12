@@ -139,6 +139,7 @@ export function FormField({
 	...rest
 }: FormFieldProps) {
 	const { colors } = useTheme();
+	const { icons } = useIcons();
 	const borderColor = invalid
 		? colors.error
 		: focused
@@ -150,13 +151,22 @@ export function FormField({
 			? colors.primary
 			: colors.muted;
 
+	// The accent border alone is a weak focus cue on a screen of stacked fields —
+	// it is one thin line, and an `invalid` field is already accented in another
+	// colour. A caret in front of the label says which field the keyboard is in
+	// without ambiguity. The title rides the border, so this costs no row and no
+	// reflow (it only shifts the label two cells along the top edge).
+	const title = label
+		? `${focused ? ` ${icons.caret}` : ""} ${label}${required ? " *" : ""} `
+		: undefined;
+
 	return (
 		<box
 			ref={ref}
 			border={noBorder ? undefined : true}
 			borderStyle={noBorder ? undefined : "rounded"}
 			borderColor={noBorder ? undefined : borderColor}
-			title={label ? (required ? ` ${label} * ` : ` ${label} `) : undefined}
+			title={title}
 			titleColor={titleColor}
 			titleAlignment="left"
 			// Only pass a bottom title when there is one: an interpolated empty hint
