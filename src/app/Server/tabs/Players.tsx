@@ -77,7 +77,7 @@ const HEAD_MIN_WIDTH = 84;
  * every card to the longest coordinate a world can produce would cost a whole
  * column on a 100-cell terminal to spell out one line in full.
  */
-const CARD_MIN_WIDTH_WITH_HEAD = 36;
+const CARD_MIN_WIDTH_WITH_HEAD = 52;
 const CARD_MIN_WIDTH_PLAIN = CARD_MIN_WIDTH_WITH_HEAD - 9;
 
 /**

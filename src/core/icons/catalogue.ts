@@ -158,18 +158,18 @@ export const ICONS: Readonly<
 	// every set — hence a filled/outline pair rather than one glyph in two
 	// colours (a colour-blind terminal palette, or a monochrome one, would make
 	// the meter unreadable).
-	heartFull: { nerd: "\u{f004}" /* nf-fa-heart */, unicode: "♥", ascii: "#" },
+	heartFull: { nerd: "\u{f004} " /* nf-fa-heart */, unicode: "♥", ascii: "#" },
 	heartEmpty: {
-		nerd: "\u{f08a}" /* nf-fa-heart_o */,
+		nerd: "\u{f08a} " /* nf-fa-heart_o */,
 		unicode: "♡",
 		ascii: "-",
 	},
 	// NOT a drumstick: every food emoji (🍖 U+1F356, 🍗) is East-Asian Wide and
 	// would take two cells, so the unicode set uses a filled/outline block pair
 	// and the nerd set the cutlery glyph's filled/outline pair.
-	foodFull: { nerd: "\u{f0f5}" /* nf-fa-cutlery */, unicode: "▰", ascii: "=" },
+	foodFull: { nerd: "\u{f141f} " /* nf-fa-cutlery */, unicode: "▰", ascii: "=" },
 	foodEmpty: {
-		nerd: "\u{f096}" /* nf-fa-square_o */,
+		nerd: "\u{f1420} " /* nf-fa-square_o */,
 		unicode: "▱",
 		ascii: "-",
 	},
