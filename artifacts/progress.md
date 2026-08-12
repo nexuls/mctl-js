@@ -3,11 +3,51 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, focus affordances)_
+_Last updated: 2026-08-12 (Phase 3: loaders, installers, tmux runtime, install resume)_
 
 ---
 
 ## Done
+
+- **Phase 3 — loaders, installers, runtimes (this session).** All four roadmap bullets landed.
+  - **Types.** `InstallStrategy` gained `loaderJar` (a meta service's pre-built launcher) and
+    `installer` (download a program, run it); `LaunchSpec` gained `argFile` and `script` and became a
+    **Zod schema**, because a launch spec is now *persisted* — `MctlJson.launch` records the one the
+    install produced when the kind alone cannot imply it. `jar` gained optional `args` (Velocity takes
+    no `nogui`). `buildFromSource` deliberately still absent — no provider needs it.
+  - **`core/runtime/launch.ts`** — the pure `launchCommand(spec, javaPath, jvmArgs)` + `launchInputs`,
+    shared by both runtimes. `core/runtime/console-log.ts` — the capture-file tail, likewise shared.
+  - **`core/server/install.ts`** — runs installer jars (`javaPath` is a required input for that
+    strategy), verifies what they produced, **falls back to the generated `run.sh`** when the predicted
+    argfile is missing, cleans up the installer, and returns the resolved `LaunchSpec`.
+  - **Six providers**: `fabric` (loaderJar), `quilt` + `forge` + `neoforge` (installer),
+    `purpur` (directJar, MD5 only), `velocity` (directJar, a proxy). `providers/server/mojang-meta.ts`
+    is the new shared upstream client — four of the six need Minecraft's own Java requirement, and
+    reaching it through `VanillaProvider` would be provider→provider. `fill.ts` is the shared PaperMC
+    v3 client behind Paper and Velocity; `forge-common.ts` holds the two facts Forge and NeoForge share.
+  - **`providers/runtime/tmux.ts`** — detached, re-attachable, and the runtime where **`exec` and
+    `stop` work from any instance**. `RuntimeManager` verifies the launch files exist before spawning
+    and writes `user_jvm_args.txt` for a `script` launch.
+  - **Install resume** — artefacts land in `$ROOT/downloads/partial/` (keyed by URL) and move into
+    staging once verified; JDK downloads resume too. `lib/download.ts` gained `md5` and `resume`.
+  - **UI**: the create form's Runtime select and the wizard/Settings Kind+Runtime pickers now come from
+    the registry or one shared `app/choices.ts` table — there were **four** hand-kept lists, three of
+    which still said "Vanilla only".
+  - Tests (**303 total, 33 files**, +41): `core/runtime/launch.test.ts`, `core/server/install.test.ts`
+    (installer stubbed by a shell script standing in for `java`; resume driven against a local server
+    that honours `Range`), `lib/download.test.ts`, `providers/server/forge-family.test.ts`,
+    `providers/runtime/tmux.test.ts` (including a quoted launch line round-tripped through a real `sh`).
+  - **Verified end-to-end in a sandbox `$HOME`, not just typed:** `bunx tsc --noEmit` clean;
+    `bun test` 302 pass / 1 pre-existing fail; `bun run format` clean; `bunx biome check` clean bar
+    four pre-existing warnings. Created **and booted to `Done (…)`**: fabric 1.21.4, forge 1.21.4
+    (via its generated argfile), neoforge 21.1.248, quilt 1.21.4, purpur 1.21.4 — five kinds, plus
+    vanilla/paper/velocity resolution checked against the live APIs. Under tmux: `logs`, `exec`
+    (`[Server] tmux exec works`) and a graceful `stop` all **from separate `mctl` processes**. The TUI
+    driven at 120×40 shows every kind and both runtimes.
+  - **Three real defects found by doing it for real**, all fixed: the tmux launch was originally
+    `send-keys`'d into the user's interactive shell (zsh's first-run wizard ate the leading `e` and
+    left `xec …: command not found`); a Java **pin** was triggering resolution at create time; and
+    Quilt's meta service publishes a **wrong SHA-256** (see `memory.md`).
 
 - **App-wide keyboard pass (this session, user request).** "Tab cycle is not properly done
   everywhere. Focused areas are not well highlighted (Tabs). Disabled buttons are also acquiring
@@ -771,20 +811,28 @@ _Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, foc
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
-- **Uncommitted, not mine:** `src/app/Server/tabs.ts` has `DEFAULT_SERVER_TAB` flipped from
-  `"overview"` to `"players"` — a debugging convenience from the user, left in place.
+- **The user's dev shortcuts are still in the tree** (committed before this session, left alone):
+  `app/Router.tsx` boots straight to `server/first-paper-server` and `DEFAULT_SERVER_TAB` is
+  `"players"`. A sandbox `$HOME` used for a TUI run must either hold a server with that id or expect
+  the app to open on "not found" — press `1` to reach the Dashboard.
 
-## Next up (Phase 3)
+## Next up (Phase 4 — networking & operations)
 
-1. Fabric and Quilt (`loaderJar`); Forge and NeoForge (`installer` → `argFile`/`script`) — the
-   `InstallStrategy`/`LaunchSpec` unions are tagged and `executeInstall` has an exhaustiveness guard,
-   so each is additive.
-2. Purpur, Velocity (both `directJar` — cheap once the loaders are in).
-3. **tmux runtime** (detached, re-attachable). This is what removes the foreground runtime's two
-   limitations: servers dying with the TUI, and `exec` only working from the owning process. It also
-   unblocks the `TODO(phase-3)` in `core/session/session-manager.ts` (confirm the tmux session /
-   docker container exists, not just the pid).
-4. Staged installs with **resume** (the staging dir is already per-uuid; nothing resumes yet).
+1. `direct` network provider; then cloudflared / playit / ngrok / tailscale (binaries **discovered on
+   PATH, never downloaded**; a missing one degrades to direct with an install hint).
+2. Cloudflare DNS with SRV records, tagged by server id so MCTL only touches records it created.
+3. Backup providers + scheduling; auto-restart, health checks, resource monitoring behind the
+   supervisor lock.
+4. `BackupProvider` / `NetworkProvider` interfaces join `types/provider.ts` when their first real
+   implementation is written — not before.
+
+Carried over from Phase 3, deliberately not done:
+
+- **The Server page's Settings tab is still read-only** (`TODO(phase-3)` in `tabs/Settings.tsx`).
+  Making it a form over `ServerManager.editServer` was the one Phase-3-marked item outside the
+  roadmap's four bullets; `mctl edit` remains the way to change these values.
+- **`mctl update <id>`** — changing a server's `kind` or `minecraftVersion` is a re-install, not an
+  edit, and `editServer` still refuses it. The install machinery it needs now exists.
 
 ## Demo / scratch
 
@@ -796,9 +844,31 @@ _Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, foc
 
 ## Known gaps / carried forward
 
+- **Phase 3 gaps, new this session:**
+  - **An orphaned staging directory is never swept.** A create killed with SIGKILL cannot run its
+    `finally`, so `$ROOT/downloads/staging/<uuid>/` survives (observed while testing resume). Nothing
+    reads it and it is safe to delete, but it grows. A sweep must use an age threshold — another
+    instance's in-flight create lives in exactly the same place.
+  - **`$ROOT/downloads/partial/` is never pruned either.** A partial for a version nobody installs
+    again stays forever. Same fix, same caution.
+  - **Velocity is installable but not really *managed*.** It is a proxy: no world, no
+    `server.properties`, no players of its own, and its `minecraftVersion` holds a *Velocity* version.
+    The inspection screens find nothing and say nothing about why. Its config is `velocity.toml` —
+    the one place a TOML file legitimately exists inside a server directory, written by Velocity, not
+    by MCTL.
+  - **NeoForge for Minecraft 1.20.1 is not offered** — those builds were published under the
+    `net/neoforged/forge` artefact with a Forge-style version. `--kind forge` covers it; the error
+    message says so.
+  - **Fabric servers need network on their first boot** (the launcher downloads the game then), and
+    **Forge/NeoForge/Quilt creates need a JVM** even with `--no-java`, because the install *is* a
+    program. Both are stated in the provider docs; neither is surfaced in the UI.
+  - **`launchSpec(dir)` is now vestigial for the installer kinds.** They record their spec in
+    `mctl.json` at create time and their `launchSpec()` returns the `run.sh` fallback, which is only
+    reached by a hand-written `mctl.json`. Widening the interface to take a `Server` would let it go.
 - **The Server page's Settings tab is read-only.** Editing goes through `mctl edit` today; making it
   a form over `ServerManager.editServer` (buffered draft + validation + Ctrl+S, mirroring
-  `app/Settings/use-settings.ts`) is marked `TODO(phase-3)` in `tabs/Settings.tsx`.
+  `app/Settings/use-settings.ts`) is marked `TODO(phase-3)` in `tabs/Settings.tsx` — **not done in
+  Phase 3**, carried into Phase 4.
 - **The Backups and Network tabs are honest scaffolding**, not features: Backups shows the configured
   policy and says archives arrive in Phase 4; Network shows the direct picture and says tunnels/DNS
   do. Both have a `TODO(phase-4)` naming the provider call that fills them in.
@@ -806,9 +876,10 @@ _Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, foc
   Minecraft has no shadow ban, so nothing happens on the server. Real enforcement needs the
   RCON/plugin subsystem (`TODO(phase-5)` in `core/server/player-admin.ts`).
 - **Player actions require the server to be running**, because they are console commands. Under the
-  foreground runtime `exec` additionally only works **from the owning instance** — a second MCTL
-  gets `SessionNotOwnedError`, which the tab surfaces as a toast. The tmux runtime (Phase 3) is
-  what removes that.
+  **foreground** runtime `exec` additionally only works from the owning instance — a second MCTL gets
+  `SessionNotOwnedError`, which the tab surfaces as a toast. **Under tmux this is gone** (verified):
+  the console is addressed by session name, so any instance can send a command. Running a server on
+  the tmux runtime is now the answer to that limitation.
 - **Per-player ping and current session length are unavailable** and are named as such on the
   Players tab; both need RCON or a plugin.
 - **Content counts jars; it does not list them.** A real mod/plugin list needs the Modrinth/CurseForge
@@ -839,9 +910,12 @@ _Last updated: 2026-08-12 (app-wide keyboard pass: focus rings, modal guard, foc
 - **A `{pinned}` Java that is not installed is fetched silently** during create/start. That is the
   right default, but there is no "ask first" prompt in the TUI (the `autoInstall: false` path exists
   in `resolveJava` and is unused by the UI).
-- **`ServerProvider` implementations are not tested against recorded fixtures yet.** AGENTS.md asks
-  for this; the manager tests use a stub provider instead, and Vanilla/Paper were verified live.
-  Recording the three Paper endpoints and the two Mojang hops is the obvious next test.
+- **`ServerProvider` implementations are still not tested against recorded fixtures.** AGENTS.md asks
+  for this and it is now the largest untested surface: **eight** providers, verified live rather than
+  against fixtures. Their *pure* parts are covered (`decodeNeoVersion`, `compareMinecraftVersions`,
+  the install executor), but no test would catch an upstream schema change or a wrong URL. Recording
+  one endpoint set per origin is the obvious next test, and Quilt's bad digest (see `memory.md`) is
+  the case that shows why a fixture is not a substitute for the occasional live run.
 
 ## Notes for the next agent
 

@@ -258,19 +258,51 @@ this one does not.
 
 **The one wiring point is `providers/index.ts` (`createProviderRegistry()`)**, called by each
 front-end. Nothing under `core/` or `hooks/` may import a concrete provider — that is the arrow that
-must not reverse.
+must not reverse. **A UI that offers a choice of kind or runtime should read it from the registry**
+(`app/ServerCreate` does), not from a list typed out beside the form; the exception is the setup
+wizard, which runs before there is a context to hold one and shares a compile-checked table with
+Settings instead (`app/choices.ts`).
+
+**Shared upstream clients are not providers.** `providers/server/mojang-meta.ts` (Mojang's version
+manifest and the Java requirement every loader inherits), `fill.ts` (the PaperMC v3 API behind Paper
+and Velocity) and `forge-common.ts` sit beside the providers and are imported by several of them.
+That is not the dependency the rule forbids: the rule exists so a backup provider cannot reach into a
+runtime, and the alternative here — Fabric importing `VanillaProvider` to ask what Java 1.21.4 needs
+— is exactly what it forbids.
 
 ## Install & launch — `types/install.ts` + `core/server/install.ts`
 
 Install shape is an explicit tagged union, not a hidden branch inside one `install()`:
 
-- `InstallStrategy` — Phase 2 ships `directJar` (Vanilla, Paper). Phase 3 adds `loaderJar`,
-  `installer`, `buildFromSource`; every consumer already switches on `kind`, and the exhaustiveness
-  guard in `executeInstall` makes a new member a compile error rather than a silent no-op.
-- `LaunchSpec` — Phase 2 ships `jar`; `argFile` (Forge 1.17+) and `script` follow.
+- `InstallStrategy` — `directJar` (Vanilla, Paper, Purpur, Velocity), `loaderJar` (Fabric: a launcher
+  the meta service builds on demand, with no published digest and the game downloaded on first boot),
+  and `installer` (Quilt, Forge, NeoForge: the artefact is a *program* that generates the server
+  tree). `buildFromSource` is still absent because no provider needs it — the union is written against
+  real implementations. Every consumer switches on `kind`, and the exhaustiveness guard in
+  `executeInstall` makes a new member a compile error rather than a silent no-op.
+- `LaunchSpec` — `jar` (with optional program args: a proxy takes no `nogui`), `argFile` (Forge and
+  NeoForge from 1.17, which ship **no runnable jar**), and `script` (delegate to the generated
+  `run.sh`, which reads its heap flags from `user_jvm_args.txt` rather than the command line).
+  It is a **Zod schema**, not a bare type, because it is persisted — see below.
 
 `core/server/install.ts` executes a strategy into a directory and knows nothing about where those
-files will end up — which is what guarantees a failed install leaves no half-built server.
+files will end up — which is what guarantees a failed install leaves no half-built server. For an
+`installer` it also **verifies what was produced**: the provider predicts the generated argfile's path
+from the version numbers, and if that prediction misses, the installer's own `run.sh` is used instead
+of handing the user a launch that cannot work.
+
+**Where a launch spec lives.** Vanilla and Paper always launch `server.jar`, so their provider answers
+from nothing. Forge does not: its argfile path embeds the loader version, which
+`ServerProvider.launchSpec(dir)` has no way to recover. So a spec that had to be *discovered* is
+recorded in `mctl.json` (`launch`), and `RuntimeManager` uses `server.launch ?? provider.launchSpec()`.
+This is the one place install output feeds forward into config, and it is why `LaunchSpec` is
+validated at the disk boundary like everything else.
+
+**Resume.** Artefacts are fetched into `$ROOT/downloads/partial/`, keyed by URL, and moved into
+staging once verified. Staging stays per-attempt and is deleted in every outcome — that is what makes
+a failure clean — but it would otherwise discard most of a downloaded Forge installer on every retry.
+Keying by URL rather than by destination name matters because every kind installs something called
+`server.jar`.
 
 ## Java — `core/java/`
 
@@ -310,8 +342,14 @@ written once at create, only on explicit opt-in, into staging, and never touched
 ## Runtime — `core/runtime/` + `providers/runtime/`
 
 `RuntimeManager` does everything *around* a runtime provider: resolve the provider, resolve Java,
-build the JVM args, take the per-server lock, announce the state change. `restart` lives here rather
-than on the interface because it is "stop, then start with a **freshly resolved** context".
+resolve the launch spec, **check the files it names actually exist**, build the JVM args, take the
+per-server lock, announce the state change. `restart` lives here rather than on the interface because
+it is "stop, then start with a **freshly resolved** context".
+
+Two pieces are shared by every runtime rather than reimplemented per provider: `core/runtime/launch.ts`
+(pure — a `LaunchSpec` plus a java path becomes an argv, and names the files that launch depends on)
+and `core/runtime/console-log.ts` (the capture-file tail). Runtimes differ in how they *capture*
+output, not in how it is read back.
 
 `ForegroundRuntime` ties the server to the MCTL process. Its handles map is process-local (an OS
 handle cannot be re-derived); every fact another instance needs is in `runtime/<id>.json`. Console
@@ -319,6 +357,15 @@ output is captured to `~/.local/state/mctl/console/<id>.log` — outside the ser
 shared, so any instance can tail it. Its one genuine limit: `exec` needs the child's stdin and so
 works only from the owning process (`SessionNotOwnedError`); `stop` from a foreign instance sends
 SIGTERM, which Minecraft's shutdown hook handles as a graceful save.
+
+`TmuxRuntime` is the detached one, and **the runtime that makes "MCTL manages servers, it does not
+hold them" literally true**: the server survives quitting the TUI, and because its console is a
+*named* session rather than a private pipe, `exec` and a console `stop` work from **any** instance —
+the foreground runtime's one hard limit has no counterpart here. Liveness is still the recorded pid
+(the launch line `exec`s over the shell, so the pane's pid is the JVM's), refined by a `has-session`
+check in `status()`: that second half is the answer `core/session/probe` structurally cannot give,
+since it must not import a provider. tmux is discovered on `PATH` and its absence is a typed,
+actionable error rather than a crash.
 
 **Locks — `core/session/lock.ts`.** `withServerLock(id, fn)` uses `open(path, "wx")`, whose
 check-and-create is atomic in the kernel. A lock owned by a dead pid is reclaimed, not respected.

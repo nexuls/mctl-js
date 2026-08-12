@@ -5,6 +5,76 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Phase 3 — loaders, installers, the tmux runtime (2026-08-12)
+
+- **A launch spec is now *data on disk*, not just a provider's answer.** `MctlJson.launch`
+  (Zod-validated, hence `LaunchSpec` moved from a bare TS type to a schema in `types/install.ts`)
+  records what an install *produced* when the kind cannot imply it. Forge is the reason: its argfile
+  path is `libraries/net/minecraftforge/forge/<mc>-<forge>/unix_args.txt`, which embeds the loader
+  version, and `ServerProvider.launchSpec(dir)` only receives a directory.
+  - **How to apply:** `RuntimeManager` uses `server.launch ?? provider.launchSpec(path)`. A new kind
+    with a generated layout returns it from `resolveInstall().produces`; it does **not** go looking
+    on disk at start time.
+- **Forge/NeoForge 1.17+ ship no runnable jar at all.** Verified by running the real installer:
+  `java -jar forge-installer.jar --installServer` generates `run.sh`, `user_jvm_args.txt` and the
+  argfile above, whose contents for 1.21.4 are `-jar forge-<ver>-shim.jar`. Launching the *installer*
+  jar re-runs the installer instead of starting a server. `run.sh` is `java @user_jvm_args.txt
+  @libraries/…/unix_args.txt "$@"` — which is why the `script` launch spec must write the heap flags
+  into `user_jvm_args.txt` rather than passing them on the command line.
+  - The executor **verifies the prediction and falls back to `run.sh`** if the argfile is not where
+    the provider said. Cheap insurance against an upstream layout change; the alternative is a JVM
+    usage dump at the user's first Start.
+- **`sleep 0.2; exec …` in the tmux launch line is two fixes, not a hack.** Both were real:
+  - The command must be **given to tmux**, never `send-keys`'d into the pane. Typing it into the
+    user's *interactive* shell put the launch at the mercy of that shell — observed: zsh's first-run
+    configuration wizard swallowed the keystrokes and the pane held `xec '…/java'` (leading `e`
+    eaten) → `command not found`. tmux hands its command string to `/bin/sh`, so no rc file runs.
+  - **`exec` keeps the pid** (it replaces the shell in place), so `pane_pid` *is* the JVM's pid. Read
+    it immediately after `new-session` — same number before and after the exec. Without `exec`,
+    every liveness probe would report a dead server as running while its shell lived.
+  - The **`sleep` exists because `pipe-pane` captures only what is printed after it attaches**, and a
+    server that dies instantly prints its only useful line before that.
+- **tmux removes `SessionNotOwnedError`** — `exec`/`stop` go through a *named* session, so any
+  instance can drive the console. Verified: `say` from a second `mctl` process reached the server,
+  and a `stop` from a third brought it down gracefully in 1.1 s.
+- **Quilt's meta service publishes a WRONG sha256.** `meta.quiltmc.org/v3/versions/installer` says
+  `2bd88a14…` for installer 0.15.1; the artefact is `0a229138…`, and Maven's own
+  `…/quilt-installer-0.15.1.jar.sha256` sidecar agrees with the artefact. MCTL correctly refused the
+  install until the provider was changed to read the **sidecar** instead.
+  - **How to apply:** for a Maven-hosted artefact, prefer `<url>.sha256` over a digest copied into
+    some other service's index. The repository verifies uploads against the sidecar; the index is a
+    copy that can rot.
+- **Quilt is an `installer`, Fabric is a `loaderJar`** — they only look alike. Quilt has no
+  `/server/jar` route (404) and ships a CLI installer whose **`--install-dir=.` is mandatory**:
+  without it the default is a `server/` *subdirectory* (verified by running it). Fabric's
+  `/v2/versions/loader/<game>/<loader>/<installer>/server/jar` builds a launcher on demand, publishes
+  no digest, and downloads the game on **first boot** — so a fresh Fabric directory looks nearly
+  empty and its first start needs network.
+- **Upstream shapes worth not re-deriving:** Forge and NeoForge have **no versions API** — both mavens
+  are Reposilite, so `…/api/maven/versions/releases/<group path>` returns `{versions: […]}`
+  oldest-first (`maven-metadata.json` 404s; the `.xml` exists). Forge's versions are the composite
+  `<mc>-<forge>`, split on the **first** hyphen only. NeoForge encodes the Minecraft version in its
+  own: three parts → `1.<a>.<b>` (a `0` minor dropped), **four** parts → Minecraft's calendar version
+  `<a>.<b>.<c>` (a `0` patch dropped) since MC 26.1. Purpur's v2 API returns build numbers as
+  **strings** and publishes **MD5 only** (hence `md5` in `lib/download.ts`).
+- **`ServerProvider.javaRequirement` for every loader is Minecraft's own**, via the new shared
+  `providers/server/mojang-meta.ts`. That module exists specifically so Fabric/Quilt/Forge/NeoForge
+  do not import `VanillaProvider` — a shared *upstream client* beside the providers is not the
+  provider→provider dependency the rule forbids, and the rule's purpose (a backup provider must not
+  reach into a runtime) is untouched.
+- **A Java `{pinned}` must not trigger resolution at create time.** Adding one broke
+  `manager.test.ts` by timing out (it tried to fetch a JDK). The rule: a pin *is* the answer; it is
+  only *located* when an installer has to be run with it.
+- **Hand-kept option lists rot silently.** Four existed (create form kinds, create form runtimes,
+  wizard Defaults, Settings) and three still said "Vanilla only" a whole phase later. Kinds/runtimes
+  in `ServerCreate` now come from the **`ProviderRegistry`**; the two *defaults* pickers share
+  `app/choices.ts`, typed `Record<ServerKind, …>` so a new enum member is a **compile error** rather
+  than a quietly missing entry. The wizard cannot use the registry — it runs before there is a config.
+- **`Bun.file().writer()` truncates**, so it cannot append: a resumed download uses a `node:fs`
+  handle opened `"a"`. A resumed transfer must also **re-hash the bytes already on disk** (they were
+  written by a previous process), and must treat a `200` answer to a `Range` request as "start over"
+  — appending a full body to a partial file is how you get a corrupt jar that fails its digest.
+
 ## Keyboard: rings skip disabled, modals own the keyboard, focus is drawn (2026-08-12, user request)
 
 User: "Tab cycle is not properly done everywhere. Focused areas are not well highlighted (Tabs).
