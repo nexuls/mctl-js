@@ -3,11 +3,35 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-08 (player heads render the player's real Minecraft skin)_
+_Last updated: 2026-08-12 (player card redesigned to the user's wireframe)_
 
 ---
 
 ## Done
+
+- **Player card redesigned to a wireframe (this session, user request).** Six interior rows: the
+  4-row head beside `name ● status` / `<playtime> Played` / `Last Position: Overworld(x, y, z)` /
+  `<GameMode> n Kills n Deaths`, then full-width `Health:` and `Food:` meters — ten game-style
+  icons each with the exact percentage at the right edge. Standing (`OP`/`WL`/`SHADOW`) moved to
+  the **top** border; the name moved into the body; game mode stopped being a badge.
+  - `src/types/icons.ts` + `src/core/icons/catalogue.ts` — four new icons
+    (`heartFull`/`heartEmpty`/`foodFull`/`foodEmpty`) in all three sets.
+  - `src/app/Server/tabs/Players.tsx` — `PlayerCard` rewritten and **exported** for its test;
+    `StatBar` (a `ProgressBar`) replaced by `StatMeter` + the pure `meterFill`; helpers
+    `dimensionLabel`, `titleCase`, `counted`, `gameModeColor`.
+  - `src/app/Server/tabs/Players.test.tsx` — **new**, 6 tests mounting the card through
+    `createTestRenderer` + `createRoot`: the wireframe's fields, singular/plural counts, the
+    meters' icons agreeing with their percentage, the both-ends fill bias, six rows with data /
+    without data / without a head, and a banned player's card.
+  - **Two real defects the tests caught:** every body line needed `truncate wrapMode="none"` (an
+    unwrapped position line grew a 36-wide card to 10 rows), and the meter row's caption and icons
+    needed `flexShrink={0}` beside the `flexGrow` spacer (they were being shrunk to nothing).
+  - Verified: `bunx tsc --noEmit` clean; `bun test` **256/256** (+6); `bun run format` clean; the
+    card rendered through `createTestRenderer` at widths 50/43/36 in the `unicode` and `ascii` sets
+    (full player, a long-named creative player in the Nether, and a player with no data at all) —
+    six rows in every case, meters aligned, long lines middle-ellipsised.
+  - **Not verified:** the tab has not been driven in a real pty since the redesign — the card is
+    checked frame-by-frame in tests, the *grid* around it is unchanged code.
 
 - **Player heads are real skins (this session, user request).** "Fetch the head from the API, prefer
   8×8, convert it to the Head Skin type, then render it. Official Minecraft first, then TLauncher,

@@ -4,10 +4,11 @@
  * Three groups, in the order they matter: **online** (whoever a live list ping
  * named), then **offline** (the rosters plus anyone with player data on disk),
  * then **banned**. Each player is a card carrying everything the server records
- * about them — health, hunger, experience, game mode and position from their
- * `playerdata` NBT, and playtime, kills, deaths and distance from their stats
- * file — with a head drawn from {@link MinecraftHead}, picked deterministically
- * from their uuid so the same player always looks the same.
+ * about them — game mode, last position, health and hunger from their
+ * `playerdata` NBT, and playtime, kills and deaths from their stats file — with
+ * their real face from {@link "../../../hooks/use-player-heads".usePlayerHeads}
+ * when one can be fetched, and a built-in head picked deterministically from
+ * their uuid until then. See {@link PlayerCard} for the card's shape.
  *
  * Page-layer (AGENTS.md § 3): every value arrives on a view model from
  * `hooks/use-players.ts`; this file reads no files and sends no commands. The
@@ -37,7 +38,6 @@ import { TextAttributes } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import {
 	MinecraftHead,
-	ProgressBar,
 	ScrollBox,
 	skinFor,
 	useBoxWidth,
@@ -68,9 +68,14 @@ const HEAD_MIN_WIDTH = 84;
  * these are a floor, not the width anything actually renders at.
  *
  * With a head: 4 cells of border and padding, 9 for the head and its gap, and
- * ~23 for the longest body line (`12.4k kills · 12.4k deaths`). Below that the
- * kill/death line starts to clip. Without a head the floor drops by exactly the
- * head's nine cells.
+ * ~23 for the game-mode/kills/deaths line (`Survival 12.4k Kills 12.4k Deaths`
+ * shortens gracefully; `Survival 1 Kill 1 Death` does not). Without a head the
+ * floor drops by exactly the head's nine cells.
+ *
+ * The position line (`Last Position: Overworld(-2, 56, 105)`, ~37 cells) is the
+ * first thing to clip and is deliberately *not* what sets the floor: sizing
+ * every card to the longest coordinate a world can produce would cost a whole
+ * column on a 100-cell terminal to spell out one line in full.
  */
 const CARD_MIN_WIDTH_WITH_HEAD = 36;
 const CARD_MIN_WIDTH_PLAIN = CARD_MIN_WIDTH_WITH_HEAD - 9;
@@ -124,6 +129,21 @@ function fitCards(
 const DEFAULT_MAX_HEALTH = 20;
 const MAX_FOOD = 20;
 
+/**
+ * Icons in a health or hunger meter. Ten, because that is what the game's own
+ * HUD draws — twenty half-units render as ten hearts, so a player on 9 health
+ * shows four and a half hearts in game and, here, five of ten icons plus the
+ * exact percentage beside them.
+ */
+const METER_ICONS = 10;
+
+/**
+ * Width the `Health:` / `Food:` captions are padded to, so the two meters start
+ * in the same column. `Health:` is the longer of the two at 7 cells; the eighth
+ * is the space between the caption and the first icon.
+ */
+const METER_LABEL_WIDTH = 8;
+
 /** Which group a card belongs to, which decides what its four lines say. */
 type CardKind = "online" | "offline" | "banned";
 
@@ -150,45 +170,147 @@ function compactCount(value: number | undefined, empty: string): string {
 	return `${(value / 1_000_000).toFixed(1)}M`;
 }
 
-/** A short bar with its readout, for health and hunger. */
-function StatBar({
-	icon,
+/**
+ * How many of a meter's ten icons are filled at `value` of `max`.
+ *
+ * Rounded to the nearest icon, but biased at both ends so the two states that
+ * matter are never misread: a player who is alive but nearly dead keeps one
+ * heart rather than showing an empty bar, and a player one point short of full
+ * loses one rather than reading as untouched. Same rule `ProgressBar` applies to
+ * its cells, for the same reason.
+ */
+function meterFill(value: number, max: number): number {
+	if (max <= 0) return 0;
+	const fraction = Math.max(0, Math.min(1, value / max));
+	const filled = Math.round(fraction * METER_ICONS);
+	if (filled === 0 && fraction > 0) return 1;
+	if (filled === METER_ICONS && fraction < 1) return METER_ICONS - 1;
+	return filled;
+}
+
+/**
+ * One player meter — a caption, ten icons, and the exact percentage pushed to
+ * the card's right edge.
+ *
+ * Ten icons cannot express 20 half-units on their own (a whole heart is two
+ * points), which is why the percentage is spelled out rather than left implied:
+ * the icons give the shape at a glance, the readout gives the number.
+ */
+function StatMeter({
+	label,
 	value,
 	max,
-	variant,
+	full,
+	empty,
+	color,
 }: {
-	icon: string;
+	label: string;
 	value: number;
 	max: number;
-	variant: "success" | "warning" | "info";
+	/** Glyph for a remaining point. */
+	full: string;
+	/** Glyph for a lost one. */
+	empty: string;
+	color: string;
 }) {
 	const { colors } = useTheme();
+	const filled = meterFill(value, max);
+	const percent = max > 0 ? Math.round((value / max) * 100) : 0;
 	return (
-		<box flexDirection="row" gap={1} alignItems="center">
-			<text fg={colors.muted}>{icon}</text>
-			<ProgressBar
-				value={Math.max(0, Math.min(value, max))}
-				max={max}
-				width={9}
-				style="smooth"
-				variant={variant}
-				readout="none"
-			/>
-			<text fg={colors.foreground}>{`${Math.round(value)}/${max}`}</text>
+		// `flexShrink={0}` on all three: the spacer is `flexGrow`, so without it
+		// yoga takes the row's slack out of the caption and the icons — a meter
+		// that silently renders as a blank gap between "Health:" and "50%".
+		<box flexDirection="row" alignItems="center">
+			<text fg={colors.muted} flexShrink={0}>
+				{label.padEnd(METER_LABEL_WIDTH)}
+			</text>
+			<text flexShrink={0}>
+				<span fg={color}>{full.repeat(filled)}</span>
+				<span fg={colors.border}>{empty.repeat(METER_ICONS - filled)}</span>
+			</text>
+			<box flexGrow={1} />
+			<text fg={colors.muted} flexShrink={0}>
+				{`${Math.max(0, Math.min(100, percent))}%`}
+			</text>
 		</box>
 	);
 }
 
 /**
- * One player card: a head, four lines of detail, the name on the top border and
- * the player's badges on the bottom one.
- *
- * The name and badges ride the **border** rather than costing two body rows —
- * the same trick the shell uses for the screen title. Four body lines is exactly
- * the head's height, so a card with a head and one without are the same height
- * and the grid stays even.
+ * `minecraft:the_nether` → `The Nether`. The namespace is noise on a card, and a
+ * modded dimension (`aether:the_aether`) reads correctly under the same rule.
  */
-function PlayerCard({
+function dimensionLabel(dimension: string): string {
+	const bare = dimension.includes(":")
+		? (dimension.split(":")[1] ?? dimension)
+		: dimension;
+	return bare
+		.split("_")
+		.filter((word) => word.length > 0)
+		.map((word) => word[0]?.toUpperCase() + word.slice(1))
+		.join(" ");
+}
+
+/** `Survival`, `Creative` — the game's own capitalisation. */
+function titleCase(text: string): string {
+	return text.length === 0 ? text : text[0]?.toUpperCase() + text.slice(1);
+}
+
+/**
+ * `1 Kill` / `2 Kills` / `12.4k Kills`. Minecraft's own counters are singular at
+ * one, and "1 Kills" on a fresh player's card is the kind of detail that makes a
+ * panel look unfinished.
+ */
+function counted(
+	value: number | undefined,
+	noun: string,
+	empty: string,
+): string {
+	return `${compactCount(value, empty)} ${noun}${value === 1 ? "" : "s"}`;
+}
+
+/**
+ * The colour a game mode is named in. Deliberately not one accent for all four:
+ * the mode changes what a player can do to the world, so creative and spectator
+ * are worth spotting in a grid of cards.
+ */
+function gameModeColor(
+	mode: string,
+	colors: ReturnType<typeof useTheme>["colors"],
+): string {
+	if (mode === "creative") return colors.warning;
+	if (mode === "spectator") return colors.muted;
+	if (mode === "adventure") return colors.info;
+	return colors.secondary;
+}
+
+/**
+ * One player card, six interior rows tall:
+ *
+ * ```
+ * ╭──────────────────────────────────────── OP ─╮
+ * │ ████  BeardStone ● Last Online: 2d ago      │
+ * │ ████  6m Played                             │
+ * │ ████  Last Position: Overworld(-2, 56, 105) │
+ * │ ████  Survival 1 Kill 1 Death               │
+ * │ Health: ♥♥♥♥♥♡♡♡♡♡                      50% │
+ * │ Food:   ▰▰▰▰▰▰▰▱▱▱                      50% │
+ * ╰─────────────────────────────────────────────╯
+ * ```
+ *
+ * The head is 4 rows tall, so the four lines beside it are exactly its height
+ * and the two meters below span the card. That total is fixed whatever the card
+ * has to say — a player with no data on disk still draws six rows — because a
+ * row of cards of differing heights reads as a broken grid.
+ *
+ * Only the player's *standing* (`OP`/`WL`/`SHADOW`) rides the border; the name
+ * shares line 1 with the player's status, which a border title could not hold.
+ *
+ * Exported for `Players.test.tsx`: the card's promises — six rows whatever the
+ * data, ten meter icons, a percentage that agrees with them — are claims about
+ * rendered frames, and a frame is the only place they can be checked.
+ */
+export function PlayerCard({
 	player,
 	kind,
 	selected,
@@ -221,113 +343,139 @@ function PlayerCard({
 				? colors.success
 				: colors.muted;
 
+	// Roster standing only. The game mode is *not* a badge any more — it names the
+	// player's own line beside their kills and deaths, where the wireframe puts it.
 	const badges = [
 		player.op
-			? `op${player.op.level < 4 ? ` ${player.op.level}` : ""}`
+			? `OP${player.op.level < 4 ? ` ${player.op.level}` : ""}`
 			: undefined,
-		player.whitelisted ? "wl" : undefined,
-		player.shadowBan ? "shadow" : undefined,
-		state?.gameMode && kind !== "banned" ? state.gameMode : undefined,
+		player.whitelisted ? "WL" : undefined,
+		player.shadowBan ? "SHADOW" : undefined,
 	].filter((badge): badge is string => badge !== undefined);
 
-	const lines = (() => {
-		if (kind === "banned") {
-			return [
-				`by ${player.ban?.source ?? empty}`,
-				player.ban?.created ?? empty,
-				`expires ${player.ban?.expires ?? "never"}`,
-				player.ban?.reason ?? "no reason given",
-			].map((text, position) => (
-				<text key={`ban-${position}`} fg={colors.foreground}>
-					{text}
-				</text>
-			));
-		}
+	const maxHealth = state?.maxHealth ?? DEFAULT_MAX_HEALTH;
+	const playtime =
+		stats?.playTimeMs === undefined ? empty : formatDuration(stats.playTimeMs);
 
-		const maxHealth = state?.maxHealth ?? DEFAULT_MAX_HEALTH;
-		const playtime =
-			stats?.playTimeMs === undefined
-				? empty
-				: formatDuration(stats.playTimeMs);
-		const kd = `${compactCount(stats?.playerKills ?? stats?.mobKills, empty)} kills ${icons.separator} ${compactCount(stats?.deaths, empty)} deaths`;
+	/** Line 1's right half: where this player is, in one phrase. */
+	const status =
+		kind === "banned"
+			? `Banned${player.ban?.source ? ` by ${player.ban.source}` : ""}`
+			: kind === "online"
+				? "Online now"
+				: `Last Online: ${ago(player.lastSeen, empty)}`;
 
-		if (kind === "online") {
-			return [
-				state?.health === undefined ? (
-					<text key="health" fg={colors.muted}>
-						no player data yet
-					</text>
-				) : (
-					<StatBar
-						key="health"
-						icon={icons.diamond}
-						value={state.health}
-						max={maxHealth}
-						variant="success"
-					/>
-				),
-				state?.food === undefined ? (
-					<text key="food"> </text>
-				) : (
-					<StatBar
-						key="food"
-						icon={icons.bullet}
-						value={state.food}
-						max={MAX_FOOD}
-						variant="warning"
-					/>
-				),
-				<text key="xp" fg={colors.foreground}>
-					{`lvl ${state?.xpLevel ?? empty} ${icons.separator} ${playtime} played`}
-				</text>,
-				<text key="kd" fg={colors.muted}>
-					{kd}
-				</text>,
-			];
-		}
-
-		return [
-			<text key="seen" fg={colors.foreground}>
-				{`seen ${ago(player.lastSeen, empty)}`}
-			</text>,
-			<text key="played" fg={colors.foreground}>
-				{`${playtime} played`}
-			</text>,
-			<text key="kd" fg={colors.muted}>
-				{kd}
-			</text>,
-			<text key="mode" fg={colors.muted}>
-				{state
-					? `lvl ${state.xpLevel ?? empty} ${icons.separator} ${state.gameMode ?? empty}`
-					: "no player data"}
-			</text>,
-		];
-	})();
+	const lines =
+		kind === "banned"
+			? [
+					<text key="reason" fg={colors.foreground} truncate wrapMode="none">
+						{player.ban?.reason ?? "No reason given"}
+					</text>,
+					<text key="created" fg={colors.muted} truncate wrapMode="none">
+						{`Banned: ${player.ban?.created ?? empty}`}
+					</text>,
+					<text key="expires" fg={colors.muted} truncate wrapMode="none">
+						{`Expires: ${player.ban?.expires ?? "never"}`}
+					</text>,
+				]
+			: [
+					<text key="played" fg={colors.foreground} truncate wrapMode="none">
+						{`${playtime} Played`}
+					</text>,
+					<text key="position" fg={colors.muted} truncate wrapMode="none">
+						Last Position:{" "}
+						<span fg={colors.info}>
+							{state?.position
+								? `${dimensionLabel(state.dimension ?? "overworld")}(${state.position.x}, ${state.position.y}, ${state.position.z})`
+								: empty}
+						</span>
+					</text>,
+					<text key="kd" truncate wrapMode="none">
+						{state?.gameMode ? (
+							<span fg={gameModeColor(state.gameMode, colors)}>
+								{`${titleCase(state.gameMode)} `}
+							</span>
+						) : null}
+						<span fg={colors.foreground}>
+							{`${counted(stats?.playerKills ?? stats?.mobKills, "Kill", empty)} ${counted(stats?.deaths, "Death", empty)}`}
+						</span>
+					</text>,
+				];
 
 	return (
 		<box
 			width={width}
-			flexDirection="row"
-			gap={1}
+			flexDirection="column"
 			flexShrink={0}
 			border
 			borderStyle="rounded"
 			borderColor={selected ? colors.primary : colors.border}
-			title={` ${player.name} `}
+			// Standing rides the top border, right-aligned — the wireframe's `OP`
+			// tab. The name is a body line here rather than a border title: it shares
+			// its row with the player's status, and a border can hold only one run of
+			// text per side.
+			title={badges.length > 0 ? ` ${badges.join(" ")} ` : undefined}
+			titleAlignment="right"
 			titleColor={selected ? colors.primary : accent}
-			bottomTitle={badges.length > 0 ? ` ${badges.join(" ")} ` : undefined}
-			bottomTitleAlignment="right"
 			paddingX={1}
 			onMouseDown={() => (selected ? onActivate() : onSelect())}
 		>
-			{/* The player's own face when one has been fetched, else the deterministic
-			    built-in `skinFor` picks. The card never waits on the network. */}
-			{showHead ? (
-				<MinecraftHead skin={head ?? skinFor(player.uuid ?? player.name)} />
-			) : null}
-			<box flexDirection="column" flexGrow={1} overflow="hidden">
-				{lines}
+			{/* Head + four lines. The head is 4 rows tall, so the column beside it
+			    holds exactly four: identity, then three facts. */}
+			<box flexDirection="row" gap={1}>
+				{/* The player's own face when one has been fetched, else the deterministic
+				    built-in `skinFor` picks. The card never waits on the network. */}
+				{showHead ? (
+					<MinecraftHead skin={head ?? skinFor(player.uuid ?? player.name)} />
+				) : null}
+				{/* `truncate wrapMode="none"` on every line, not just the long ones: a
+				    line that wraps grows the card by a row, and one taller card makes
+				    the whole grid row ragged. Clipping is the only safe overflow here. */}
+				<box flexDirection="column" flexGrow={1} overflow="hidden">
+					<text truncate wrapMode="none">
+						<span fg={colors.foreground} attributes={TextAttributes.BOLD}>
+							{player.name}
+						</span>
+						<span fg={accent}>{` ${icons.bullet} ${status}`}</span>
+					</text>
+					{lines}
+				</box>
 			</box>
+
+			{/* The two meters span the whole card, under the head — they are the one
+			    thing on the card with a fixed shape, and full width is what lets the
+			    percentages line up down a column of cards. */}
+			{state?.health === undefined && state?.food === undefined ? (
+				<>
+					<text fg={colors.muted} truncate wrapMode="none">
+						{kind === "online"
+							? "No player data written yet."
+							: "No player data on disk."}
+					</text>
+					{/* Holds the card at six interior rows whatever it has to say, so a
+					    row of cards has one baseline instead of a ragged one. */}
+					<text> </text>
+				</>
+			) : (
+				<>
+					<StatMeter
+						label="Health:"
+						value={state?.health ?? 0}
+						max={maxHealth}
+						full={icons.heartFull}
+						empty={icons.heartEmpty}
+						color={colors.error}
+					/>
+					<StatMeter
+						label="Food:"
+						value={state?.food ?? 0}
+						max={MAX_FOOD}
+						full={icons.foodFull}
+						empty={icons.foodEmpty}
+						color={colors.warning}
+					/>
+				</>
+			)}
 		</box>
 	);
 }

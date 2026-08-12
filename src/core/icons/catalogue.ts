@@ -153,6 +153,26 @@ export const ICONS: Readonly<
 	// shift the column beside it when the user switched away from `nerd`.
 	java: { nerd: "\u{f0f4}" /* nf-fa-coffee */, unicode: "◈", ascii: "J" },
 	settings: { nerd: "\u{f013}" /* nf-fa-cog */, unicode: "⚙", ascii: "%" },
+	// The two player meters are drawn as ten discrete icons each, the way the
+	// game's own HUD draws them, so full and empty need to differ at a glance in
+	// every set — hence a filled/outline pair rather than one glyph in two
+	// colours (a colour-blind terminal palette, or a monochrome one, would make
+	// the meter unreadable).
+	heartFull: { nerd: "\u{f004}" /* nf-fa-heart */, unicode: "♥", ascii: "#" },
+	heartEmpty: {
+		nerd: "\u{f08a}" /* nf-fa-heart_o */,
+		unicode: "♡",
+		ascii: "-",
+	},
+	// NOT a drumstick: every food emoji (🍖 U+1F356, 🍗) is East-Asian Wide and
+	// would take two cells, so the unicode set uses a filled/outline block pair
+	// and the nerd set the cutlery glyph's filled/outline pair.
+	foodFull: { nerd: "\u{f0f5}" /* nf-fa-cutlery */, unicode: "▰", ascii: "=" },
+	foodEmpty: {
+		nerd: "\u{f096}" /* nf-fa-square_o */,
+		unicode: "▱",
+		ascii: "-",
+	},
 };
 
 /**

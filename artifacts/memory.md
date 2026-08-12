@@ -5,6 +5,36 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The player card was redesigned to a wireframe (2026-08-12, user request)
+
+- **The card is six interior rows, always**: four beside the 4-row head (name + status, playtime,
+  last position, game mode + kills/deaths) and two full-width meters (health, food) under it.
+  A player with no `playerdata` on disk still draws six rows — it says "No player data on disk"
+  plus a blank line — because **one taller card makes the whole grid row ragged**.
+  - Only *standing* (`OP`/`WL`/`SHADOW`) rides the border now, on the **top** border right-aligned;
+    the name moved into the body because it shares its row with the player's status and a border
+    side holds one run of text. Game mode is no longer a badge — it names line 4.
+- **Every body `<text>` needs `truncate wrapMode="none"`.** OpenTUI text *wraps* by default, and a
+  wrapped line grows the card by a row: the position line (`Last Position: Overworld(-2, 56, 105)`,
+  ~37 cells) turned a 36-wide card into 10 rows instead of 8. `overflow="hidden"` on the parent does
+  **not** prevent the wrap, it only clips what the wrap produced. `truncate` gives a *middle*
+  ellipsis (`Last Posit..., 56, 105)`), which is the app's existing convention (Settings, Form).
+- **A `flexGrow` spacer eats its siblings unless they are `flexShrink={0}`.** The meter row is
+  caption + icons + spacer + percentage; without the guard yoga took the row's slack out of the
+  caption and the icons and the meter rendered as a **blank gap** between `Health:` and `50%`.
+  Same rule as the `Tabs`/`NavRail` segments.
+- **Meters are ten discrete icons, not a `ProgressBar`** — that is how the game's own HUD draws them.
+  Ten icons cannot express 20 half-units (a whole heart is two points), so the exact percentage is
+  printed at the card's right edge. `meterFill` biases both ends the way `ProgressBar` does: a live
+  player never shows an empty meter, and one point short of full never shows a full one.
+  - New icons `heartFull`/`heartEmpty`/`foodFull`/`foodEmpty`. **No food emoji**: 🍖/🍗 are
+    East-Asian Wide and the catalogue bars two-cell glyphs, so unicode food is `▰`/`▱`.
+- **`PlayerCard` is exported and `Players.test.tsx` mounts it** (6 tests). The suite must **not**
+  hardcode `♥` — `useIcons` without a provider resolves `auto` off the *runner's* environment, and
+  a Nerd Font terminal renders PUA hearts that look like blanks in a captured frame (which is how
+  the first run's failures read as "the meter renders nothing"). It resolves the same set the
+  component will and builds the expected run from that.
+
 ## Player heads are real skins now (2026-08-08, user request)
 
 - **`core/skins/` fetches a player's actual skin and crops the head; `skinFor` is the fallback,
@@ -136,8 +166,7 @@ delete entries that stop being true. Newest-relevant first.
   pure `fitCards(available, minimum)` takes as many columns as fit at the minimum
   (`CARD_MIN_WIDTH_WITH_HEAD = 36`, nine less without a head) and then widens every card to an equal
   share of the row — two columns are half each, three a third. **Heads are dropped below 84 cells**
-  (a head is 8 cells). Four body lines is exactly the head's height, so a card with a head and one
-  without are the same height and the grid stays even. Name rides `title`, badges ride `bottomTitle`.
+  (a head is 8 cells). See the redesign entry at the top of this file for the card's own layout.
   - **`available` is the *measured* interior of a `Section`, not the terminal width.** `Section`
     wraps its children in a box it measures with `useBoxWidth` and reports through `onWidth`; only
     the layout engine knows what the shell frame, the tab padding, the section border and the

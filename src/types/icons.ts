@@ -133,7 +133,15 @@ export type IconName =
 	/** A Java runtime. */
 	| "java"
 	/** Configuration. */
-	| "settings";
+	| "settings"
+	/** One remaining point of a player's health meter. */
+	| "heartFull"
+	/** One lost point of a player's health meter. */
+	| "heartEmpty"
+	/** One remaining point of a player's hunger meter. */
+	| "foodFull"
+	/** One lost point of a player's hunger meter. */
+	| "foodEmpty";
 
 /**
  * A fully-resolved glyph table: every {@link IconName} mapped to the string to
