@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-13 (Phase 4a — networking)_
+_Last updated: 2026-08-13 (Phase 4a — networking; artifact gaps filled in)_
 
 ---
 
@@ -936,12 +936,31 @@ roadmap in `plan.md`.
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
 - **The dev shortcuts are gone** — `app/Router.tsx` boots to the Dashboard again and
-  `DEFAULT_SERVER_TAB` is `"overview"`. (Corrected here: this file claimed otherwise; the code is
-  truth.)
-- **One uncommitted tweak in the working tree is the user's, not this session's**:
-  `app/Dashboard/index.tsx` has the expanded row's left border / background commented out in favour
-  of `paddingLeft`. Left alone and deliberately not committed; it is why `biome check` reports an
-  unused `alpha` import there.
+  `DEFAULT_SERVER_TAB` is `"overview"`.
+- **The working tree is clean** as of 2026-08-13; the Dashboard tweak this file used to list as
+  uncommitted is committed (`c233a97`, see the hand-made UI passes entry).
+
+### Current state of the checks (re-run 2026-08-13, on `master` at `c233a97`)
+
+| Check | Result |
+|---|---|
+| `bunx tsc --noEmit` | clean |
+| `bun test` | **371 pass / 1 fail**, 372 tests across 39 files |
+| `bun run format` | clean |
+| `bunx biome check src` | 215 files, **1 error + 3 warnings**, all pre-existing |
+
+The four Biome findings, so the next agent knows which are theirs and which are not:
+
+- `hooks/use-toast.test.tsx:39` — `useExhaustiveDependencies` (**the one error**): the test's helper
+  effect deliberately raises its toast once, so the empty dependency array is intentional. Silence it
+  with an ignore comment naming the reason rather than adding `toast` to the array.
+- `app/setup/Welcome.tsx:11`, `components/Form.tsx:33` — unused imports.
+- `lib/png.test.ts:214` — an unused variable.
+
+The single failing test is `core/icons/detect.test.ts` → *glyphs are single-cell*, on `nerd.heartFull`.
+**No longer an open question:** the two-cell nerd meter glyphs are the user's deliberate change
+(`4c0e56a`), so the test's assertion is the thing that is wrong. Fix = add `heartFull`, `heartEmpty`,
+`foodFull`, `foodEmpty` to the test's documented exemptions and say why.
 
 ## Next up (Phase 4 — the operations half)
 
@@ -1060,6 +1079,14 @@ Carried over from Phase 3, deliberately not done:
 - **A `{pinned}` Java that is not installed is fetched silently** during create/start. That is the
   right default, but there is no "ask first" prompt in the TUI (the `autoInstall: false` path exists
   in `resolveJava` and is unused by the UI).
+- **`lib/colors.ts` has no test file**, and every theme, every `alpha()` wash and every focus tint in
+  the app goes through it. It is pure, dependency-free and takes no fixtures — `parseHex` round-trips,
+  the `#rrggbbaa` form, `mix` endpoints, and `contrastRatio` against the two WCAG reference pairs would
+  cover it in one sitting. The cheapest test debt left in the repo.
+- **`Table`'s `measured - 3` is a hand-tuned constant.** `layoutColumns` is tested at every width
+  1–200, but the outer-width subtraction that pays for the new row borders (`f442c93`) is not, so a
+  future border-style change silently misaligns the header against the rows. A test that renders a
+  bordered table and asserts header/row column starts agree would pin it.
 - **`ServerProvider` implementations are still not tested against recorded fixtures.** AGENTS.md asks
   for this and it is now the largest untested surface: **eight** providers, verified live rather than
   against fixtures. Their *pure* parts are covered (`decodeNeoVersion`, `compareMinecraftVersions`,
