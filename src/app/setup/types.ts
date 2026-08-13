@@ -14,7 +14,6 @@ import { defaultRoot } from "../../lib/paths.ts";
 import type {
 	BackupProvider,
 	CompressionKind,
-	NetworkProvider,
 	RuntimeKind,
 	ServerKind,
 } from "../../types/config.ts";
@@ -51,8 +50,8 @@ export interface SetupDraft {
 	/** Default archive compression. */
 	compression: CompressionKind;
 
-	/** Default network profile for new servers. */
-	network: NetworkProvider;
+	/** Default network profile for new servers (a profile name). */
+	network: string;
 }
 
 /** Props every wizard step receives from the {@link SetupWizard} container. */

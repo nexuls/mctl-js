@@ -54,7 +54,7 @@ import type {
 	BackupProvider,
 	CompressionKind,
 	IconMode,
-	NetworkProvider,
+	NetworkConfig,
 } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
 import { useSettings, type SettingsDraft } from "./use-settings.ts";
@@ -94,10 +94,23 @@ const ICON_MODES: RadioItem<IconMode>[] = [
 	},
 ];
 
-/** Network profiles available today; tunnels arrive in Phase 4. */
-const NETWORKS: RadioItem<NetworkProvider>[] = [
-	{ label: "direct", value: "direct", description: "bind a local port" },
-];
+/**
+ * The profiles this config actually defines, for the default-profile picker.
+ *
+ * Built from config rather than typed out, because profiles are **user-defined**
+ * — a hand-kept list here could not name a `cf-tunnel` profile the user added,
+ * which is exactly the case the picker exists for. Each option is described by
+ * the provider it selects, since a profile name alone says nothing.
+ */
+function profileOptions(network: NetworkConfig): RadioItem<string>[] {
+	return Object.entries(network.profiles).map(([name, profile]) => ({
+		label: name,
+		value: name,
+		description: profile.dns
+			? `${profile.provider} + dns ${profile.dns.hostname}`
+			: profile.provider,
+	}));
+}
 
 /** The settings groups, in tab order. */
 type GroupId = "locations" | "defaults" | "backups" | "network" | "appearance";
@@ -521,11 +534,11 @@ export function Settings() {
 				) : null}
 
 				{group === "network" ? (
-					<Section description="Tunnels and DNS arrive in Phase 4.">
+					<Section description="Profiles are defined in config.json; the Network page shows which providers this machine can use.">
 						<RadioGroup
 							label="Default profile"
 							hint="applied to new servers"
-							options={NETWORKS}
+							options={profileOptions(config.network)}
 							value={draft.network}
 							focused={ring.isFocused("network")}
 							onFocused={() => ring.setFocus("network")}

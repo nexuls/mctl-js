@@ -118,6 +118,36 @@ export function runtimeLockFile(id: string): string {
 	return join(runtimeDir(), `${id}.lock`);
 }
 
+/**
+ * Directory of per-server tunnel session descriptors and agent output.
+ *
+ * Sibling of `runtime/` and for the same reason: a tunnel agent started by one
+ * instance must be findable, showable and stoppable by every other one, and the
+ * only channel between instances is the filesystem. Durable state rather than
+ * cache — a descriptor left behind by a crashed instance is how the next one
+ * knows there is an orphaned agent to reap.
+ */
+export function networkDir(): string {
+	return join(stateDir(), "network");
+}
+
+/** Tunnel session descriptor for one server: `{ provider, pid, endpoint, … }`. */
+export function networkFile(id: string): string {
+	return join(networkDir(), `${id}.json`);
+}
+
+/**
+ * Captured output of one server's tunnel agent.
+ *
+ * Kept because a tunnel that will not come up is otherwise silent: the agent's
+ * own words ("failed to authenticate", "tunnel credentials not found") are the
+ * only diagnosis available, and they are printed once, to a pipe nobody is
+ * holding after the spawning instance exits.
+ */
+export function networkLogFile(id: string): string {
+	return join(networkDir(), `${id}.log`);
+}
+
 /** MCTL's own log directory (server logs stay inside each server dir instead). */
 export function logsDir(): string {
 	return join(stateDir(), "logs");

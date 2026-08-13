@@ -63,8 +63,23 @@ export const EventType = {
 	/** A JDK was installed by MCTL. Payload: `{ major, version, home }`. */
 	JavaInstalled: "JavaInstalled",
 
-	// Later phases: InstallStepChanged, TunnelUp/Down, DownloadCompleted,
-	// PlayerJoined/Left, BackupFinished.
+	// ── Phase 4 ────────────────────────────────────────────────────────────────
+	/**
+	 * A server became reachable through a network provider. Payload:
+	 * `{ id, provider, profile, joinAddress, kind }` — the *address*, never a
+	 * credential (AGENTS.md § Secrets).
+	 */
+	TunnelUp: "TunnelUp",
+	/** A server's tunnel was torn down or died. Payload: `{ id, provider, reason }`. */
+	TunnelDown: "TunnelDown",
+	/**
+	 * MCTL created or removed DNS records for a server. Payload:
+	 * `{ id, hostname, records, action }` — record ids only, never the API token.
+	 */
+	DnsChanged: "DnsChanged",
+
+	// Later phases: InstallStepChanged, DownloadCompleted, PlayerJoined/Left,
+	// BackupFinished.
 } as const;
 export type EventType =
 	| (typeof EventType)[keyof typeof EventType]

@@ -106,24 +106,78 @@ export const BackupPolicy = z.object({
 });
 export type BackupPolicy = z.infer<typeof BackupPolicy>;
 
-/** Available Network Providers, e.g. "direct", "cloudflared", "ngrok", "playit", "tailscale" … */
-export const NetworkProvider = z.enum(["direct"]);
-export type NetworkProvider = z.infer<typeof NetworkProvider>;
+/**
+ * Network provider ids MCTL offers in the setup wizard and Settings.
+ *
+ * Like {@link ServerKind}, this bounds a *picker* and nothing else: a profile's
+ * `provider` is a free string resolved against the `ProviderRegistry`, so a
+ * config written by a newer MCTL still loads instead of failing validation and
+ * taking every other setting down with it.
+ */
+export const NETWORK_PROVIDER_IDS = [
+	"direct",
+	"cloudflared",
+	"playit",
+	"ngrok",
+	"tailscale",
+] as const;
+export const NetworkProviderId = z.enum(NETWORK_PROVIDER_IDS);
+export type NetworkProviderId = z.infer<typeof NetworkProviderId>;
 
 /**
- * A named network profile. `provider` selects a NetworkProvider id ("direct",
- * "cloudflared", …). Provider-specific settings are kept loose (`options`) until
- * the concrete providers land in Phase 4 and define their own schemas.
+ * Cloudflare DNS automation for a profile: publish the server's address as
+ * records on a domain the user owns, so players join on a bare hostname.
+ *
+ * Two records are written (plan.md § Networking): an `A`/`AAAA` for the address
+ * itself and an `SRV` for `_minecraft._tcp.<hostname>`, which is what lets the
+ * Minecraft client find a non-default port without the user typing one.
+ *
+ * Every record MCTL creates is tagged in its `comment` field with the server id,
+ * and teardown removes **only** records carrying that tag — the user's own
+ * records on the same zone are never touched. This is the single most important
+ * safety property of the DNS integration.
+ */
+export const CloudflareDnsConfig = z.object({
+	/** Zone name (`example.com`) or zone id. A name is resolved through the API. */
+	zone: z.string().min(1),
+	/** Full hostname players will join, e.g. `mc.example.com`. */
+	hostname: z.string().min(1),
+	/**
+	 * Route the record through Cloudflare's proxy. **Defaults to false and
+	 * should stay there:** the orange-cloud proxy handles HTTP(S), not the
+	 * Minecraft TCP protocol, so a proxied record makes the server unreachable
+	 * rather than protected.
+	 */
+	proxied: z.boolean().default(false),
+	/** Also publish the `_minecraft._tcp` SRV record. */
+	srv: z.boolean().default(true),
+	/** Record TTL in seconds; `1` means "automatic". Short by default — tunnel addresses move. */
+	ttl: z.number().int().positive().default(60),
+});
+export type CloudflareDnsConfig = z.infer<typeof CloudflareDnsConfig>;
+
+/**
+ * A named network profile. `provider` selects a network provider id
+ * (`"direct"`, `"cloudflared"`, …); `options` carries that provider's own
+ * settings, kept loose because each provider validates its own shape at the
+ * point of use rather than forcing every provider's schema into MCTL's config
+ * schema.
  */
 export const NetworkProfile = z.object({
-	provider: NetworkProvider.default("direct"),
+	provider: z.string().min(1).default("direct"),
 	options: z.record(z.string(), z.unknown()).optional(),
+	/** Optional Cloudflare DNS automation applied on top of whatever the provider announced. */
+	dns: CloudflareDnsConfig.optional(),
 });
 export type NetworkProfile = z.infer<typeof NetworkProfile>;
 
-/** Network configuration: a default profile name plus the named profiles. */
+/**
+ * Network configuration: the profile new servers get by default, plus the named
+ * profiles themselves. `defaultProfile` is a **profile name**, not a provider
+ * id — they coincide only because the stock profile is called `direct`.
+ */
 export const NetworkConfig = z.object({
-	defaultProfile: NetworkProvider.default("direct"),
+	defaultProfile: z.string().min(1).default("direct"),
 	profiles: z
 		.record(z.string(), NetworkProfile)
 		.default({ direct: { provider: "direct" } }),

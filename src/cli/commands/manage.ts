@@ -9,6 +9,7 @@
  * — the directory stays exactly where it is and can be re-discovered.
  */
 
+import { getServer } from "../../core/server/discover.ts";
 import { cliContext, reportError } from "../context.ts";
 import { boolFlag, intFlag, parseArgs, stringFlag, ArgError } from "../args.ts";
 import { toJson, wantsJson, formatServerStatus } from "../format.ts";
@@ -66,6 +67,12 @@ export async function runDelete(argv: string[]): Promise<number> {
 		}
 
 		const context = await cliContext();
+		// Networking first: `deleteServer` refuses a running server, so anything
+		// recorded here belongs to a stopped one — but a `direct` descriptor
+		// survives a stop, and leaving it behind would keep answering `mctl network
+		// status` for a server that no longer exists.
+		const server = await getServer(id, context.paths.serversDir);
+		if (server) await context.network.teardown(server);
 		await context.servers.deleteServer(id, { deleteFiles });
 		console.log(
 			wantsJson(argv)

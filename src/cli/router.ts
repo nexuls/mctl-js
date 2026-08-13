@@ -35,6 +35,7 @@ Commands:
   logs <id> [-f]       stream a server's console
   exec <id> <cmd...>   send a command to a running server's console
   java list|install    inspect or install Java runtimes
+  network [up|down]    join addresses, tunnels, and DNS
 
 Planned:
   backup|restore <id>  (Phase 4)
@@ -116,6 +117,11 @@ export async function runCli(argv: string[]): Promise<number> {
 	if (command === "logs" || command === "exec") {
 		const { runLogs, runExec } = await import("./commands/logs.ts");
 		return command === "logs" ? runLogs(argv.slice(1)) : runExec(argv.slice(1));
+	}
+
+	if (command === "network") {
+		const { runNetwork } = await import("./commands/network.ts");
+		return runNetwork(argv.slice(1));
 	}
 
 	if (command === "java") {

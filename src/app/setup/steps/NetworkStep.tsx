@@ -13,10 +13,16 @@ import { useFocusRing } from "../../../hooks/use-focus-ring.ts";
 import { StepScaffold } from "../StepScaffold.tsx";
 import { WizardFooter } from "../WizardFooter.tsx";
 import type { StepProps } from "../types.ts";
-import type { NetworkProvider } from "../../../types/config.ts";
-
-/** Network profiles available today. Tunnels + DNS land in Phase 4. */
-const PROFILES: RadioItem<NetworkProvider>[] = [
+/**
+ * Profiles the wizard can offer.
+ *
+ * Only `direct`, and not because tunnels are unimplemented: the wizard runs
+ * *before* there is a `config.json`, so there are no named profiles yet, and a
+ * tunnel profile needs a provider choice plus its options (and often a
+ * credential) — a flow that belongs on the Network page, not in a six-step
+ * first-run wizard. Every server created before then can be re-pointed later.
+ */
+const PROFILES: RadioItem<string>[] = [
 	{
 		label: "direct",
 		value: "direct",

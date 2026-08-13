@@ -11,6 +11,11 @@
  */
 
 import { ProviderRegistry } from "../core/registry/provider-registry.ts";
+import { CloudflaredNetwork } from "./network/cloudflared.ts";
+import { DirectNetwork } from "./network/direct.ts";
+import { NgrokNetwork } from "./network/ngrok.ts";
+import { PlayitNetwork } from "./network/playit.ts";
+import { TailscaleNetwork } from "./network/tailscale.ts";
 import { ForegroundRuntime } from "./runtime/foreground.ts";
 import { TmuxRuntime } from "./runtime/tmux.ts";
 import { FabricProvider } from "./server/fabric.ts";
@@ -36,6 +41,12 @@ export { QuiltProvider } from "./server/quilt.ts";
 export { VanillaProvider } from "./server/vanilla.ts";
 export { VelocityProvider } from "./server/velocity.ts";
 export { VersionNotFoundError } from "./server/mojang-meta.ts";
+export { CloudflaredNetwork } from "./network/cloudflared.ts";
+export { DirectNetwork } from "./network/direct.ts";
+export { NgrokNetwork } from "./network/ngrok.ts";
+export { PlayitNetwork } from "./network/playit.ts";
+export { TailscaleNetwork } from "./network/tailscale.ts";
+export { TunnelStartError } from "./network/agent.ts";
 
 /**
  * Build the registry of providers this build ships.
@@ -62,6 +73,14 @@ export function createProviderRegistry(): ProviderRegistry {
 			.registerServer(new VelocityProvider())
 			.registerRuntime(new ForegroundRuntime())
 			.registerRuntime(new TmuxRuntime())
+			// `direct` first and always: it is the default profile and the fallback
+			// every other network provider degrades to, so it must be registered
+			// whatever else is or is not available on this machine.
+			.registerNetwork(new DirectNetwork())
+			.registerNetwork(new CloudflaredNetwork())
+			.registerNetwork(new PlayitNetwork())
+			.registerNetwork(new NgrokNetwork())
+			.registerNetwork(new TailscaleNetwork())
 	);
 	// Phase 5: DockerRuntime.
 }

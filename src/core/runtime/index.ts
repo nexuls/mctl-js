@@ -35,6 +35,7 @@ import type {
 import type { EventBus } from "../events/bus.ts";
 import { publish } from "../events/log.ts";
 import { resolveJava } from "../java/index.ts";
+import type { NetworkManager } from "../network/index.ts";
 import type { ProviderRegistry } from "../registry/provider-registry.ts";
 import { withServerLock } from "../session/lock.ts";
 import { getServer } from "../server/discover.ts";
@@ -42,6 +43,13 @@ import { ServerOperationError } from "../server/manager.ts";
 import { launchInputs } from "./launch.ts";
 
 const logger = log("runtime");
+
+/**
+ * Port assumed when a runtime recorded none. Every runtime reads `server-port`
+ * from `server.properties` at start, so this is only reached for a server whose
+ * descriptor predates that — and Minecraft's own default is the right guess.
+ */
+const DEFAULT_PORT = 25565;
 
 /** Everything the manager needs, injected so it stays testable and UI-free. */
 export interface RuntimeManagerDeps {
@@ -53,6 +61,15 @@ export interface RuntimeManagerDeps {
 	providers: ProviderRegistry;
 	/** The process event bus. */
 	bus: EventBus;
+	/**
+	 * Networking, applied around a start/stop.
+	 *
+	 * Optional so a test (or a future headless caller) can drive the runtime with
+	 * no networking at all; absent means the server simply starts with no endpoint
+	 * recorded. It is always present in `core/context.ts`, which is what both
+	 * front-ends use.
+	 */
+	network?: NetworkManager;
 }
 
 /** Options for {@link RuntimeManager.start}. */
@@ -132,6 +149,11 @@ export class RuntimeManager {
 	 * @throws {ResourceBusyError} when another instance is starting it right now.
 	 * @throws {UnknownProviderError} for an unregistered `kind` or `runtime`.
 	 * @throws {JavaNotResolvedError} when no suitable Java can be found or fetched.
+	 *
+	 * Networking is applied **after** the process is up and is never allowed to
+	 * fail the start: a tunnel that will not come up degrades to direct, and even
+	 * that is caught here. A running server the user can reach on the LAN beats no
+	 * server at all (plan.md § Networking).
 	 */
 	async start(id: string, options: StartOptions = {}): Promise<RuntimeSession> {
 		const { paths, providers, bus } = this.#deps;
@@ -178,6 +200,7 @@ export class RuntimeManager {
 				id,
 				state: "running",
 			});
+			await this.#expose(server, session);
 			return session;
 		});
 	}
@@ -198,6 +221,11 @@ export class RuntimeManager {
 		await providers.runtime(server.runtime).stop(server, options);
 		logger.info({ id }, "stopped server");
 		await publish(bus, EventType.ServerStateChanged, { id, state: "stopped" });
+		// After the process is down, so an agent is never left forwarding to a port
+		// nothing is listening on. Never allowed to fail a stop.
+		await this.#deps.network?.teardown(server).catch((err: unknown) => {
+			logger.warn({ id, err: String(err) }, "network teardown failed");
+		});
 	}
 
 	/** Stop then start, re-resolving everything in between. */
@@ -234,6 +262,34 @@ export class RuntimeManager {
 	async status(id: string): Promise<ServerState> {
 		const server = await this.#require(id);
 		return this.#deps.providers.runtime(server.runtime).status(server);
+	}
+
+	/**
+	 * Expose a freshly started server through its network profile.
+	 *
+	 * Swallows everything: `NetworkManager.expose` already degrades to direct on
+	 * any provider problem, so an exception here means something unexpected went
+	 * wrong in MCTL itself — which is worth a log line and nothing more, because
+	 * the server is already running and unwinding it would be a worse outcome
+	 * than a missing join address.
+	 */
+	async #expose(server: Server, session: RuntimeSession): Promise<void> {
+		const network = this.#deps.network;
+		if (!network) return;
+		try {
+			const result = await network.expose(server, session.port ?? DEFAULT_PORT);
+			if (result.degradedReason) {
+				logger.warn(
+					{ id: server.id, reason: result.degradedReason },
+					"network profile degraded to direct",
+				);
+			}
+		} catch (err) {
+			logger.warn(
+				{ id: server.id, err: String(err) },
+				"could not expose server; it is running with no recorded endpoint",
+			);
+		}
 	}
 
 	/**

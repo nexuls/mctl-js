@@ -192,6 +192,9 @@ export function ServerDetail() {
 		if (!context) return;
 		setConfirmDelete(false);
 		try {
+			// Tear the networking down first: a `direct` endpoint descriptor outlives
+			// a stop, and one left behind would keep describing a server that is gone.
+			if (server) await context.network.teardown(server);
 			await context.servers.deleteServer(id);
 			toast.success(`Removed ${id}`, {
 				description: "Its directory and worlds were left untouched.",

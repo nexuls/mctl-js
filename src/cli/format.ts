@@ -83,7 +83,7 @@ function formatJava(server: Server): string {
 }
 
 /** Render headered rows as a space-aligned table (columns sized to content). */
-function renderTable(headers: string[], rows: string[][]): string {
+export function renderTable(headers: string[], rows: string[][]): string {
 	const widths = headers.map((h, col) =>
 		Math.max(h.length, ...rows.map((r) => (r[col] ?? "").length)),
 	);

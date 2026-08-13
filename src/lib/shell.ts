@@ -3,14 +3,19 @@
  * on `$PATH`.
  *
  * Leaf helper (`lib/`) — UI-free, provider-free, server-free. It knows nothing
- * about Minecraft, Java, or runtimes; it spawns and reports. Long-lived,
- * *supervised* processes (a server, a tunnel) are **not** this module's job —
- * those belong to a runtime/network provider, which needs the handle itself.
+ * about Minecraft, Java, or runtimes; it spawns and reports. *Supervising* a
+ * long-lived process (deciding it died, restarting it, reading its address out
+ * of its output) is **not** this module's job — that belongs to a runtime or
+ * network provider. Launching one so it outlives this process is, because that
+ * is pure process mechanics with no domain in it: see {@link spawnDetached}.
  *
- * Everything here is short-lived and fully buffered, which is only safe because
- * the callers (`java -version`, `tar -xzf`) produce a few kilobytes at most.
+ * {@link run} is fully buffered, which is only safe because its callers
+ * (`java -version`, `tar -xzf`, `tmux has-session`) produce a few kilobytes at
+ * most.
  */
 
+import { spawn } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { log } from "./logger.ts";
 
 const logger = log("shell");
@@ -103,6 +108,77 @@ export async function run(
 		return { code, stdout, stderr };
 	} finally {
 		if (timer !== undefined) clearTimeout(timer);
+	}
+}
+
+/** Options for {@link spawnDetached}. */
+export interface SpawnDetachedOptions {
+	/** Working directory for the child. */
+	cwd?: string;
+	/** Extra environment variables, merged over `process.env`. */
+	env?: Record<string, string>;
+	/**
+	 * File both stdout and stderr are **appended** to. Opened here and closed in
+	 * this process immediately after the spawn — the child keeps its own
+	 * duplicated descriptor, which is what lets it keep writing after MCTL exits.
+	 */
+	logFile: string;
+}
+
+/**
+ * Start a process that **outlives this one**, with its output appended to a file.
+ *
+ * Three mechanics make that true and all three are required:
+ *
+ *  - `detached: true` puts the child in its own process group, so a Ctrl-C in
+ *    the terminal running MCTL (which signals the whole foreground group) does
+ *    not take the tunnel down with it.
+ *  - `unref()` removes it from this process's event loop, so MCTL can exit
+ *    without waiting on a child that is meant to run for days.
+ *  - stdout/stderr are a **file descriptor**, not a pipe. A pipe dies with the
+ *    parent, and its far end is unreadable from any other instance — whereas an
+ *    appended file is exactly the same no-IPC channel `events.jsonl` and the
+ *    console capture already use, so another `mctl` can read why an agent failed.
+ *
+ * `node:child_process` is used rather than `Bun.spawn` because Bun's spawn has
+ * no detach option; the child is not awaited or held in any way here.
+ *
+ * @returns the child's pid.
+ * @throws {CommandError} when the binary cannot be spawned or the log file
+ *   cannot be opened.
+ */
+export function spawnDetached(
+	command: string,
+	args: string[],
+	options: SpawnDetachedOptions,
+): number {
+	let fd: number;
+	try {
+		fd = openSync(options.logFile, "a");
+	} catch (err) {
+		throw new CommandError(command, `cannot open log file: ${String(err)}`);
+	}
+	try {
+		const child = spawn(command, args, {
+			cwd: options.cwd,
+			env: options.env ? { ...process.env, ...options.env } : process.env,
+			detached: true,
+			stdio: ["ignore", fd, fd],
+		});
+		if (child.pid === undefined) {
+			throw new CommandError(command, "spawned without a pid");
+		}
+		child.unref();
+		logger.debug({ command, args, pid: child.pid }, "spawned detached process");
+		return child.pid;
+	} catch (err) {
+		if (err instanceof CommandError) throw err;
+		throw new CommandError(command, `failed to spawn: ${String(err)}`);
+	} finally {
+		// The child duplicated the descriptor at spawn time; this process has no
+		// further use for it and leaking one per tunnel would be a slow fd leak in
+		// a long-lived TUI.
+		closeSync(fd);
 	}
 }
 

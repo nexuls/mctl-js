@@ -29,7 +29,6 @@ import type {
 	CompressionKind,
 	Config,
 	IconMode,
-	NetworkProvider,
 	RuntimeKind,
 	ServerKind,
 } from "../../types/config.ts";
@@ -72,8 +71,12 @@ export interface SettingsDraft {
 	/** Archive compression format. */
 	compression: CompressionKind;
 
-	/** Default network profile for new servers. */
-	network: NetworkProvider;
+	/**
+	 * Default network profile for new servers — a **profile name** from
+	 * `config.network.profiles`, not a provider id. They coincide only because the
+	 * stock profile is called `direct`.
+	 */
+	network: string;
 }
 
 /**

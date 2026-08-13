@@ -13,7 +13,11 @@
  * a server was created by a build of MCTL that knows a kind this one does not.
  */
 
-import type { RuntimeProvider, ServerProvider } from "../../types/provider.ts";
+import type {
+	NetworkProvider,
+	RuntimeProvider,
+	ServerProvider,
+} from "../../types/provider.ts";
 
 /**
  * Thrown when a server names a provider this build does not have. Carries the
@@ -46,6 +50,7 @@ export class UnknownProviderError extends Error {
 export class ProviderRegistry {
 	readonly #servers = new Map<string, ServerProvider>();
 	readonly #runtimes = new Map<string, RuntimeProvider>();
+	readonly #networks = new Map<string, NetworkProvider>();
 
 	/** Register a server-kind provider. Re-registering an id replaces it. */
 	registerServer(provider: ServerProvider): this {
@@ -56,6 +61,18 @@ export class ProviderRegistry {
 	/** Register a runtime provider. Re-registering an id replaces it. */
 	registerRuntime(provider: RuntimeProvider): this {
 		this.#runtimes.set(provider.id, provider);
+		return this;
+	}
+
+	/**
+	 * Register a network provider. Re-registering an id replaces it.
+	 *
+	 * Unlike `kind` and `runtime`, the id here is the `provider` field of a
+	 * *network profile* in `config.json`, not a value in `mctl.json` — a server
+	 * records a profile **name**, and the profile chooses the provider.
+	 */
+	registerNetwork(provider: NetworkProvider): this {
+		this.#networks.set(provider.id, provider);
 		return this;
 	}
 
@@ -83,6 +100,18 @@ export class ProviderRegistry {
 		return provider;
 	}
 
+	/**
+	 * Resolve a network provider by a profile's `provider` id.
+	 * @throws {UnknownProviderError} when no provider claims that id.
+	 */
+	network(id: string): NetworkProvider {
+		const provider = this.#networks.get(id);
+		if (!provider) {
+			throw new UnknownProviderError("network", id, this.networkIds());
+		}
+		return provider;
+	}
+
 	/** Every registered server provider, registration order. */
 	servers(): ServerProvider[] {
 		return [...this.#servers.values()];
@@ -101,5 +130,15 @@ export class ProviderRegistry {
 	/** Ids of every registered runtime provider. */
 	runtimeIds(): string[] {
 		return [...this.#runtimes.keys()];
+	}
+
+	/** Every registered network provider, registration order. */
+	networks(): NetworkProvider[] {
+		return [...this.#networks.values()];
+	}
+
+	/** Ids of every registered network provider — what a UI offers as a profile provider. */
+	networkIds(): string[] {
+		return [...this.#networks.keys()];
 	}
 }

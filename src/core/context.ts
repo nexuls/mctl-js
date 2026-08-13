@@ -22,6 +22,7 @@ import type { Config } from "../types/config.ts";
 import { loadConfig, resolveRootPaths } from "./config/index.ts";
 import { EventBus } from "./events/bus.ts";
 import { JobScheduler } from "./jobs/index.ts";
+import { NetworkManager } from "./network/index.ts";
 import type { ProviderRegistry } from "./registry/provider-registry.ts";
 import { RuntimeManager } from "./runtime/index.ts";
 import { ServerManager } from "./server/manager.ts";
@@ -42,6 +43,8 @@ export interface MctlContext {
 	servers: ServerManager;
 	/** Start / stop / restart / stream servers. */
 	runtime: RuntimeManager;
+	/** Expose servers: profiles, provider readiness, tunnels, DNS. */
+	network: NetworkManager;
 }
 
 /**
@@ -62,6 +65,7 @@ export async function createContext(
 	const config = await loadConfig();
 	const paths = resolveRootPaths(config);
 	const jobs = new JobScheduler(bus);
+	const network = new NetworkManager({ config, providers, bus });
 
 	return {
 		config,
@@ -69,7 +73,11 @@ export async function createContext(
 		providers,
 		bus,
 		jobs,
+		network,
 		servers: new ServerManager({ config, paths, providers, bus, jobs }),
-		runtime: new RuntimeManager({ config, paths, providers, bus }),
+		// The runtime holds the network manager rather than the other way round:
+		// exposing a server is something that happens *because* it started, and a
+		// front-end that starts a server should not have to remember step two.
+		runtime: new RuntimeManager({ config, paths, providers, bus, network }),
 	};
 }

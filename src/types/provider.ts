@@ -7,9 +7,9 @@
  * No I/O, no UI. Interfaces only — this file must never import a concrete
  * provider, or the dependency arrow reverses.
  *
- * Phase 2 defines `ServerProvider` and `RuntimeProvider`. `BackupProvider` and
- * `NetworkProvider` arrive with their phases (4) — writing them now would be
- * designing against imaginary implementations.
+ * Phase 2 defines `ServerProvider` and `RuntimeProvider`; Phase 4 adds
+ * `NetworkProvider`. `BackupProvider` arrives with the backup subsystem —
+ * writing it now would be designing against imaginary implementations.
  */
 
 import type {
@@ -20,6 +20,13 @@ import type {
 	VersionInfo,
 } from "./install.ts";
 import type { JavaRequirement } from "./java.ts";
+import type {
+	Endpoint,
+	ExposeRequest,
+	NetStatus,
+	Readiness,
+	RequiredBinary,
+} from "./network.ts";
 import type { RuntimeSession, Server, ServerState } from "./server.ts";
 
 /** Common shape of every registered provider: a stable id and a display name. */
@@ -153,4 +160,67 @@ export interface RuntimeProvider extends Provider {
 
 	/** Re-identify the server's state from its descriptor plus a liveness probe. */
 	status(server: Server): Promise<ServerState>;
+}
+
+/**
+ * A way of making a server reachable: `direct` (report the addresses this
+ * machine already has) or a tunnel agent (`cloudflared`, `playit`, `ngrok`,
+ * `tailscale`).
+ *
+ * **Deviations from plan.md § Networking, both deliberate:**
+ *  - `expose` takes an {@link ExposeRequest} rather than `(server, port)`. A
+ *    provider needs its profile options and its secrets, and neither belongs on
+ *    the `Server` view model — `mctl.json` names a *profile*, and the profile's
+ *    contents live in `config.json` while its credentials live in
+ *    `secrets.json`. Passing a resolved request keeps providers off both files.
+ *  - `status` takes the server id rather than the `Server`, because it must be
+ *    answerable for a server that is not running (that is precisely when "is
+ *    there a stale tunnel?" matters).
+ *
+ * Every implementation must hold to two rules that come from the plan:
+ *  - **Never download the binary.** {@link requires} declares it,
+ *    {@link preflight} reports its absence, and `NetworkManager` degrades to
+ *    direct rather than failing a server's start.
+ *  - **Never log or return a secret.** Tokens arrive in `ExposeRequest.secrets`,
+ *    go into the child's environment, and appear nowhere else.
+ */
+export interface NetworkProvider extends Provider {
+	/** External binaries this provider needs, with install hints. `[]` for `direct`. */
+	requires(): RequiredBinary[];
+
+	/**
+	 * Can this provider be used right now? Checks the binary is on `$PATH` and,
+	 * where the agent can be asked cheaply, that it is authenticated.
+	 *
+	 * Never throws: an unusable provider is a {@link Readiness} value, because
+	 * "cloudflared is not installed" is a normal state of the world that the UI
+	 * shows in a row, not an exception that aborts a page.
+	 */
+	preflight(secrets?: Readonly<Record<string, string>>): Promise<Readiness>;
+
+	/**
+	 * Make the server reachable and return the endpoint players should use.
+	 *
+	 * Providers that own an agent process spawn it **detached** and write
+	 * `~/.local/state/mctl/network/<id>.json`, so any later instance can find and
+	 * stop it — the same no-IPC mechanism the detached runtimes use.
+	 *
+	 * @throws {Error} when the agent could not be started or announced no address
+	 *   within its timeout. `NetworkManager` catches this and degrades to direct.
+	 */
+	expose(request: ExposeRequest): Promise<Endpoint>;
+
+	/**
+	 * Tear down whatever `expose` created and remove the descriptor. A no-op when
+	 * nothing is up — `mctl stop` in a teardown script must be safe to run twice.
+	 */
+	teardown(serverId: string): Promise<void>;
+
+	/**
+	 * Re-derive this server's networking state from the descriptor plus a
+	 * liveness probe. Returns `undefined` when this provider has nothing recorded
+	 * for the server, which `NetworkManager` renders as `down`/`inactive`
+	 * depending on whether the server is running.
+	 */
+	status(serverId: string): Promise<NetStatus | undefined>;
 }
