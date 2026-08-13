@@ -14,6 +14,42 @@ list — the first six entries are the most recent, the rest run oldest-first be
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
 
+- **Hand-made UI passes by the user (2026-08-03 → 2026-08-13).** A dozen commits the artifacts never
+  recorded, because they were the user's own work between agent sessions. They are *decisions*, not
+  drift — do not revert them while "restoring" something an older entry below describes.
+  - **`components/Table.tsx` — a row is now a bordered card, not a line** (`f442c93`, on top of
+    `9a40104`): every row is a `rounded`-bordered box whose border turns `primary` when selected, the
+    header keeps its bottom border **only when the table is empty**, header ink moved from `secondary`
+    to `primary`, cells gained `paddingX`, and the measured outer width is now `measured - 3` to pay
+    for the row borders. That subtraction is a hand-tuned constant: `layoutColumns` is still tested
+    (never-overflow at every width), but the `-3` itself is not.
+  - **`components/Form.tsx` — `FormFieldProps` became `BoxProps & {…}`** with `...rest` passthrough,
+    plus `prefix` / `suffix` / `noBorder` (`d9cae5e`), which is what lets a control be embedded
+    chromeless (the console command line). `Select`'s tab layout now sizes `tabWidth` from the longest
+    option label (`ea5e24b`).
+  - **Colours** (`a71d9c7`): the terminal theme's `border` is derived at `alpha(…, 0.6)` and the
+    NavRail / Tabs rules moved `0.6 → 0.8`; Nord's `muted` was lightened `#4c566a → #708abd` because
+    nord3 was unreadable as body text. `src/lib/colors.ts` is the helper behind all of it.
+  - **Dashboard** (`c233a97`, superseding the "uncommitted tweak" this file used to note): the
+    expanded row dropped its left border and `marginLeft` for `paddingLeft={3}` over the tinted
+    background.
+  - **Server page**: identity row and action bar share one `space-between` row with a bottom border so
+    the lifecycle buttons stay on one line (`29aa06b`); horizontal padding moved off the tab container
+    into `Columns` (`paddingX` prop) so the console and table tabs own their own edges (`b9333c5`);
+    the tab *description* line under the tab bar is gone and `players` joined `TAB_OWNS_SCROLL`
+    (`ce8c680`).
+  - **Players**: `CARD_MIN_WIDTH_WITH_HEAD` 36 → **52** (`4c0e56a`) — the head plus the six-row
+    wireframe never fit 36 in practice, so the entry below describing 36 is history. The action menu
+    is a wrapping **row** of `medium`/`outline` buttons instead of a left-aligned column of small
+    ghosts (`de6fb7a`).
+  - **The nerd meter glyphs are deliberately two cells** (`4c0e56a`): `heartFull`/`heartEmpty` carry a
+    trailing space and `foodFull`/`foodEmpty` moved to `\u{f141f}`/`\u{f1420}`. This settles the open
+    question below — `core/icons/detect.test.ts`'s single-cell assertion is what is now wrong, and the
+    fix is to add these four to the test's `exempt` set, not to narrow the glyphs.
+  - **`Hint`** gained `flexShrink={0}` (`5252344`); pages gained `paddingX={1}` (`2dc1c76`);
+    `RouterProvider` accepts initial `params` (`315089e`) — which is what made the temporary
+    "boot straight into a server" shortcut possible, since reverted (`ea5e24b`).
+
 - **Phase 4a — networking (2026-08-13).** Roadmap bullets 1 and 2 of Phase 4 are done; bullet 3
   (backups, supervision) is **not started** — see *Next up*.
   - **Types.** `types/network.ts` (new): `RequiredBinary`, `Readiness` (a tagged union, because
