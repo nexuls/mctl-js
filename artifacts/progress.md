@@ -9,7 +9,12 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
 
 ## Done
 
-- **Phase 4a — networking (this session).** Roadmap bullets 1 and 2 of Phase 4 are done; bullet 3
+Every entry is dated. Dates are the date of the commit that landed the work, not the order of this
+list — the first six entries are the most recent, the rest run oldest-first below them. "user request"
+/ "user report" marks work the user asked for mid-session; entries with neither were driven by the
+roadmap in `plan.md`.
+
+- **Phase 4a — networking (2026-08-13).** Roadmap bullets 1 and 2 of Phase 4 are done; bullet 3
   (backups, supervision) is **not started** — see *Next up*.
   - **Types.** `types/network.ts` (new): `RequiredBinary`, `Readiness` (a tagged union, because
     "missing binary" wants an install command and "logged out" wants a login command),
@@ -77,7 +82,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     **324 pass / 1 pre-existing fail** (`nerd.heartFull`, see memory.md); `bunx tsc --noEmit` clean;
     verified in a tmux pty against the user's real NeoForge capture.
 
-- **Phase 3 — loaders, installers, runtimes (this session).** All four roadmap bullets landed.
+- **Phase 3 — loaders, installers, runtimes (2026-08-12).** All four roadmap bullets landed.
   - **Types.** `InstallStrategy` gained `loaderJar` (a meta service's pre-built launcher) and
     `installer` (download a program, run it); `LaunchSpec` gained `argFile` and `script` and became a
     **Zod schema**, because a launch spec is now *persisted* — `MctlJson.launch` records the one the
@@ -117,7 +122,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     left `xec …: command not found`); a Java **pin** was triggering resolution at create time; and
     Quilt's meta service publishes a **wrong SHA-256** (see `memory.md`).
 
-- **App-wide keyboard pass (this session, user request).** "Tab cycle is not properly done
+- **App-wide keyboard pass (2026-08-12, user request).** "Tab cycle is not properly done
   everywhere. Focused areas are not well highlighted (Tabs). Disabled buttons are also acquiring
   tabs."
   - **`src/hooks/use-focus-ring.ts`** — members are now `FocusItem = string | {id, disabled?}` and the
@@ -159,7 +164,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     health/food meters are 20 cells wide in `nerd` mode. Fails on `master` too; left for the user to
     decide, since the space may be deliberate.
 
-- **Player card redesigned to a wireframe (this session, user request).** Six interior rows: the
+- **Player card redesigned to a wireframe (2026-08-12, user request).** Six interior rows: the
   4-row head beside `name ● status` / `<playtime> Played` / `Last Position: Overworld(x, y, z)` /
   `<GameMode> n Kills n Deaths`, then full-width `Health:` and `Food:` meters — ten game-style
   icons each with the exact percentage at the right edge. Standing (`OP`/`WL`/`SHADOW`) moved to
@@ -183,7 +188,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - **Not verified:** the tab has not been driven in a real pty since the redesign — the card is
     checked frame-by-frame in tests, the *grid* around it is unchanged code.
 
-- **Player heads are real skins (this session, user request).** "Fetch the head from the API, prefer
+- **Player heads are real skins (2026-08-08, user request).** "Fetch the head from the API, prefer
   8×8, convert it to the Head Skin type, then render it. Official Minecraft first, then TLauncher,
   then Ely.by; fall back to the defaults."
   - **`src/lib/png.ts`** — a hand-rolled, read-only PNG decoder (inflate → unfilter → expand to
@@ -220,7 +225,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
 - Repo scaffolded from `create-tui`: Bun + `@opentui/core` + `@opentui/react` + React 19.
 - `opentui` skill available and vendored under `.claude/skills/opentui/`.
 - Planning artifacts written for the TypeScript/OpenTUI stack (plan/architecture/memory/AGENTS).
-- **Phase 1 foundation groundwork (this session):**
+- **Phase 1 foundation groundwork (2026-07-25):**
   - Deps added: `zod` (4.x), `eventemitter3`, `pino` (+ `pino-pretty` dev). `typecheck` script added.
   - `src/lib/paths.ts` — XDG + `$ROOT` resolution. Config/cache/state path helpers (known before
     config loads) + `rootPaths(root, overrides)` for data dirs. **All path building goes through here.**
@@ -241,7 +246,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - Verified: `tsc --noEmit` clean; CLI dispatch paths exercised; a runtime smoke test round-tripped
     config write/reload, first-run detection, 0600 secrets + env override, and the full dir tree.
 
-- **Theming — light/dark schemes (this session):**
+- **Theming — light/dark schemes (2026-07-25):**
   - `Theme.colors`/`ThemeFile.colors` is now a `ThemeColorScheme` = `{ default }` **or** `{ dark, light }`.
     Removed `appearance` from `Theme`/`ThemeSummary`/`ThemeFile`. `resolveColors(scheme, mode)` added.
   - Built-ins `github` + `nord` ship both light and dark palettes. Terminal theme is a `{ default }`.
@@ -250,7 +255,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - Verified: `tsc --noEmit` clean; headless smoke (both builtins differ light vs dark; terminal default
     resolves identically both modes; appearance light/dark from bg luminance).
 
-- **Theming system (earlier this session):**
+- **Theming system (2026-07-25, earlier the same day):**
   - `src/types/theme.ts` — Zod `ThemeFile`/`ThemeColors` (11 semantic roles, hex-only) + `Theme`,
     `ThemeSummary`, neutral `TerminalPalette` types.
   - `src/core/theme/` — `builtin.ts` (GitHub Dark + Nord, `FALLBACK_THEME`), `terminal.ts`
@@ -266,7 +271,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - Verified: `tsc --noEmit` clean; headless smoke test (registry list/get, custom+reserved+broken
     files, terminal mapping + null fallbacks, config default/override); TUI mounts and renders themed.
 
-- **Component library — shared UI kit (this session):**
+- **Component library — shared UI kit (2026-07-25):**
   - `src/components/` now holds the full primitive set, all pure-UI (no I/O), theme-driven
     via `useTheme().colors`, and controlled (value + onChange + `focused`):
     - `support.ts` — `Variant`/`SemanticColor` types, `variantColor`/`onAccent`, `clamp`,
@@ -288,14 +293,14 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
       `App.tsx` (replaced the MinecraftHead placeholder demo).
   - Verified: `tsc --noEmit` clean; `bun run src/index.tsx` mounts and renders the gallery
     (breadcrumb/tabs/buttons/form frames all draw; terminal theme active).
-  - **Mouse focus (this session):** every focusable control gained an `onFocused?: () => void` prop,
+  - **Mouse focus (2026-07-25):** every focusable control gained an `onFocused?: () => void` prop,
     fired on mouse-down so a click moves the page's focus ring to it (`Button`, `Tabs`, `Input`,
     `TextArea`, `Select`, `Toggle`, `Checkbox`, `RadioGroup`). Form controls forward it to `FormField`,
     which owns the `onMouseDown` on its frame (clicks bubble). `Button` fires `onFocused` then `onClick`.
     Gallery wires each ring member's `onFocused → setFocus(id)`. `tsc --noEmit` clean. See `memory.md`
     § Component library for the convention.
 
-- **First-run setup wizard + `mctl init` (this session):**
+- **First-run setup wizard + `mctl init` (2026-07-26):**
   - `src/lib/format.ts` — `formatBytes` (binary units). `src/lib/fs.ts` — `diskFree(path)` →
     `{free,total}` via `statfs`, walking up to the nearest existing ancestor (root may not exist yet).
   - `src/hooks/use-focus-ring.ts` — reusable `useFocusRing(ids)`: tracks the focused id, Tab/Shift-Tab
@@ -328,7 +333,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     0600, full dir tree, re-run refused, bad flag → exit 1, `--help`/`--json`); TUI under a pty renders
     the Welcome screen and Enter→step-1 with no runtime errors.
 
-- **Phase 1 completion — registry, session, events, CLI, router (this session):**
+- **Phase 1 completion — registry, session, events, CLI, router (2026-07-26):**
   - `src/types/server.ts` — `MctlJson` (`z.looseObject`, future-key safe), `ServerRegistryFile`/
     `ServerRegistryEntry`, `RuntimeSession`, `ServerState` enum, `JavaPin`, and the `Server` view model
     (plain TS interface — `state`/`available` are derived, not stored).
@@ -361,7 +366,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     foreign-event-tailed); TUI mounts under a pty (router + Servers nav + quit, no stderr) and the
     first-run wizard still mounts with no config.
 
-- **Box border clipping fix (this session):**
+- **Box border clipping fix (2026-07-26):**
   - `src/components/box-clip-patch.ts` — `installBoxClipPatch()` works around an upstream
     `@opentui/core` 0.4.5 bug where the native `bufferDrawBox` ignores the scissor stack, so bordered
     boxes inside a `<scrollbox>` painted their borders over the top bar / nav rail / hint strip when
@@ -376,7 +381,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - Verified: `tsc --noEmit` clean; `bun test` 2/2; real app under a pty at 14×80 — Settings scrolled
     with the mouse wheel leaks a stray `│` into the hint strip without the patch, clean with it.
 
-- **NavRail redesign — horizontal tab bar (this session):**
+- **NavRail redesign — horizontal tab bar (2026-07-27):**
   - `src/app/NavRail.tsx` rewritten to match a user-supplied reference: a row of tabs where the active
     route is a filled primary pill (on-accent bold ink) and the rest are muted text with a faint hover
     wash; digit shortcuts stay as a DIM prefix. Local `NavTab` component owns hover state (a `Button`
@@ -394,7 +399,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     replayed — active pill emits a real background SGR, rule and border titles draw, tabs scroll rather
     than wrap when narrow.
 
-- **Phase 1 tail — Settings, key gating, log rotation, watcher fix (this session):**
+- **Phase 1 tail — Settings, key gating, log rotation, watcher fix (2026-07-27):**
   - `src/hooks/use-input-capture.tsx` — `InputCaptureProvider` + `useCaptureKeys(active)` +
     `useKeysCaptured()` / `useIsCapturing()`. A counted capture; `isCaptured` is a getter because a
     `useKeyboard` handler closes over its render. Mounted inside `RouterProvider` in `Router.tsx`.
@@ -425,7 +430,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     quitting, Ctrl+S writes `config.json` (schedule/retention and the extra network profile preserved)
     and the header flips to "saved" via the watcher's `ConfigChanged`.
 
-- **Theme reactivity fix (this session):**
+- **Theme reactivity fix (2026-07-31):**
   - `src/hooks/use-theme.tsx` — new `subscribeThemeId` prop (mirror of `onThemeChange`): a bridge for
     theme ids changed outside the provider. Its effect updates local state only, never re-persists.
   - `src/app/App.tsx` — `themeIdSubscriber(bus)` built once in `renderApp()` and passed in: on
@@ -438,7 +443,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   - **Known gap:** the theme *catalogue* (`ThemeRegistry`) is still loaded once at startup — adding or
     editing `~/.config/mctl/themes/*.json` needs a restart.
 
-- **Settings regrouped into tabs with a pinned action bar (this session):**
+- **Settings regrouped into tabs with a pinned action bar (2026-07-31):**
   - `src/app/Router.tsx` — added `OWN_SCROLL` (a `ReadonlySet<RouteId>`, currently `{settings}`):
     those routes render in a plain padded box instead of the shell's `<scrollbox>`, so a page can
     pin its own chrome and own its scrolling. Every other route is unchanged.
@@ -462,7 +467,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     flags `Defaults !` from another tab, toggling EULA + Ctrl+S writes `eula: true` and the header
     flips to "saved", and Dashboard (the scrollbox path) still renders.
 
-- **Toast notifications (this session):**
+- **Toast notifications (2026-07-31):**
   - `src/components/Toast.tsx` — pure UI: `ToastCard` (variant-tinted bordered card: icon or
     spinner, bold title, wrapped description, optional action chip with a keycap, optional
     time-to-live meter) and `ToastViewport` (an absolutely-positioned, **content-sized** stack for
@@ -490,7 +495,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     app under a pty in a sandbox HOME — toggling a Settings field and pressing Ctrl+S wrote
     `config.json` and painted the "Settings saved / Written to …" toast, no errors.
 
-- **ProgressBar styles & variations (this session):**
+- **ProgressBar styles & variations (2026-07-31):**
   - `src/components/ProgressBar.tsx` rewritten around a glyph table: eight track styles
     (`blocks | smooth | shaded | line | smooth-line | dots | segments | ascii`, `PROGRESS_STYLES`;
     `smooth-line` steps the thin rule in halves via `╸`), `value` + `max`
@@ -509,7 +514,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     `createTestRenderer` and read back from `captureCharFrame()` (the preview script was temporary and
     is deleted). No existing caller changed — Toast's TTL meter still passes `value`/`width`/`variant`.
 
-- **`Select` width measurement fixed (this session):**
+- **`Select` width measurement fixed (2026-07-31):**
   - `src/components/Form.tsx` — the adaptive `Select` never measured itself: the `ref` it watched was
     attached only in the *tabs* branch, which the initial `w = 0` never selects, so a flex-sized
     (`width="100%"`/`"auto"`) Select was permanently a dropdown. It also listened for the wrong thing
@@ -522,7 +527,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     outer widths 60 and 30 — 60 ⇒ tabs, 30 ⇒ dropdown, for both a fixed-width and a flex-sized field.
     Non-vacuous: with the fix stashed, the flex-sized field at width 60 still rendered as a dropdown.
 
-- **`ScrollBox` wrapper + shell scroll acceleration (this session):**
+- **`ScrollBox` wrapper + shell scroll acceleration (2026-08-01):**
   - `src/components/ScrollBox.tsx` (+ barrel export) — a pass-through wrapper around the
     `<scrollbox>` intrinsic: every prop and the `ref` are forwarded untouched, and it adds one prop,
     `enableAccel`, which supplies a stable `MacOSScrollAccel`. **Every `<scrollbox>` in `src/` was
@@ -537,7 +542,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     HOMEs — the first-run wizard's welcome renders, and with a config the NavRail bar, Servers, and
     Settings (its `Tabs` strip + scrolling panel) all draw with no errors.
 
-- **Icon sets — Nerd / Unicode / ASCII (this session):**
+- **Icon sets — Nerd / Unicode / ASCII (2026-08-03):**
   - `src/types/icons.ts` — `IconSet` (`nerd | unicode | ascii`), `ICON_SETS`, the `IconName` union
     (~40 semantic names: status, server state, selection controls, stepper, chrome, arrows, rules,
     domain), `IconMap`.
@@ -581,7 +586,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     The wiring type-checks and the persist path is shared with the theme picker, but *picking a
     mode in the UI and seeing it written* is unconfirmed. Do this first next session.
 
-- **Phase 2 — server lifecycle (this session):** all four roadmap bullets landed.
+- **Phase 2 — server lifecycle (2026-08-03):** all four roadmap bullets landed.
   - **Types:** `types/install.ts` (`InstallStrategy` — `directJar` today, tagged for Phase 3;
     `LaunchSpec`; `VersionInfo`/`LoaderVersion`/`InstallRequest`), `types/java.ts`
     (`JavaRequirement`, `JavaInstallation`, `LTS_MAJORS = [25,21,17,11,8]`), `types/provider.ts`
@@ -648,7 +653,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
   ignores drag. Verified at runtime against the real catalogue: `text` → `false` by default, `true`
   with the prop, `false` with `selectable={false}`; `box`/`input` unaffected. `bunx tsc --noEmit` clean.
 
-- **Dashboard absorbed the Servers screen (this session, user request).**
+- **Dashboard absorbed the Servers screen (2026-08-03, user request).**
   - `src/app/Dashboard/index.tsx` rewritten: summary tiles → column header → server rows, with the
     **selected row expanding in place** (name/loader/java/memory/network/path + pid/port/startedAt when
     running, and an `Enter/c/n` hint). Keeps the old list's keyboard (↑/↓ or j/k, Enter open, `c`
@@ -686,7 +691,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     The real app driven under a pty at 100×30 in a sandbox `$HOME` renders the rail, tiles and table
     with no stderr.
 
-- **Server inspection + a responsive Table; richer Dashboard and Server pages (this session, user
+- **Server inspection + a responsive Table; richer Dashboard and Server pages (2026-08-03, user
   request).** "Make the table look good (full width), make it responsive, add more columns and info."
   - **New core read path — `src/core/server/inspect.ts`** (read-only twin of `discover.ts`):
     `inspectServer(server)` (cheap tier: `server.properties`, roster JSONs, `mods/`+`plugins/` jar
@@ -738,7 +743,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     world vs total size, the full rules panel, columns dropping in priority order as the terminal
     narrowed, and header/row alignment holding once the scrollbar appeared.
 
-- **Server page became a tabbed multi-screen page (this session, user request).** "Start with the
+- **Server page became a tabbed multi-screen page (2026-08-07, user request).** "Start with the
   scaffolding and implement the basics now."
   - `src/app/Server/tabs.ts` — the tab model (`ServerTabId`, `SERVER_TABS` with label + description,
     `DEFAULT_SERVER_TAB`, `serverTab`, `isServerTabId`).
@@ -766,7 +771,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     (99% of 8 cores), RSS against the 4G heap, threads, a 3 h uptime and the session min/avg/peak
     summary, with the action bar flipping to Stop/Restart. No stderr in any run.
 
-- **Global hint provider — one strip for the whole app (this session, user request).** "The hints are
+- **Global hint provider — one strip for the whole app (2026-08-07, user request).** "The hints are
   showing in two places. Create a provider to update the global hints rendered from `Router.tsx`."
   - `src/hooks/use-hints.tsx` — `HintProvider` + `useHints(items, {scope, active})` +
     `useHintItems()` + the pure, exported `composeHints`. Scopes `context`/`page`/`global`, merge by
@@ -791,7 +796,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     replacing `Esc back` on the create form, and the character shortcuts disappearing the moment a
     text field or the console command line takes the capture. No stderr in any run.
 
-- **The `console` route removed (this session, user request).** "We should only be able to see the
+- **The `console` route removed (2026-08-08, user request).** "We should only be able to see the
   console from inside the server page."
   - `app/routes.ts` — `console` dropped from `RouteId`; `RouteParams.serverId` now serves `server`
     alone. `app/Router.tsx` — the `Console` import, the `Page` case, the `OWN_SCROLL` entry and the
@@ -803,7 +808,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     depth, so only `Server/tabs/Console.tsx`'s import specifier changed.
   - Verified: `bunx tsc --noEmit` clean; `bun test` 189/189; `bun run format` clean.
 
-- **The Players tab became a real screen (this session, user request).** "Display all players
+- **The Players tab became a real screen (2026-08-08, user request).** "Display all players
   together in list or grid format, online first then offline, banned below; add ban / kick / shadow
   ban / teleport / feed / kill; show every worthwhile stat; a random head per player, hidden on
   small screens; responsive and modern."
@@ -842,7 +847,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     kick failed with the foreground runtime's real `SessionNotOwnedError`. Killing the fake server
     moved every player to Offline with the "not answering a status ping yet" note.
 
-- **Player cards are fitted to the row, not fixed-width (this session, user request).** "Instead of
+- **Player cards are fitted to the row, not fixed-width (2026-08-08, user request).** "Instead of
   using fixed width, calculate to fit. Like if 2 column, make the width 50% and so on."
   - `app/Server/tabs/Players.tsx` — `CARD_WIDTH_WITH_HEAD`/`CARD_WIDTH_PLAIN` replaced by
     `CARD_MIN_WIDTH_WITH_HEAD` (36, nine less without a head) plus the pure `fitCards(available,
@@ -858,7 +863,7 @@ _Last updated: 2026-08-13 (Phase 4a — networking)_
     ban) — 3 columns of 43 filling all 131 available cells at 140, 3 at 100, 2 at 84 and 83 (where
     the heads drop), 2 at 70, 1 at 60, with no card overflowing or wrapping at any width.
 
-- **Fix: the Players tab showed no player data on a Minecraft 26.x server (this session, user
+- **Fix: the Players tab showed no player data on a Minecraft 26.x server (2026-08-08, user
   report).** Every card read `seen —` / `— played` / `no player data`.
   - **Cause:** Minecraft **26.1** regrouped the world's per-player directories under `players/` —
     `<world>/playerdata` → `<world>/players/data`, `<world>/stats` → `<world>/players/stats`
@@ -919,7 +924,7 @@ Carried over from Phase 3, deliberately not done:
 
 ## Known gaps / carried forward
 
-- **Phase 4a gaps, new this session:**
+- **Phase 4a gaps (2026-08-13):**
   - **No tunnel keepalive.** An agent that dies takes the tunnel with it and nothing brings it back;
     `mctl network status` reports `down` and `mctl network up <id>` restores it by hand. Keepalive
     needs the supervisor lock, which is the operations half of Phase 4 — that is where it belongs,
