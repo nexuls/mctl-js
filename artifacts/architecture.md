@@ -95,6 +95,8 @@ $ROOT/  (default ~/.mctl, chosen at first run, not editable after)
   events.jsonl           append-only cross-instance event log
   runtime/<id>.json      session descriptor: pid, runtime, sessionRef, port, startedAt
   runtime/<id>.lock      per-server action / supervisor locks
+  network/<id>.json      tunnel descriptor: provider, profile, pid?, endpoint, startedAt
+  network/<id>.log       captured tunnel-agent output — the only diagnosis when one won't start
   console/<id>.log       captured server console — shared, so any instance can tail it
   logs/                  MCTL's own logs
 ```
@@ -250,9 +252,11 @@ new ProviderRegistry()
   .registerRuntime(new ForegroundRuntime());
 ```
 
-Interfaces live in **`types/provider.ts`** (`ServerProvider`, `RuntimeProvider`; `BackupProvider` and
-`NetworkProvider` arrive with Phase 4 — writing them now would design against imaginary code). Core
-resolves by the `kind` / `runtime` / `network` fields in `mctl.json`; an unresolvable id is a typed,
+Interfaces live in **`types/provider.ts`** (`ServerProvider`, `RuntimeProvider`, `NetworkProvider`;
+`BackupProvider` arrives with the backup subsystem — writing it now would design against imaginary
+code). Core resolves a server kind and runtime by the `kind` / `runtime` fields in `mctl.json`; a
+**network** provider is resolved one level further out, from the `provider` of the *profile* a server
+names (`mctl.json.network` is a profile name, not a provider id). An unresolvable id is a typed,
 user-facing `UnknownProviderError`, because it means the server was made by a build that knows a kind
 this one does not.
 
@@ -369,6 +373,54 @@ actionable error rather than a crash.
 
 **Locks — `core/session/lock.ts`.** `withServerLock(id, fn)` uses `open(path, "wx")`, whose
 check-and-create is atomic in the kernel. A lock owned by a dead pid is reclaimed, not respected.
+
+## Networking — `core/network/` + `providers/network/`
+
+`NetworkManager` does everything *around* a network provider: resolve the server's profile from
+`config.network.profiles`, check the provider is usable, expose the port, publish DNS on top, and
+announce the result. `RuntimeManager` holds it and calls it after a successful start and after a
+stop, so exposing a server is not a step a front-end has to remember.
+
+**The governing rule: networking never stops a server from starting** (plan.md § Networking). A
+missing binary, an unregistered provider, a deleted profile, an agent that will not come up — each
+degrades to `direct` with a `degradedReason` the UI shows, and the server runs. The one exception is
+`direct` itself failing, which means reading this machine's own interfaces failed and is genuinely
+exceptional.
+
+**Tunnel state is a descriptor, exactly like a runtime session.** `~/.local/state/mctl/network/<id>.json`
+records `{ provider, profile, pid?, localPort, endpoint, startedAt }` and is re-read plus liveness-probed
+on every status call; a descriptor whose agent is dead is reaped. That is what lets `mctl network status`
+in one process describe a tunnel another process started. `pid` is **optional**: `direct` and `tailscale`
+announce an address without owning a process, and a pid-less descriptor is never reaped.
+
+**Providers and what each one actually is:**
+
+| Provider | Owns a process? | Joinable directly? | Notes |
+|---|---|---|---|
+| `direct` | no | on the LAN | Reports LAN + public address. Cannot fail; the fallback floor. |
+| `cloudflared` | yes | **no** | Quick tunnel or a named tunnel. TCP rides the HTTPS edge, so each *player* must run `cloudflared access tcp`. Stated in the endpoint's `note`. |
+| `playit` | yes | yes | Address is assigned on playit.gg, not printed reliably — set `options.address` from the dashboard; otherwise scraped, with a live-but-silent agent kept via `AgentSpec.fallback`. |
+| `ngrok` | yes | yes | The one tunnel a vanilla client joins as-is. Authtoken via the child's **environment**. |
+| `tailscale` | no | tailnet only | The daemon is the user's; MCTL discovers the MagicDNS name and reports it. Never reaped. |
+
+`providers/network/agent.ts` is the shared machinery for the three that own a process (spawn detached,
+scrape the address out of the captured output, write/read/reap the descriptor). It is a shared helper
+*beside* the providers, like `providers/server/mojang-meta.ts` — not a provider importing a provider.
+`lib/shell.spawnDetached` is the leaf mechanic underneath: `detached` + `unref()` + stdout/stderr on a
+**file descriptor**, because a pipe dies with the parent and is unreadable from any other instance.
+
+**Cloudflare DNS (`core/network/cloudflare-dns.ts`)** sits in core, not beside the providers, because
+it is orthogonal to them: the records are the same whichever provider produced the address. It writes
+an `A`/`CNAME` plus an `SRV` at `_minecraft._tcp.<hostname>` (the SRV is what carries a non-default
+port so players type a bare name). **Every record is tagged `mctl:<server id>` in its `comment`, and
+deletion only ever touches records carrying that tag** — the user's own records are never at risk.
+This is the module's most important property and is pinned by a test.
+
+**Secrets are scoped, not shared.** `scopedSecrets(providerId, secrets)` passes a provider only the
+keys prefixed with its own id (`ngrok` → `NGROK_*`). A tunnel agent's environment has no business
+holding an S3 key, and the cheapest way to keep a credential out of a process is never to put it there.
+Tokens travel in the child's environment (not argv — `/proc` is world-readable) and in the Cloudflare
+`Authorization` header, and appear in no log, descriptor, or event payload.
 
 ## The shared object graph — `core/context.ts`
 

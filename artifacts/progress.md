@@ -3,11 +3,63 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-13 (console ANSI rendering)_
+_Last updated: 2026-08-13 (Phase 4a — networking)_
 
 ---
 
 ## Done
+
+- **Phase 4a — networking (this session).** Roadmap bullets 1 and 2 of Phase 4 are done; bullet 3
+  (backups, supervision) is **not started** — see *Next up*.
+  - **Types.** `types/network.ts` (new): `RequiredBinary`, `Readiness` (a tagged union, because
+    "missing binary" wants an install command and "logged out" wants a login command),
+    `Endpoint` + `TunnelSession` (Zod — the descriptor is on-disk data), `NetState`, `NetStatus`,
+    `ExposeRequest`. `types/provider.ts` gained **`NetworkProvider`**. `types/config.ts`:
+    `NetworkProvider` → **`NetworkProviderId`** (picker only), `NetworkProfile.provider` and
+    `NetworkConfig.defaultProfile` relaxed to strings, new `CloudflareDnsConfig` on a profile.
+    `types/events.ts`: `TunnelUp` / `TunnelDown` / `DnsChanged`.
+  - **`core/network/index.ts` — `NetworkManager`**: `profiles()`, `readiness()`, `expose()`,
+    `teardown()`, `status()`, plus the exported pure `scopedSecrets`. Degrades to `direct` for five
+    distinct reasons rather than ever failing a start.
+  - **`core/network/cloudflare-dns.ts`**: A/CNAME + `_minecraft._tcp` SRV, zone-name or zone-id,
+    idempotent, and deletion restricted to records tagged `mctl:<server id>`.
+  - **Five providers** under `providers/network/`: `direct`, `cloudflared`, `playit`, `ngrok`,
+    `tailscale`, over the shared `agent.ts` (detached spawn → scrape the announced address → write /
+    read / reap `network/<id>.json`). `ProviderRegistry` gained `registerNetwork`/`network`/
+    `networks`/`networkIds`; all five are wired in `providers/index.ts`.
+  - **`lib/shell.spawnDetached`** (own process group, `unref`, output on an fd not a pipe),
+    **`lib/net.publicAddress`** (two echo services, validated, 10-minute cache, never throws),
+    **`lib/paths`** `networkDir`/`networkFile`/`networkLogFile`.
+  - **Wiring**: `RuntimeManager` holds the `NetworkManager` and exposes after a successful start /
+    tears down after a stop, swallowing failures both ways; `core/context.ts` builds it. Delete (CLI
+    *and* TUI) tears networking down first.
+  - **CLI**: `mctl network` (provider readiness + profiles), `network status [<id>]`, `network up <id>`,
+    `network down <id>`, all with `--json`. `cli/format.renderTable` exported for it.
+  - **TUI**: `hooks/use-network.ts` (`useNetworkOverview` 30 s, `useNetworkStatus` 5 s, both
+    self-chaining); `app/Network/` is a real page (providers with install hints, profiles, per-server
+    endpoints); the Server page's Network tab now shows the live profile/provider/state/endpoint plus
+    provider readiness beside the unchanged direct picture.
+  - Tests (**372 total, 39 files**, +47): `providers/network/agent.test.ts` (11, driving **real
+    detached shell-script agents**: scraping, survival past the parent, a failing agent leaving no
+    descriptor, a silent agent being reaped — proved via a pid the script writes — the `fallback`
+    path, log truncation, descriptor reaping, pid-less descriptors surviving, `stopAgent`),
+    `core/network/cloudflare-dns.test.ts` (13, against a **real local stand-in API**, including the
+    two decoy records that prove tag-scoped deletion), `core/network/index.test.ts` (17, every
+    degradation path + `scopedSecrets`), `providers/network/matchers.test.ts` (6, the real log lines).
+  - **Verified for real, not just typed:** `bunx tsc --noEmit` clean; `bun test` 371 pass / 1
+    pre-existing fail (`nerd.heartFull`); `bun run format` clean; `bunx biome check src` clean bar
+    four pre-existing warnings (plus one from the user's own uncommitted Dashboard tweak). In a
+    sandbox `$HOME`: `mctl network` listed all five providers with real readiness (tailscale
+    correctly `unauthenticated — sudo tailscale up`); a **real Paper 1.21.4 server on the tmux
+    runtime** was created and started, and the start brought up a **real cloudflared quick tunnel**
+    (`supporters-freight-erik-monetary.trycloudflare.com`) which a **separate** `mctl network status`
+    process then described, and `mctl stop` killed the agent and removed the descriptor; direct
+    exposure reported LAN + real public address; degradation to direct was confirmed for both a
+    logged-out tailscale and an unregistered provider; delete removed the descriptor. TUI driven
+    under **tmux at 130×40**: the Network page and the Server page's Network tab both render.
+  - **One real defect found in the pty**: the Network page's sections carried `flexGrow`/`flexBasis`
+    inside a column parent and rendered as overlapping text — the same trap `memory.md` already
+    recorded for the Dashboard's expanded panel.
 
 - **The Console tab renders ANSI (2026-08-13, user-reported defect).** A modded server's output
   (NeoForge/Forge run log4j with a colouring console appender) reached the frame buffer with its
@@ -827,20 +879,27 @@ _Last updated: 2026-08-13 (console ANSI rendering)_
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.
-- **The user's dev shortcuts are still in the tree** (committed before this session, left alone):
-  `app/Router.tsx` boots straight to `server/first-paper-server` and `DEFAULT_SERVER_TAB` is
-  `"players"`. A sandbox `$HOME` used for a TUI run must either hold a server with that id or expect
-  the app to open on "not found" — press `1` to reach the Dashboard.
+- **The dev shortcuts are gone** — `app/Router.tsx` boots to the Dashboard again and
+  `DEFAULT_SERVER_TAB` is `"overview"`. (Corrected here: this file claimed otherwise; the code is
+  truth.)
+- **One uncommitted tweak in the working tree is the user's, not this session's**:
+  `app/Dashboard/index.tsx` has the expanded row's left border / background commented out in favour
+  of `paddingLeft`. Left alone and deliberately not committed; it is why `biome check` reports an
+  unused `alpha` import there.
 
-## Next up (Phase 4 — networking & operations)
+## Next up (Phase 4 — the operations half)
 
-1. `direct` network provider; then cloudflared / playit / ngrok / tailscale (binaries **discovered on
-   PATH, never downloaded**; a missing one degrades to direct with an install hint).
-2. Cloudflare DNS with SRV records, tagged by server id so MCTL only touches records it created.
-3. Backup providers + scheduling; auto-restart, health checks, resource monitoring behind the
-   supervisor lock.
-4. `BackupProvider` / `NetworkProvider` interfaces join `types/provider.ts` when their first real
-   implementation is written — not before.
+Networking (bullets 1 and 2) is done. What remains of Phase 4:
+
+1. **Backup providers + scheduling.** `BackupProvider` joins `types/provider.ts` with its first real
+   implementation (filesystem), not before. `config.backup` already carries provider / schedule /
+   retention / compression and the setup wizard collects them; the Backups page and the Server page's
+   Backups tab are honest scaffolding waiting for it. `mctl backup` / `mctl restore` are still the
+   only Phase-4 stubs left in `cli/router.ts`.
+2. **Supervision behind the supervisor lock**: auto-restart, health checks, resource monitoring —
+   *and tunnel keepalive*, which networking deliberately does not have yet (see Known gaps).
+3. A **profile editor**. Network profiles can only be created by hand-editing `config.json` today;
+   Settings picks a default among them and the Network page lists them read-only.
 
 Carried over from Phase 3, deliberately not done:
 
@@ -860,7 +919,26 @@ Carried over from Phase 3, deliberately not done:
 
 ## Known gaps / carried forward
 
-- **Phase 3 gaps, new this session:**
+- **Phase 4a gaps, new this session:**
+  - **No tunnel keepalive.** An agent that dies takes the tunnel with it and nothing brings it back;
+    `mctl network status` reports `down` and `mctl network up <id>` restores it by hand. Keepalive
+    needs the supervisor lock, which is the operations half of Phase 4 — that is where it belongs,
+    not bolted onto `NetworkManager`.
+  - **Network profiles are hand-edited JSON.** There is no UI or CLI to *create* one; Settings only
+    picks the default among existing profiles.
+  - **playit is wired but never confirmed against a real account.** Its binary was present on the
+    test machine, but no tunnel was claimed, so the `options.address` path and the scraper were
+    exercised only by unit tests. cloudflared was confirmed end to end with a real quick tunnel;
+    ngrok and tailscale were confirmed only as far as preflight (no account / logged out).
+  - **Cloudflare DNS was never run against the real API** — only against a local stand-in speaking
+    the v4 envelope. The shapes come from Cloudflare's docs; a live run needs a zone and a token.
+  - **A named cloudflared tunnel is not created by MCTL**, only run. Creating one is `cloudflared`'s
+    own browser login flow.
+  - **`mctl network up` on a server whose port changed since it booted uses the recorded port.** That
+    is deliberate (the running server did not re-read `server.properties` either), but it means an
+    edited port needs a restart, not just a re-expose.
+
+- **Phase 3 gaps:**
   - **An orphaned staging directory is never swept.** A create killed with SIGKILL cannot run its
     `finally`, so `$ROOT/downloads/staging/<uuid>/` survives (observed while testing resume). Nothing
     reads it and it is safe to delete, but it grows. A sweep must use an age threshold — another
@@ -885,9 +963,9 @@ Carried over from Phase 3, deliberately not done:
   a form over `ServerManager.editServer` (buffered draft + validation + Ctrl+S, mirroring
   `app/Settings/use-settings.ts`) is marked `TODO(phase-3)` in `tabs/Settings.tsx` — **not done in
   Phase 3**, carried into Phase 4.
-- **The Backups and Network tabs are honest scaffolding**, not features: Backups shows the configured
-  policy and says archives arrive in Phase 4; Network shows the direct picture and says tunnels/DNS
-  do. Both have a `TODO(phase-4)` naming the provider call that fills them in.
+- **The Backups tab is honest scaffolding**, not a feature: it shows the configured policy and says
+  archives arrive with the backup subsystem, with a `TODO(phase-4)` naming the provider call that
+  fills it in. (The Network tab is now real — see Phase 4a above.)
 - **Shadow ban is recorded but not enforced.** `mctl.json.shadowBans` is an MCTL-side marker —
   Minecraft has no shadow ban, so nothing happens on the server. Real enforcement needs the
   RCON/plugin subsystem (`TODO(phase-5)` in `core/server/player-admin.ts`).

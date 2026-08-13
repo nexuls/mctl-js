@@ -5,6 +5,73 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Phase 4a — networking: providers, tunnels, Cloudflare DNS (2026-08-13)
+
+- **`mctl.json.network` is a *profile name*, not a provider id**, and the code now says so. The old
+  `config.NetworkProvider` enum (typed as both) was renamed to **`NetworkProviderId`**, and both
+  `NetworkProfile.provider` and `NetworkConfig.defaultProfile` became free **strings**: a config
+  written by a newer MCTL naming a provider this build lacks must still load, or one unknown profile
+  takes every other setting down with it. Same lesson as `mctl.json.kind` in Phase 2.
+  - Settings' default-profile picker is now built from `config.network.profiles` — profiles are
+    user-defined, so a hand-kept list could not name the `cf-tunnel` the user just added.
+- **Networking never fails a start.** `NetworkManager.expose` degrades to `direct` for *five* distinct
+  reasons (binary missing, provider unregistered, provider unready, profile deleted, agent failed to
+  come up) and reports `degradedReason`; `RuntimeManager` additionally swallows anything that escapes.
+  A running server the user can reach on the LAN beats no server. Verified for the last four paths.
+- **A tunnel is a descriptor, not a handle** — `~/.local/state/mctl/network/<id>.json`, the exact
+  analogue of `runtime/<id>.json`, re-probed and reaped on every read. Verified end to end: `mctl start`
+  in one process brought a real cloudflared quick tunnel up, a *separate* `mctl network status` named
+  it, and `mctl stop` from a third killed the agent and removed the descriptor.
+  - **`pid` is optional and its absence must not mean "dead".** `direct` and `tailscale` announce an
+    address with no process behind them; a naive "no live pid ⇒ reap" erases them on the next read.
+    Pinned by a test.
+- **Three mechanics make a detached agent real** (`lib/shell.spawnDetached`), and all three are load-
+  bearing: `detached: true` (its own process group, so Ctrl-C on MCTL does not take the tunnel),
+  `unref()` (MCTL can exit), and stdout/stderr on a **file descriptor** rather than a pipe — a pipe
+  dies with the parent and no other instance can read it. `node:child_process` is used because
+  `Bun.spawn` has no detach option.
+- **The address is scraped from the agent's own output because none of these agents can be asked.**
+  Hence a durable capture file per server, and hence `AgentSpec.match` being the only genuinely
+  provider-specific part of starting a tunnel. Real shapes, worth not re-deriving:
+  - **cloudflared** quick tunnel prints `https://<words>.trycloudflare.com` (matched on the URL, not
+    the ASCII box around it, which has changed between releases). A *named* tunnel prints no address
+    at all — wait for `Registered tunnel connection` and take the hostname from the profile.
+  - **cloudflared TCP is not directly joinable.** Cloudflare terminates TLS at the HTTPS edge; every
+    **player** must run `cloudflared access tcp --hostname <host> --url localhost:<port>` and then
+    join `localhost`. This is the product, not a bug, and it reads as a broken tunnel if unsaid — so
+    it rides on `Endpoint.note` and is printed by both front-ends.
+  - **ngrok** needs `--log stdout --log-format logfmt` or it draws a full-screen UI and prints nothing
+    parseable; the line is `msg="started tunnel" … url=tcp://4.tcp.eu.ngrok.io:19132`. The HTTP form
+    must **not** match — that tunnel is not joinable.
+  - **playit assigns addresses on its dashboard, not in its output.** So `options.address` is the
+    supported path and `AgentSpec.fallback` exists for it: an agent that is alive but silent is kept,
+    not killed for failing to say something it was never contracted to say.
+  - **tailscale owns no per-service tunnel.** The machine is already on the tailnet, so `expose` only
+    discovers `Self.DNSName` (trailing dot stripped — the MC client rejects the FQDN form) and
+    reports it. `tailscale status --json` is answered by the **local daemon**, so unlike the tunnel
+    agents its auth state is cheap to check; a logged-out node exits non-zero but still prints usable
+    JSON, so the exit code is ignored and only a parse failure means "no answer".
+- **The Cloudflare DNS module's load-bearing safety property is the `comment` tag.** Records are
+  tagged `mctl:<server id>` and **only tagged records are ever deleted** — a user's own `A` record on
+  the same hostname and another server's records both survive. Tested against a real local stand-in
+  API with exactly those two decoys present.
+  - Filtering happens **locally** after listing the zone, not through the API's `comment` filter,
+    which is not on every plan. `proxied` defaults false and must stay there: the orange cloud speaks
+    HTTP(S) and would make a Minecraft server unreachable rather than protected. An IP is an `A`, a
+    tunnel hostname must be a `CNAME`.
+  - This bypasses `lib/http.ts` deliberately — that helper is an ETag cache for public GETs, and
+    caching an authenticated response into `~/.cache/mctl/` would be wrong on both counts.
+- **Secrets are scoped by provider id prefix** (`scopedSecrets`: `ngrok` sees `NGROK_*` and nothing
+  else), and travel in the child's **environment**, never argv — a command line is world-readable in
+  `/proc`. The UPPER_SNAKE secret-key convention is what makes the prefix rule exact.
+- **`flexGrow`/`flexBasis` on a section inside a column parent overlaps the text** — the Network page
+  hit exactly the trap `memory.md` already recorded for the Dashboard's expanded panel, and rendered
+  as garbage on its first pty run. Sections size to content; only the two *halves* grow, and only
+  when laid out as a row.
+- **Delete now tears networking down first** (both front-ends). `deleteServer` refuses a running
+  server, so this only ever cleans a stopped one — but a `direct` descriptor outlives a stop and would
+  otherwise keep answering `mctl network status` for a server that no longer exists.
+
 ## The console renders ANSI now (2026-08-13, real defect)
 
 User: "The ansi part of the line is not being rendered properly." Seen on
@@ -256,9 +323,6 @@ Disabled buttons are also acquiring tabs."
 - **`usePlayerHeads` never blocks a card.** A card draws its built-in face immediately and swaps
   when a real one arrives; lookups are capped at 64 players, 4 concurrent, attempted once per
   session, and skipped entirely below the 84-cell head threshold.
-- The user's working tree keeps a **dev shortcut**: `Router.tsx` boots straight to
-  `server/first-paper-server` and `DEFAULT_SERVER_TAB` is `"players"`. A sandbox `$HOME` used for a
-  pty run must name its server `first-paper-server` or the app opens on "not found".
 
 ## Minecraft 26.1 moved the per-player files (2026-08-08, real defect)
 
