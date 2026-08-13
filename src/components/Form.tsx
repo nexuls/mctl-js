@@ -30,7 +30,7 @@ import type {
 } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import type { BoxProps, InputProps as OpenTuiInputProps } from "@opentui/react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { useIcons } from "../hooks/use-icons.tsx";
 import { onAccent, optionsFitAsTabs, variantColor } from "./support.ts";

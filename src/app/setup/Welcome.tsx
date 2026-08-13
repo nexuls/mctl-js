@@ -8,7 +8,7 @@
  */
 
 import { TextAttributes } from "@opentui/core";
-import { Button, Hint, MinecraftHead } from "../../components/index.ts";
+import { Button, Hint } from "../../components/index.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import type { ThemeColors } from "../../types/theme.ts";

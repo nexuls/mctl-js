@@ -36,6 +36,9 @@ async function mount(
 		// Raise once, after mount, so the first frame is the "no toasts" state.
 		// (Braces matter: an arrow returning the toast id would be read as a
 		// cleanup function.)
+		// `toast` is a fresh object each render, so listing it as a dependency would
+		// re-raise on every frame and no assertion below would hold.
+		// biome-ignore lint/correctness/useExhaustiveDependencies: raise once on mount, by design
 		useEffect(() => {
 			raise(toast);
 		}, []);

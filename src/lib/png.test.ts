@@ -211,7 +211,6 @@ describe("decodePng", () => {
 			for (let i = 0; i < 4; i += 1) {
 				const a = 0; // one pixel per row, so the left neighbour is always absent
 				const b = previous[i] as number;
-				const c = 0;
 				const predictor =
 					filter === 0
 						? 0
