@@ -239,10 +239,8 @@ function ServerDetails({
 	return (
 		<box
 			flexDirection="column"
-			marginLeft={2}
 			padding={1}
-			border={["left"]}
-			borderColor={colors.primary}
+			paddingLeft={3}
 			backgroundColor={alpha(colors.primary, 0.18)}
 		>
 			<box flexDirection={stacked ? "column" : "row"} gap={stacked ? 0 : 3}>
