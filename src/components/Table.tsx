@@ -31,6 +31,20 @@ import { useBoxWidth } from "./use-box-width.ts";
 /** Cells a scrolling table keeps clear on the right for the scrollbar. */
 const SCROLLBAR_RESERVE = 1;
 
+/**
+ * Cells a row spends on chrome before any cell text: the left and right edges of
+ * its rounded border (2) plus its own horizontal padding (2).
+ *
+ * The header is not inside that border, so it pays for the same cells with
+ * padding instead — `ROW_BORDER + ROW_PADDING_X` on the left and the right. Both
+ * halves are derived from these constants rather than hand-tuned, because the
+ * failure they prevent is a header whose columns sit one cell off its rows,
+ * which only shows up once a cell's text is long enough to fill its column.
+ */
+const ROW_BORDER = 1;
+const ROW_PADDING_X = 1;
+const ROW_CHROME = (ROW_BORDER + ROW_PADDING_X) * 2;
+
 /** One rendered cell: the text plus how it should be inked. */
 export interface TableCell {
 	/** The cell's text. Truncated with the icon set's ellipsis when too long. */
@@ -293,7 +307,7 @@ export function Table<T>({
 	// The ref is attached on every render path (there is only one), so the
 	// measurement can never be gated behind the branch it decides — the trap that
 	// once froze `Select` into a dropdown forever.
-	const outer = (width ?? (measured || terminalWidth)) - 3;
+	const outer = (width ?? (measured || terminalWidth)) - ROW_CHROME;
 	// A scrollbox draws its scrollbar *inside* its own width, so the rows would
 	// be one cell narrower than the header — and only once the list grew past the
 	// viewport, which is a misalignment that appears out of nowhere. The cell is
@@ -363,8 +377,14 @@ export function Table<T>({
 					border={rows.length === 0 ? ["bottom"] : undefined}
 					borderColor={rows.length === 0 ? colors.border : undefined}
 					flexShrink={0}
-					paddingX={2}
-					paddingRight={scrollRows ? SCROLLBAR_RESERVE : 1}
+					// Stand in for the row's border + padding so a header cell starts
+					// on the same column as the cell below it, and reserve the
+					// scrollbar cell on top of that (the rows lose it inside their own
+					// box, the header has to be told).
+					paddingLeft={ROW_BORDER + ROW_PADDING_X}
+					paddingRight={
+						ROW_BORDER + ROW_PADDING_X + (scrollRows ? SCROLLBAR_RESERVE : 0)
+					}
 				>
 					{resolved.map(({ column, width: cellWidth }) => (
 						<text
