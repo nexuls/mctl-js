@@ -336,6 +336,21 @@ roadmap in `plan.md`.
     Gallery wires each ring member's `onFocused → setFocus(id)`. `tsc --noEmit` clean. See `memory.md`
     § Component library for the convention.
 
+- **Leaf helpers the artifacts never listed (2026-07-25):**
+  - `src/lib/colors.ts` (`c020c32`) — pure colour maths, the layer every theme and component builds on:
+    `parseHex`/`toHex` (`#rrggbb` and `#rrggbbaa`), `alpha`, `fade`, `mix`, `lighten`/`darken`,
+    `saturate`/`desaturate`/`grayscale`, `rotateHue`/`setHue`, `luminance`, `contrastRatio`,
+    `readableOn`. HSL transforms are lossy at 8-bit, so the doc comment tells callers to compose one
+    call rather than chain many. **No test file** — the largest untested pure module in `lib/`, and the
+    easiest to test (see Known gaps).
+  - `src/hooks/use-quit.ts` (`f4efa62`) — `useQuit()`: destroy the renderer *before* `process.exit`, or
+    the terminal is left in the alternate screen in raw mode. Used by `Router.tsx` and the setup
+    wizard. Its comment still mentions releasing "the public port" / a proxy listener — that subsystem
+    does not exist; the comment is stale, the code is right.
+  - `scripts/png-to-skin.ts` (`1eca01f`) — dev tool, outside `src/`: samples an 8×8 grid of cells out
+    of a PNG into the `HeadSkin` palette + code-grid shape. Zero dependencies (`node:zlib`), 8-bit
+    colour types 2/3/6 only. Not part of the app and not covered by `bun test`.
+
 - **First-run setup wizard + `mctl init` (2026-07-26):**
   - `src/lib/format.ts` — `formatBytes` (binary units). `src/lib/fs.ts` — `diskFree(path)` →
     `{free,total}` via `statfs`, walking up to the nearest existing ancestor (root may not exist yet).
