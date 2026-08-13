@@ -24,7 +24,7 @@
 
 import { watch, type FSWatcher } from "node:fs";
 import { basename } from "node:path";
-import { configDir, stateDir, runtimeDir } from "../../lib/paths.ts";
+import { configDir, stateDir, runtimeDir, themesDir } from "../../lib/paths.ts";
 import { ensureDir, targetOfTempName } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { EventType } from "../../types/events.ts";
@@ -93,13 +93,21 @@ function watchDir(
  *  - `config.json`  → `ConfigChanged`
  *  - `servers.json` → `RegistryChanged`
  *  - `runtime/<id>.json` → `ServerStateChanged` `{ id }` (a session came/went)
+ *  - `themes/*.json` → `ThemesChanged` `{ file }` (a custom theme was edited)
  *
  * Directories are ensured first so the watches attach even on a fresh install.
  *
  * @returns a stop function that closes every watcher.
  */
 export async function startWatchers(bus: EventBus): Promise<() => void> {
-	await Promise.all([ensureDir(configDir()), ensureDir(runtimeDir())]);
+	await Promise.all([
+		ensureDir(configDir()),
+		ensureDir(runtimeDir()),
+		// Ensured so the watch attaches even when the user has never written a
+		// custom theme — otherwise the first theme file they drop in would need a
+		// restart to be noticed, which is the gap this watcher closes.
+		ensureDir(themesDir()),
+	]);
 	// stateDir is the parent of runtimeDir, so ensuring runtimeDir made it too.
 
 	const watchers: (FSWatcher | undefined)[] = [];
@@ -124,6 +132,16 @@ export async function startWatchers(bus: EventBus): Promise<() => void> {
 			if (name.endsWith(".json")) {
 				const id = name.slice(0, -".json".length);
 				emitLocal(bus, EventType.ServerStateChanged, { id });
+			}
+		}),
+	);
+
+	watchers.push(
+		watchDir(themesDir(), (name) => {
+			// Any change to the directory invalidates the catalogue: a theme file may
+			// have been added, edited, or deleted, and only a reload can tell which.
+			if (name.endsWith(".json")) {
+				emitLocal(bus, EventType.ThemesChanged, { file: name });
 			}
 		}),
 	);

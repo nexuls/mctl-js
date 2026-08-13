@@ -92,6 +92,18 @@ export interface ThemeProviderProps {
 	 * context. **Must be referentially stable** — it is an effect dependency.
 	 */
 	subscribeThemeId?: (apply: (id: string) => void) => () => void;
+	/**
+	 * Bridge for changes to the theme *catalogue* — a file added, edited, or
+	 * deleted under `~/.config/mctl/themes/`. Called once on mount with an
+	 * `invalidate` callback the caller fires **after** it has re-read the registry
+	 * (`await registry.reload()`); the provider then re-resolves the active theme
+	 * and the picker's list from the same registry object.
+	 *
+	 * Same shape and the same reasons as {@link subscribeThemeId}: the reload is
+	 * filesystem I/O, which belongs in core, and this provider sits above the
+	 * event bus. **Must be referentially stable.**
+	 */
+	subscribeCatalogue?: (invalidate: () => void) => () => void;
 	children: React.ReactNode;
 }
 
@@ -108,9 +120,14 @@ export function ThemeProvider({
 	initialPalette = null,
 	onThemeChange,
 	subscribeThemeId,
+	subscribeCatalogue,
 	children,
 }: ThemeProviderProps) {
 	const [themeId, setThemeIdState] = useState(initialThemeId);
+	// The registry is mutable and reloaded in place, so nothing about its identity
+	// changes when its contents do. This counter is the only signal that the
+	// memos below have to be recomputed.
+	const [catalogue, setCatalogue] = useState(0);
 	const { palette } = useTerminalColors(initialPalette);
 
 	// Follow the persisted theme id when it changes underneath us. Only the local
@@ -121,6 +138,13 @@ export function ThemeProvider({
 		if (!subscribeThemeId) return;
 		return subscribeThemeId((id) => setThemeIdState(id));
 	}, [subscribeThemeId]);
+
+	// Follow the themes directory. The caller reloads the registry and then calls
+	// back, which is what makes a hand-edited theme file apply live.
+	useEffect(() => {
+		if (!subscribeCatalogue) return;
+		return subscribeCatalogue(() => setCatalogue((n) => n + 1));
+	}, [subscribeCatalogue]);
 
 	// The host's current light/dark mode, read from the terminal background. This
 	// drives which variant of *any* active theme is painted — static themes
@@ -139,12 +163,15 @@ export function ThemeProvider({
 		[palette],
 	);
 
+	// `catalogue` is not read in the body on purpose: it is the invalidation
+	// signal for the registry's mutable contents, which nothing else can observe.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: catalogue invalidates the registry
 	const theme = useMemo<Theme>(() => {
 		if (registry.isDynamic(themeId)) return terminalTheme;
 		// A named theme that no longer resolves (e.g. a deleted custom theme) degrades
 		// to the terminal theme rather than an unrelated static default.
 		return registry.get(themeId) ?? terminalTheme;
-	}, [registry, themeId, terminalTheme]);
+	}, [registry, themeId, terminalTheme, catalogue]);
 
 	// Collapse the active theme's scheme to the concrete palette for the current
 	// mode — a `default`-only theme ignores `appearance`, a light/dark theme picks
@@ -154,6 +181,8 @@ export function ThemeProvider({
 		[theme, appearance],
 	);
 
+	// Same as above: the picker's list has to be rebuilt when the catalogue does.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: catalogue invalidates registry.list()
 	const value = useMemo<ThemeContextValue>(
 		() => ({
 			theme,
@@ -166,7 +195,7 @@ export function ThemeProvider({
 				onThemeChange?.(id);
 			},
 		}),
-		[theme, colors, appearance, themeId, registry, onThemeChange],
+		[theme, colors, appearance, themeId, registry, onThemeChange, catalogue],
 	);
 
 	return <ThemeContext value={value}>{children}</ThemeContext>;

@@ -64,7 +64,21 @@ export class ThemeRegistry {
 				);
 				continue;
 			}
-			const raw = await readJsonIfExists(`${themesDir()}/${file}`);
+			// `readJsonIfExists` *throws* on a syntax error — it only tolerates an
+			// absent file — and Zod never gets to see it. That is the common case
+			// now that the themes directory is watched and re-read live: an editor
+			// saving a file is briefly a truncated one, and a throw here would take
+			// the whole catalogue (built-ins included) with it.
+			let raw: unknown;
+			try {
+				raw = await readJsonIfExists(`${themesDir()}/${file}`);
+			} catch (err) {
+				logger.warn(
+					{ file, err: String(err) },
+					"skipping unparsable theme file",
+				);
+				continue;
+			}
 			const parsed = ThemeFile.safeParse(raw);
 			if (!parsed.success) {
 				// One malformed theme file must not stop the app from launching.
@@ -87,6 +101,24 @@ export class ThemeRegistry {
 			);
 		}
 		return this;
+	}
+
+	/**
+	 * Re-read the themes directory from scratch, so the catalogue reflects
+	 * deletions as well as additions.
+	 *
+	 * {@link load} only ever *adds*: calling it again after the user deleted
+	 * `dracula.json` would leave the stale theme resolvable forever. Reload drops
+	 * every custom entry first and re-folds the built-ins, which is what makes
+	 * "edit a theme file and see it" work without restarting MCTL.
+	 *
+	 * The active theme is not this class's concern — a front-end holding an id
+	 * that no longer resolves degrades to the terminal theme (`hooks/use-theme`).
+	 */
+	async reload(): Promise<this> {
+		this.themes.clear();
+		for (const [id, theme] of BUILTIN_THEMES) this.themes.set(id, theme);
+		return this.load();
 	}
 
 	/** Whether `id` names the dynamic terminal theme (resolved by the UI layer). */

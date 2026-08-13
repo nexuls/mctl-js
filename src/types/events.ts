@@ -33,6 +33,13 @@ export const EventType = {
 	ConfigChanged: "ConfigChanged",
 	/** `servers.json` changed — a server was registered, removed, or re-pointed. */
 	RegistryChanged: "RegistryChanged",
+	/**
+	 * A file under `~/.config/mctl/themes/` was added, edited, or removed.
+	 * **Local bus only** — the theme catalogue is a projection of this
+	 * instance's own disk read, and every instance watches the directory itself.
+	 * Payload: `{ file }` (the basename that changed).
+	 */
+	ThemesChanged: "ThemesChanged",
 	/** A server's run state changed (started/stopped). Payload: `{ id, state }`. */
 	ServerStateChanged: "ServerStateChanged",
 	/** A registered server's path went missing (drive unmounted). Payload: `{ id }`. */

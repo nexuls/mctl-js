@@ -15,6 +15,7 @@ import {
 	configFile,
 	serversRegistryFile,
 	runtimeFile,
+	themesDir,
 } from "../../lib/paths.ts";
 import { writeJsonAtomic } from "../../lib/fs.ts";
 import { EventBus } from "./bus.ts";
@@ -100,4 +101,28 @@ test("an unrelated file in a watched directory emits nothing", async () => {
 		);
 	});
 	expect(seen).toEqual([]);
+});
+
+test("a custom theme file emits ThemesChanged with its name", async () => {
+	// Closes the "editing a theme needs a restart" gap: the catalogue is a
+	// projection of this directory, and nothing else tells an instance it moved.
+	const bus = new EventBus();
+	const seen: { type: string; payload?: unknown }[] = [];
+	bus.subscribe((event) =>
+		seen.push({ type: event.type, payload: event.payload }),
+	);
+	const stop = await startWatchers(bus);
+	try {
+		await writeJsonAtomic(join(themesDir(), "dracula.json"), {
+			name: "Dracula",
+			colors: { default: {} },
+		});
+		await Bun.sleep(400);
+	} finally {
+		stop();
+	}
+	expect(seen).toContainEqual({
+		type: "ThemesChanged",
+		payload: { file: "dracula.json" },
+	});
 });

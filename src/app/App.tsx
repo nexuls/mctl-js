@@ -128,6 +128,7 @@ export async function renderApp(): Promise<void> {
 	// identities are stable across renders — the providers use them as effect
 	// dependencies.
 	const subscribeThemeId = configSubscriber(events.bus, (c) => c.theme);
+	const subscribeCatalogue = catalogueSubscriber(events.bus, registry);
 	const subscribeIconMode = configSubscriber(events.bus, (c) => c.icons);
 
 	// The concrete providers this build ships. Built once here at the front-end
@@ -142,6 +143,7 @@ export async function renderApp(): Promise<void> {
 			initialPalette={initialPalette}
 			onThemeChange={(theme) => persistAppearance({ theme })}
 			subscribeThemeId={subscribeThemeId}
+			subscribeCatalogue={subscribeCatalogue}
 		>
 			{/* Icons are the other half of "appearance", so the provider sits beside
           the theme's — above everything, since the component kit itself
@@ -226,6 +228,35 @@ function configSubscriber<T>(
 						{ err: String(err) },
 						"appearance not re-read on change",
 					);
+				});
+		});
+}
+
+/**
+ * Build a `ThemesChanged` → provider bridge: re-read `~/.config/mctl/themes/`
+ * into the registry, then tell the provider its catalogue moved.
+ *
+ * `reload()` rather than `load()`, so a *deleted* theme file stops resolving.
+ * The reload is filesystem I/O and therefore lives here, on the front-end edge,
+ * rather than inside the provider (AGENTS.md § 3).
+ *
+ * @returns a subscribe function to hand to `ThemeProvider`; call it **once** and
+ * keep the result, as the provider treats it as a stable effect dependency.
+ */
+function catalogueSubscriber(
+	bus: EventBus,
+	registry: ThemeRegistry,
+): (invalidate: () => void) => () => void {
+	return (invalidate) =>
+		bus.subscribe((event) => {
+			if (event.type !== EventType.ThemesChanged) return;
+			registry
+				.reload()
+				.then(() => invalidate())
+				.catch((err) => {
+					// A half-written theme file mid-save: keep the catalogue we have.
+					// The watcher fires again when the editor finishes writing.
+					logger.debug({ err: String(err) }, "theme catalogue not reloaded");
 				});
 		});
 }
