@@ -1,13 +1,10 @@
 <div align="center">
 
-```
-███╗   ███╗ ██████╗████████╗██╗
-████╗ ████║██╔════╝╚══██╔══╝██║
-██╔████╔██║██║        ██║   ██║
-██║╚██╔╝██║██║        ██║   ██║
-██║ ╚═╝ ██║╚██████╗   ██║   ███████╗
-╚═╝     ╚═╝ ╚═════╝   ╚═╝   ╚══════╝
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.svg">
+  <img src="assets/logo-dark.svg" alt="MCTL" width="620">
+</picture>
 
 **A terminal control plane for Minecraft servers.**
 

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="200" viewBox="0 0 880 200" role="img" aria-label="MCTL — a terminal control plane for Minecraft servers">
+  <rect width="880" height="200" rx="14" fill="#0d1117"/>
+  <rect x="0.5" y="0.5" width="879" height="199" rx="13.5" fill="none" stroke="#21262d"/>
+
+  <!-- terminal chrome: three dots and the window title -->
+  <circle cx="28" cy="26" r="5" fill="#3d444d"/>
+  <circle cx="46" cy="26" r="5" fill="#3d444d"/>
+  <circle cx="64" cy="26" r="5" fill="#3d444d"/>
+  <text x="440" y="31" text-anchor="middle" fill="#6e7681"
+        font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="13" letter-spacing="1.5">mctl</text>
+  <line x1="1" y1="52" x2="879" y2="52" stroke="#21262d"/>
+
+  <!-- wordmark -->
+  <text x="440" y="126" text-anchor="middle" fill="#e6edf3"
+        font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="72" font-weight="700" letter-spacing="14">MCTL</text>
+
+  <!-- prompt line -->
+  <text x="440" y="166" text-anchor="middle" xml:space="preserve"
+        font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="16" letter-spacing="1"><tspan fill="#e8a15c">$ </tspan><tspan fill="#7d8590">mctl start survival </tspan><tspan fill="#e8a15c">█</tspan></text>
+</svg>
