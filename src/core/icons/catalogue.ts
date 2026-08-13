@@ -158,6 +158,13 @@ export const ICONS: Readonly<
 	// every set — hence a filled/outline pair rather than one glyph in two
 	// colours (a colour-blind terminal palette, or a monochrome one, would make
 	// the meter unreadable).
+	//
+	// The trailing space on the nerd glyphs is deliberate, and the one place this
+	// table breaks its own single-cell rule: a patched font draws these icons
+	// wider than one cell, so the pad claims the second cell they already take
+	// and keeps the ten icons of a meter from overlapping. Only ever drawn as a
+	// run of identical glyphs, so nothing else shifts. `detect.test.ts` exempts
+	// exactly these four and asserts the pad separately.
 	heartFull: { nerd: "\u{f004} " /* nf-fa-heart */, unicode: "♥", ascii: "#" },
 	heartEmpty: {
 		nerd: "\u{f08a} " /* nf-fa-heart_o */,

@@ -17,7 +17,7 @@ import {
 	resolveIconSet,
 	type IconEnv,
 } from "./detect.ts";
-import { ICON_SETS, type IconName } from "../../types/icons.ts";
+import { ICON_SETS, type IconName, type IconSet } from "../../types/icons.ts";
 
 /** A UTF-8, non-Nerd-Font environment — the baseline the tests vary from. */
 const PLAIN: IconEnv = { LANG: "en_US.UTF-8", TERM: "xterm-256color" };
@@ -166,17 +166,50 @@ describe("the catalogue", () => {
 		}
 	});
 
-	test("glyphs are single-cell, bar the two documented exceptions", () => {
+	test("glyphs are single-cell, bar the documented exceptions", () => {
 		// A wider glyph in one set would shift every column beside it when the user
-		// switched sets. `ellipsis` and `transition` are exempt in ASCII because no
-		// fixed-width column is measured against them.
-		const exempt = new Set<IconName>(["ellipsis", "transition"]);
+		// switched sets. Two sets carry deliberate exceptions:
+		//
+		//  - ASCII `ellipsis` / `transition` — no fixed-width column is measured
+		//    against them.
+		//  - The nerd meter glyphs — a patched font draws these Font Awesome /
+		//    Material icons wider than one cell, so the catalogue pads each with a
+		//    trailing space to claim the second cell it already occupies. Without
+		//    the pad the ten icons of a health meter overlap their neighbours.
+		//    They are only ever drawn as a run of identical glyphs, so the extra
+		//    cell shifts nothing else.
+		const exempt: Readonly<Record<IconSet, ReadonlySet<IconName>>> = {
+			ascii: new Set<IconName>(["ellipsis", "transition"]),
+			nerd: new Set<IconName>([
+				"heartFull",
+				"heartEmpty",
+				"foodFull",
+				"foodEmpty",
+			]),
+			unicode: new Set<IconName>(),
+		};
 		for (const set of ICON_SETS) {
 			const map = iconsFor(set);
 			for (const [name, glyph] of Object.entries(map)) {
-				if (set === "ascii" && exempt.has(name as IconName)) continue;
+				if (exempt[set].has(name as IconName)) continue;
 				expect([...glyph], `${set}.${name}`).toHaveLength(1);
 			}
+		}
+	});
+
+	test("the nerd meter glyphs are exactly two cells — pad, not padding drift", () => {
+		// Pins the deliberate exception above: a stray double space (or a lost one)
+		// in the catalogue would misalign every player meter, and the test that
+		// checks the rest of the table would no longer catch it.
+		const map = iconsFor("nerd");
+		for (const name of [
+			"heartFull",
+			"heartEmpty",
+			"foodFull",
+			"foodEmpty",
+		] as const) {
+			expect([...map[name]], `nerd.${name}`).toHaveLength(2);
+			expect(map[name].endsWith(" "), `nerd.${name}`).toBe(true);
 		}
 	});
 
