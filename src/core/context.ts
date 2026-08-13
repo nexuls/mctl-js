@@ -26,6 +26,7 @@ import { NetworkManager } from "./network/index.ts";
 import type { ProviderRegistry } from "./registry/provider-registry.ts";
 import { RuntimeManager } from "./runtime/index.ts";
 import { ServerManager } from "./server/manager.ts";
+import { sweepDownloads } from "./server/sweep.ts";
 
 /** The core services a front-end needs, wired together. */
 export interface MctlContext {
@@ -64,6 +65,14 @@ export async function createContext(
 ): Promise<MctlContext> {
 	const config = await loadConfig();
 	const paths = resolveRootPaths(config);
+
+	// Opportunistic housekeeping, deliberately not awaited: a create killed with
+	// SIGKILL leaves its staging tree behind, and resumable downloads outlive the
+	// attempt that started them by design. Both are safe to delete once old
+	// enough, and neither is worth delaying a front-end's first frame for. A
+	// one-shot CLI command may exit before it finishes — the sweep is idempotent,
+	// so the next instance picks up where this one stopped.
+	void sweepDownloads(paths).catch(() => {});
 	const jobs = new JobScheduler(bus);
 	const network = new NetworkManager({ config, providers, bus });
 
