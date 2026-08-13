@@ -5,6 +5,36 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Closing the standing gaps (2026-08-13, user request: "implement all the gaps")
+
+- **"Fill in the gaps in progress.md" meant *implement* them**, not document them. The first pass
+  wrote them up; the user corrected it. When a request names an artifact's gap list, assume the code
+  is the deliverable.
+- **`readJsonIfExists` throws on a syntax error.** It tolerates only an *absent* file. Every caller
+  that reads a user-editable file has to wrap it — `ThemeRegistry.load` did not, so a half-written
+  `themes/*.json` took the whole catalogue (built-ins included) down with it. That was harmless while
+  the catalogue was read once at startup and became a live crash the moment the directory was watched:
+  an editor saving a file *is* a truncated file for a few milliseconds.
+- **A Biome `// biome-ignore` must be the last comment before the node**, and it must sit above the
+  *hook call*, not above the dependency array. A prose comment placed after it silently voids the
+  suppression (`suppressions/unused`), and Biome reports `useExhaustiveDependencies` for an
+  **extra** dependency too, not just a missing one — the invalidation-counter pattern
+  (`catalogue`/`version` state that nothing in the body reads) always needs one.
+- **The nerd-set meter glyphs are two cells on purpose** (the user's `4c0e56a`): a patched font draws
+  them wider than one cell, so each carries a trailing space. The catalogue test's single-cell
+  assertion was the wrong half; it exempts those four now and pins the pad separately. Do not
+  "fix" the glyphs.
+- **`Table`'s row geometry is derived, not tuned.** A row draws inside a rounded border with its own
+  padding, so it can paint `ROW_BORDER + ROW_PADDING_X` fewer cells per side than the table's box; the
+  header draws outside that border and pays the same cells as padding. The old hand-tuned `- 3` was
+  one short, and the symptom only appears with a **filled flexible column**: the gap before it
+  collapses and the row wraps onto a second line inside its own border. `Table.render.test.tsx`
+  catches it; `layoutColumns` never could, because both halves agreed on widths and disagreed on room.
+- **A staging sweep must key on the newest mtime *inside* the tree.** A long download rewrites one
+  file and leaves every ancestor's mtime alone, so the directory's own timestamp calls a live install
+  abandoned. And age is the only usable discriminator at all: the create lock covers the server id,
+  not the staging uuid, so another instance's in-flight create is indistinguishable from a dead one.
+
 ## Phase 4a — networking: providers, tunnels, Cloudflare DNS (2026-08-13)
 
 - **`mctl.json.network` is a *profile name*, not a provider id**, and the code now says so. The old

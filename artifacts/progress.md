@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-13 (Phase 4a — networking; artifact gaps filled in)_
+_Last updated: 2026-08-13 (Phase 4a — networking; the self-contained known gaps closed)_
 
 ---
 
@@ -14,15 +14,52 @@ list — the first six entries are the most recent, the rest run oldest-first be
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
 
+- **The standing gaps, closed (2026-08-13, user request: "implement all the gaps").** Everything in
+  *Known gaps* that did not need credentials, RCON, or a whole phase behind it.
+  - **`core/icons/detect.test.ts`** — the single-cell assertion exempts the four nerd meter glyphs
+    (deliberately two cells, see the entry above) and a second test pins the pad, so a stray space
+    still fails. The suite has no failing test for the first time since 2026-08-12.
+  - **Biome is clean.** Unused imports in `setup/Welcome.tsx` and `components/Form.tsx`, an unused
+    variable in `lib/png.test.ts`, and a documented suppression for the toast test's raise-once effect.
+  - **`src/lib/colors.test.ts`** (new, 25 tests) — parse/format across all four hex lengths, the HSL
+    round trip's one-channel tolerance, the transforms' clamping, `mix`'s weight direction (reading it
+    as "how much of `to`" inverts every blended border and still looks plausible), and the WCAG
+    reference ratios.
+  - **`Table` row geometry is derived, not tuned** — `ROW_BORDER + ROW_PADDING_X` drives both the
+    outer-width subtraction and the header's padding. The old `- 3` was one cell short: with a filled
+    flexible column the gap before it collapsed and the row wrapped inside its own border.
+    `components/Table.render.test.tsx` (new, 6 tests) drives real frames and fails 3-of-6 against the
+    old constant.
+  - **`core/server/sweep.ts`** (new) — `sweepDownloads(paths, {maxAgeMs, partialMaxAgeMs, now})`
+    removes abandoned staging trees (6 h) and stale partial downloads (14 d). Called from
+    `createContext`, deliberately **not awaited**. Age is the discriminator because another instance's
+    in-flight create looks identical to a dead one, and the age is taken from the **newest file
+    inside** the tree — a long download leaves every ancestor's mtime alone.
+    `core/server/sweep.test.ts` (10 tests) includes the case that proves it never reaches into a
+    sibling `servers/` directory.
+  - **Theme files apply live.** `startWatchers` watches `~/.config/mctl/themes/` and emits
+    `ThemesChanged`; `ThemeRegistry.reload()` re-reads from scratch so a *deleted* file stops
+    resolving (`load()` only ever merges); `ThemeProvider` gained a `subscribeCatalogue` bridge,
+    mirroring `subscribeThemeId`, wired in `App.tsx` by `catalogueSubscriber`.
+    `core/theme/registry.test.ts` (new, 6 tests) + one watcher test.
+  - **One real defect found on the way:** `readJsonIfExists` *throws* on a syntax error (it tolerates
+    only an absent file), so a half-written `themes/*.json` took the whole catalogue down with it —
+    harmless while the catalogue was read once at startup, a live crash the moment the directory is
+    watched. `ThemeRegistry.load` now skips an unparsable file, as its doc comment always claimed.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` **421 pass / 0 fail** (43 files, +49),
+    `bun run format` clean, `bunx biome check src` clean. **Not driven under a pty this session** —
+    the theme-reload path is covered by unit tests over the real watcher and the real registry, but
+    *saving a theme file and watching the app repaint* is unconfirmed on screen.
+
 - **Hand-made UI passes by the user (2026-08-03 → 2026-08-13).** A dozen commits the artifacts never
   recorded, because they were the user's own work between agent sessions. They are *decisions*, not
   drift — do not revert them while "restoring" something an older entry below describes.
   - **`components/Table.tsx` — a row is now a bordered card, not a line** (`f442c93`, on top of
     `9a40104`): every row is a `rounded`-bordered box whose border turns `primary` when selected, the
     header keeps its bottom border **only when the table is empty**, header ink moved from `secondary`
-    to `primary`, cells gained `paddingX`, and the measured outer width is now `measured - 3` to pay
-    for the row borders. That subtraction is a hand-tuned constant: `layoutColumns` is still tested
-    (never-overflow at every width), but the `-3` itself is not.
+    to `primary`, cells gained `paddingX`, and the outer width lost a hand-tuned `3` to pay for the
+    row borders. (That subtraction was one cell short and is now derived — see the gap-closing entry
+    below.)
   - **`components/Form.tsx` — `FormFieldProps` became `BoxProps & {…}`** with `...rest` passthrough,
     plus `prefix` / `suffix` / `noBorder` (`d9cae5e`), which is what lets a control be embedded
     chromeless (the console command line). `Select`'s tab layout now sizes `tabWidth` from the longest
@@ -491,8 +528,7 @@ roadmap in `plan.md`.
   - Verified: `bunx tsc --noEmit` clean; `bun test` 22/22; pty run in a sandbox HOME — an external
     atomic `terminal`→`nord` edit repaints in Nord, and the same run with the fix stashed produces zero
     new output (non-vacuous). Rapid `t` cycling lands correctly with no snap-back.
-  - **Known gap:** the theme *catalogue* (`ThemeRegistry`) is still loaded once at startup — adding or
-    editing `~/.config/mctl/themes/*.json` needs a restart.
+  - (The catalogue's restart requirement was closed on 2026-08-13 — see the gap-closing entry.)
 
 - **Settings regrouped into tabs with a pinned action bar (2026-07-31):**
   - `src/app/Router.tsx` — added `OWN_SCROLL` (a `ReadonlySet<RouteId>`, currently `{settings}`):
@@ -940,27 +976,19 @@ roadmap in `plan.md`.
 - **The working tree is clean** as of 2026-08-13; the Dashboard tweak this file used to list as
   uncommitted is committed (`c233a97`, see the hand-made UI passes entry).
 
-### Current state of the checks (re-run 2026-08-13, on `master` at `c233a97`)
+### Current state of the checks (re-run 2026-08-13, after the gap-closing pass)
 
 | Check | Result |
 |---|---|
 | `bunx tsc --noEmit` | clean |
-| `bun test` | **371 pass / 1 fail**, 372 tests across 39 files |
+| `bun test` | **421 pass / 0 fail**, 43 files |
 | `bun run format` | clean |
-| `bunx biome check src` | 215 files, **1 error + 3 warnings**, all pre-existing |
+| `bunx biome check src` | 220 files, clean |
 
-The four Biome findings, so the next agent knows which are theirs and which are not:
-
-- `hooks/use-toast.test.tsx:39` — `useExhaustiveDependencies` (**the one error**): the test's helper
-  effect deliberately raises its toast once, so the empty dependency array is intentional. Silence it
-  with an ignore comment naming the reason rather than adding `toast` to the array.
-- `app/setup/Welcome.tsx:11`, `components/Form.tsx:33` — unused imports.
-- `lib/png.test.ts:214` — an unused variable.
-
-The single failing test is `core/icons/detect.test.ts` → *glyphs are single-cell*, on `nerd.heartFull`.
-**No longer an open question:** the two-cell nerd meter glyphs are the user's deliberate change
-(`4c0e56a`), so the test's assertion is the thing that is wrong. Fix = add `heartFull`, `heartEmpty`,
-`foodFull`, `foodEmpty` to the test's documented exemptions and say why.
+Nothing is failing and nothing is suppressed without a stated reason. The two suppressions in the
+tree are `hooks/use-toast.test.tsx` (raise-once effect) and `hooks/use-theme.tsx` (the catalogue
+invalidation counter); both name why. **A Biome suppression has to be the last comment before the
+node and sit above the hook call, not above its dependency array** — prose after it silently voids it.
 
 ## Next up (Phase 4 — the operations half)
 
@@ -994,6 +1022,17 @@ Carried over from Phase 3, deliberately not done:
 
 ## Known gaps / carried forward
 
+The self-contained ones were closed on 2026-08-13 (see the entry at the top of *Done*). What is left
+falls into three buckets, and the bucket is the reason it is still here:
+
+1. **Needs something MCTL cannot supply itself** — a Cloudflare zone and token, a playit account, an
+   RCON client. Listed below as unverified rather than unimplemented.
+2. **Is a roadmap phase wearing a gap's clothes** — backups, supervision/keepalive, the profile
+   editor, Modrinth/CurseForge. These belong in *Next up*, not here; building them opportunistically
+   under "close the gaps" would scaffold half a phase.
+3. **A deliberate product decision** recorded so nobody re-opens it: no version picker, the recorded
+   port on re-expose, NeoForge 1.20.1 steering to `--kind forge`.
+
 - **Phase 4a gaps (2026-08-13):**
   - **No tunnel keepalive.** An agent that dies takes the tunnel with it and nothing brings it back;
     `mctl network status` reports `down` and `mctl network up <id>` restores it by hand. Keepalive
@@ -1014,12 +1053,6 @@ Carried over from Phase 3, deliberately not done:
     edited port needs a restart, not just a re-expose.
 
 - **Phase 3 gaps:**
-  - **An orphaned staging directory is never swept.** A create killed with SIGKILL cannot run its
-    `finally`, so `$ROOT/downloads/staging/<uuid>/` survives (observed while testing resume). Nothing
-    reads it and it is safe to delete, but it grows. A sweep must use an age threshold — another
-    instance's in-flight create lives in exactly the same place.
-  - **`$ROOT/downloads/partial/` is never pruned either.** A partial for a version nobody installs
-    again stays forever. Same fix, same caution.
   - **Velocity is installable but not really *managed*.** It is a proxy: no world, no
     `server.properties`, no players of its own, and its `minecraftVersion` holds a *Velocity* version.
     The inspection screens find nothing and say nothing about why. Its config is `velocity.toml` —
@@ -1068,8 +1101,6 @@ Carried over from Phase 3, deliberately not done:
   (carried from last session; the scripted run hung and was killed). The wiring type-checks and
   shares the theme picker's persist path, but *picking a mode in the UI and seeing `config.icons`
   written* remains unconfirmed.
-- **The theme *catalogue* is still loaded once at startup** — adding or editing
-  `~/.config/mctl/themes/*.json` needs a restart.
 - **`mctl create` has no version picker in either front-end.** Both take a free-text version and fall
   back to the kind's newest release. Listing versions is a network round-trip per kind and would make
   the form unusable offline; revisit if users ask.
@@ -1079,14 +1110,6 @@ Carried over from Phase 3, deliberately not done:
 - **A `{pinned}` Java that is not installed is fetched silently** during create/start. That is the
   right default, but there is no "ask first" prompt in the TUI (the `autoInstall: false` path exists
   in `resolveJava` and is unused by the UI).
-- **`lib/colors.ts` has no test file**, and every theme, every `alpha()` wash and every focus tint in
-  the app goes through it. It is pure, dependency-free and takes no fixtures — `parseHex` round-trips,
-  the `#rrggbbaa` form, `mix` endpoints, and `contrastRatio` against the two WCAG reference pairs would
-  cover it in one sitting. The cheapest test debt left in the repo.
-- **`Table`'s `measured - 3` is a hand-tuned constant.** `layoutColumns` is tested at every width
-  1–200, but the outer-width subtraction that pays for the new row borders (`f442c93`) is not, so a
-  future border-style change silently misaligns the header against the rows. A test that renders a
-  bordered table and asserts header/row column starts agree would pin it.
 - **`ServerProvider` implementations are still not tested against recorded fixtures.** AGENTS.md asks
   for this and it is now the largest untested surface: **eight** providers, verified live rather than
   against fixtures. Their *pure* parts are covered (`decodeNeoVersion`, `compareMinecraftVersions`,
