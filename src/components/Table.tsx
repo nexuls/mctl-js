@@ -334,9 +334,6 @@ export function Table<T>({
 							flexDirection="row"
 							gap={gap}
 							paddingX={1}
-							backgroundColor={
-								selected ? alpha(colors.primary, 0.18) : undefined
-							}
 							onMouseDown={() =>
 								selected ? onActivate?.(row, index) : onSelect?.(row, index)
 							}

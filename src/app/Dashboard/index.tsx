@@ -43,7 +43,6 @@ import {
 	uptimeOf,
 	yesNo,
 } from "../shared.tsx";
-import { alpha } from "../../lib/colors.ts";
 
 /**
  * Terminal width below which the summary strip sheds its resource totals and
@@ -237,12 +236,7 @@ function ServerDetails({
 	const stacked = width < PANEL_STACK_WIDTH;
 
 	return (
-		<box
-			flexDirection="column"
-			padding={1}
-			paddingLeft={3}
-			backgroundColor={alpha(colors.primary, 0.18)}
-		>
+		<box flexDirection="column" padding={1} paddingLeft={3}>
 			<box flexDirection={stacked ? "column" : "row"} gap={stacked ? 0 : 3}>
 				<DetailGroup title="Server" columned={!stacked}>
 					<Detail label="name" value={server.name} />
