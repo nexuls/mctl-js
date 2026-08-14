@@ -5,6 +5,47 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Forms are a responsive grid; the version field spins (2026-08-14, user request)
+
+User: "Update the new server screen and settings forms. Re-organise the fields in a responsive grid
+view to optimize the spaces. Also, while loading the versions, show a better loading spinner in the
+field instead of just showing loading in the hint."
+
+- **A terminal has no media queries, so a responsive column count has to be *measured*.**
+  `components/FormGrid.tsx` uses `useBoxWidth` (the same primitive `Select` and `Table` already
+  depend on) and `columnsFor(width, min, max, gap)`. The gap is counted **between** columns, not
+  after them: two 46-wide columns need 94 cells, not 96. An unmeasured width (0, before yoga's first
+  pass) is one column on purpose — guessing wide truncates every field for a frame, guessing narrow
+  only under-uses the terminal for one.
+- **`packRows` is greedy and order-preserving, and that is load-bearing.** Row-major placement in
+  declaration order is what keeps the layout matching each page's Tab ring; an item that does not fit
+  starts a new row rather than letting the next item jump ahead of it. Neither page's ring changed.
+- **Cells are `flexBasis={0}` + proportional `flexGrow` inside a *row* parent.** That is the
+  sanctioned case — the trap recorded below (a `flexGrow`/`flexBasis` *section* inside a **column**
+  parent overlapping its text, hit twice: Dashboard, then the Network page) is untouched by this.
+  Sizing cells to content instead lets a long hint widen its column and stagger the fields below it.
+- **A row is as tall as its tallest cell**, so pairing a 10-row dropdown (Kind, whose options carry
+  descriptions) with a 3-row input leaves whitespace beside the short one. Accepted: the create form
+  went from running off the bottom of a 40-row terminal to fitting with room to spare.
+- **The spinner lives *in* the field, via `Select`'s new `prefix`/`suffix` passthrough to
+  `FormField`.** A word on the bottom border is easy to miss and cannot distinguish a fetch that is
+  still running from one that has stalled. The hint went back to its normal duty; it only names the
+  wait when it has nothing else to say. `Select`'s tabs-vs-dropdown width test subtracts 2 cells per
+  affix, or it measures room the options do not have.
+- **`Spinner` self-ticks unless given a `frame`**, exactly like `ProgressBar`'s indeterminate sweep,
+  so a page with one spinner does not re-render ten times a second and the toast provider can keep
+  driving its own. Frame counts differ per icon set (ASCII 4, the others 10) — always
+  `frame % length`.
+- **A rendered spinner test must pin the icon set** (`<IconProvider initialMode="ascii">`): `useIcons`
+  without a provider resolves `auto` off the *runner's* environment, which is the same trap the
+  player-head tests hit. The `ascii` frames are plain characters, so a captured frame can be asserted
+  on directly — and none of them occur in the box-drawing chrome, which is what makes the
+  "idle field has no spinner" half of the assertion meaningful.
+- Verified in tmux against a sandbox `$HOME`: the create form is two columns at 140 and one at 70;
+  Settings' Defaults, Backups (once enabled), Locations and Appearance groups all pair up at 140; and
+  with the API cache cleared the version field's braille spinner was captured mid-animation on four
+  consecutive frames.
+
 ## The version field became a picker; kinds describe themselves (2026-08-14, user request)
 
 User: "fetch the versions dynamically from the upstream api of the selected server type and render

@@ -423,6 +423,17 @@ export interface SelectProps<T = string> {
 	width?: number | `${number}%` | "auto";
 	/** Max visible rows in the dropdown layout before it scrolls. Defaults to 5. */
 	maxVisible?: number;
+	/**
+	 * Element drawn inside the border, left of the options. Forwarded to
+	 * {@link FormField}.
+	 */
+	prefix?: React.ReactNode;
+	/**
+	 * Element drawn inside the border, right of the options — a
+	 * {@link "./Spinner".Spinner} while the options are still being fetched, say.
+	 * Forwarded to {@link FormField}.
+	 */
+	suffix?: React.ReactNode;
 }
 
 /**
@@ -455,6 +466,8 @@ export function Select<T = string>({
 	required = false,
 	width = 40,
 	maxVisible = 5,
+	prefix,
+	suffix,
 }: SelectProps<T>) {
 	const { colors } = useTheme();
 	const ref = useRef<BoxRenderable | null>(null);
@@ -476,8 +489,12 @@ export function Select<T = string>({
 	// once the real width arrives.
 	const outer = measured || (typeof width === "number" ? width : 0);
 	// Interior width available to the control: outer minus the two borders and the
-	// one cell of padding on each side that FormField applies.
-	const inner = outer - 4;
+	// one cell of padding on each side that FormField applies, minus a cell plus
+	// its padding for each affix drawn beside the options (a loading spinner is
+	// the usual one) — otherwise the tabs-vs-dropdown test measures room the
+	// options do not have.
+	const affixes = (prefix ? 2 : 0) + (suffix ? 2 : 0);
+	const inner = outer - 4 - affixes;
 	const asTabs = optionsFitAsTabs(
 		options.map((o) => o.label),
 		inner,
@@ -573,6 +590,8 @@ export function Select<T = string>({
 			focused={focused}
 			onFocused={onFocused}
 			width={width}
+			prefix={prefix}
+			suffix={suffix}
 		>
 			{asTabs && !forceDropdown ? (
 				<tab-select

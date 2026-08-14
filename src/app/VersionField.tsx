@@ -25,7 +25,7 @@ import type { VersionInfo } from "../types/install.ts";
 import type { ServerVersionsState } from "../hooks/use-server-versions.ts";
 import { useIcons } from "../hooks/use-icons.tsx";
 import { useTheme } from "../hooks/use-theme.tsx";
-import { Select, type SelectItem } from "../components/index.ts";
+import { Select, type SelectItem, Spinner } from "../components/index.ts";
 import { alpha } from "../lib/colors.ts";
 
 /**
@@ -157,6 +157,12 @@ export function VersionField({
 				focused={focus.isFocused(prefix)}
 				onFocused={() => focus.setFocus(prefix)}
 				width={width}
+				// The wait lives *in* the field, not only in the hint: a static word on
+				// the bottom border is easy to miss and cannot distinguish a fetch that
+				// is still running from one that has quietly stalled. The glyph is the
+				// only moving thing on the form, so it is also what draws the eye to the
+				// one control that is not ready yet.
+				suffix={state.loading ? <Spinner /> : undefined}
 				// Six rows: enough to scan a version list without the picker taking
 				// over the form it sits in the middle of.
 				maxVisible={6}
@@ -195,9 +201,14 @@ export function VersionField({
 }
 
 /**
- * The bottom-border hint. A failure or a fetch in flight always wins the line —
- * "could not load versions" is the only place that news is shown, so it must not
- * be displaced by an explanation of the option that happens to be selected.
+ * The bottom-border hint. A failure always wins the line — "could not load
+ * versions" is the only place that news is shown, so it must not be displaced by
+ * an explanation of the option that happens to be selected.
+ *
+ * A fetch *in flight* no longer takes the line: the spinner inside the field
+ * says so, and it says it better. The hint still names the wait when it has
+ * nothing else to offer, because a picker holding one option and no explanation
+ * reads as a broken field rather than a pending one.
  *
  * @param latest what "latest" promises, when that is the selected option.
  */
@@ -207,8 +218,8 @@ function fieldHint(
 	latest?: string,
 ): string {
 	if (state.error) return `could not load versions — ${state.error}`;
-	if (state.loading) return "loading versions…";
 	if (latest !== undefined) return latest;
+	if (state.loading) return "fetching the published versions";
 	if (state.all.length === 0) return "no versions published";
 	return `${count} of ${state.all.length} versions`;
 }

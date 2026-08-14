@@ -14,6 +14,8 @@ import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot } from "@opentui/react";
 import { ThemeRegistry } from "../core/theme/registry.ts";
 import { ThemeProvider } from "../hooks/use-theme.tsx";
+import { IconProvider } from "../hooks/use-icons.tsx";
+import { SPINNERS } from "../core/icons/catalogue.ts";
 import type { ServerVersionsState } from "../hooks/use-server-versions.ts";
 import type { VersionChannel } from "../core/server/versions.ts";
 import type { VersionInfo } from "../types/install.ts";
@@ -56,13 +58,17 @@ async function mount(
 	});
 	createRoot(renderer).render(
 		<ThemeProvider registry={registry} initialThemeId="github">
-			<VersionField
-				state={versions}
-				value={value}
-				onChange={() => {}}
-				focus={{ isFocused: (id) => id === focusedId, setFocus: () => {} }}
-				width={width}
-			/>
+			{/* Pinned to `ascii` so a captured frame is the same whatever font the
+			    test runner's terminal has — the spinner test below depends on it. */}
+			<IconProvider initialMode="ascii">
+				<VersionField
+					state={versions}
+					value={value}
+					onChange={() => {}}
+					focus={{ isFocused: (id) => id === focusedId, setFocus: () => {} }}
+					width={width}
+				/>
+			</IconProvider>
 		</ThemeProvider>,
 	);
 	renderOnce();
@@ -136,6 +142,24 @@ test("a value missing from the list is still the selected option", async () => {
 	// the options at all.
 	expect(frame).toContain("1.20.1");
 	expect(frame).toContain("no versions published");
+});
+
+test("a fetch in flight spins inside the field, not just in the hint", async () => {
+	// The `ascii` set's four frames are plain characters, so the assertion does
+	// not depend on the runner's font. A non-loading field is captured with the
+	// same set as the control: none of those characters may appear by accident
+	// (the frame is otherwise box-drawing and version ids), so the difference is
+	// the spinner and nothing else.
+	const spinning = (
+		await mount(state({ all: [], versions: [], channels: [], loading: true }))
+	).join("\n");
+	const idle = (await mount(state())).join("\n");
+	const frames = SPINNERS.ascii;
+
+	expect(frames.some((glyph) => spinning.includes(glyph))).toBe(true);
+	expect(frames.some((glyph) => idle.includes(glyph))).toBe(false);
+	// And the hint spends its line on something the spinner cannot say.
+	expect(spinning).not.toContain("loading versions");
 });
 
 test("versionFieldIds contributes the select plus one id per toggle", () => {

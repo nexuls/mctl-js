@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (version picker + per-kind descriptions)_
+_Last updated: 2026-08-14 (responsive form grid + in-field loading spinner)_
 
 ---
 
@@ -13,6 +13,33 @@ Every entry is dated. Dates are the date of the commit that landed the work, not
 list — the first six entries are the most recent, the rest run oldest-first below them. "user request"
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
+
+- **Forms became a responsive grid; the version field spins (2026-08-14, user request).**
+  - `src/components/FormGrid.tsx` (**new**) — `FormGrid` measures its own width and lays children out
+    in as many columns as fit (two by default, from 94 cells), plus `FormGridItem span="full"` and
+    the pure, exported `columnsFor` / `packRows`. Packing is row-major and order-preserving, so both
+    pages' focus rings are unchanged.
+  - `src/components/Spinner.tsx` (**new**) — the shared work-in-flight glyph over the active icon
+    set's frames; self-ticking at 10 fps unless the caller supplies `frame`.
+  - `src/components/Form.tsx` — `Select` gained `prefix`/`suffix`, forwarded to `FormField`; the
+    tabs-vs-dropdown width test subtracts the cells an affix occupies.
+  - `src/app/VersionField.tsx` — a `Spinner` sits in the field while the list is being fetched; the
+    hint no longer spends its line on "loading versions…" and only names the wait when it has nothing
+    else to say.
+  - `src/app/ServerCreate/index.tsx` — the six fields moved into a `FormGrid` (Kind keeps its
+    description line inside its own cell).
+  - `src/app/Settings/index.tsx` — Locations (the two overrides), Defaults (Kind/Version,
+    Memory/Runtime, full-width EULA), Backups (full-width switch, then Provider/Compression) and
+    Appearance (Theme/Icons) all grid; the hardcoded `width="50%"` fields are gone.
+  - Tests (**462 total, 49 files**, +12): `components/FormGrid.test.tsx` (8 — the packing rules plus
+    real frames proving the reflow at 90 and 40 cells), `components/Spinner.test.tsx` (3, including
+    that it animates with no caller-supplied frame), and one more in `app/VersionField.test.tsx`
+    (the field spins while loading and does not while idle; its mount now pins the `ascii` icon set).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 462 pass / 0 fail, `bun run format` and
+    `bunx biome check src` clean. Driven **in tmux against a sandbox `$HOME`**: the create form at
+    140×40 (two columns, whole form on screen) and 70×30 (one column); all five Settings groups at
+    140×40, including Backups with the switch on; and, with `~/.cache/mctl/api` cleared, the version
+    field's spinner captured mid-animation on four consecutive frames.
 
 - **The version field became a picker; kinds describe themselves (2026-08-14, user request).**
   - `src/types/install.ts` — `VersionInfo.type` gained `beta` and `alpha`;

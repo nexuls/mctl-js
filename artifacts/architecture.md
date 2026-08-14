@@ -668,6 +668,28 @@ whole slack and the row reads as padding.
 reserves one cell for the scrollbar (matched by the header's padding) because a scrollbox draws its
 scrollbar inside its own width.
 
+## Form layout — `components/FormGrid.tsx` + `components/Spinner.tsx`
+
+Forms are laid out by `FormGrid`, not by stacking fields. It **measures its own width**
+(`useBoxWidth`, the same primitive `Select` and `Table` use — OpenTUI's `width` vocabulary never
+hands a component a number) and derives a column count: `columnsFor(width, minColumnWidth,
+maxColumns, gap)`, defaulting to two columns at ≥ 94 cells. `packRows` is greedy and
+**order-preserving**, so the visual order is the declaration order and therefore the page's Tab ring
+order — the rings in `ServerCreate` and `Settings` are unchanged by the grid. Both functions are pure
+and exported; a child wrapped in `FormGridItem span="full"` takes a row to itself (a switch that
+reveals the fields beneath it, a preview strip). Cells are `flexBasis={0}` with a proportional
+`flexGrow` inside a **row** parent — the sanctioned case; the same props on a section inside a
+*column* parent overlap their text (see `memory.md`).
+
+An unmeasured width (0, before yoga's first pass) is one column, deliberately: guessing wide would
+truncate every field for a frame, guessing narrow only under-uses the terminal for one.
+
+`Spinner` is the shared "work in flight" glyph — the active icon set's frames, animating on its own
+interval unless a caller that already owns a ticker supplies `frame` (as the toast provider does).
+`Select` forwards `prefix`/`suffix` to `FormField`, which is how a spinner sits **inside** the field
+whose options are still being fetched; the tabs-vs-dropdown width test subtracts the cells an affix
+takes.
+
 ## Dashboard — `app/Dashboard/`
 
 The landing screen **and** the fleet list: the former Servers page was folded into it (2026-08-03), so

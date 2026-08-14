@@ -14,11 +14,22 @@
  * listing versions costs a network round trip per kind — the fetch is
  * non-blocking now, so the form still renders (and still accepts "latest")
  * while the list is loading or when it cannot be loaded at all.
+ *
+ * The fields are laid out in a {@link FormGrid}: one column on a narrow
+ * terminal, two once there is room, filled row-major in the same order as the
+ * focus ring below — the form used to be a single tall column that ran off the
+ * bottom of the screen while two thirds of a wide terminal sat empty.
  */
 
 import { useState } from "react";
 import { useKeyboard } from "@opentui/react";
-import { Button, Input, Select, Checkbox } from "../../components/index.ts";
+import {
+	Button,
+	Checkbox,
+	FormGrid,
+	Input,
+	Select,
+} from "../../components/index.ts";
 import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
@@ -175,75 +186,85 @@ export function ServerCreate() {
 				subtitle={busy ? "creating…" : "Fills in from your defaults"}
 			/>
 
-			<Input
-				label="Name"
-				hint={id === "" ? "required" : `id: ${id}`}
-				value={name}
-				onChange={setName}
-				focused={ring.isFocused("name")}
-				onFocused={() => ring.setFocus("name")}
-				width="100%"
-			/>
-			<Select
-				label="Kind"
-				// The provider's own one-liner, so the dropdown layout explains each
-				// choice; the tab layout has no room for it, hence the line below.
-				options={(context?.providers.servers() ?? []).map((provider) => ({
-					value: provider.id,
-					label: provider.displayName,
-					description: provider.description,
-				}))}
-				value={kind}
-				onChange={setKind}
-				focused={ring.isFocused("kind")}
-				onFocused={() => ring.setFocus("kind")}
-				width="100%"
-			/>
-			{kindProvider ? (
-				<text fg={colors.muted} paddingX={2} truncate wrapMode="none">
-					{kindProvider.description}
-				</text>
-			) : null}
-			<VersionField
-				state={versions}
-				value={minecraftVersion}
-				onChange={setMinecraftVersion}
-				focus={ring}
-				latestHint="newest release for this kind, resolved at create time"
-			/>
-			<Input
-				label="Memory"
-				hint="JVM heap, e.g. 2G or 4096M"
-				value={memory}
-				onChange={setMemory}
-				focused={ring.isFocused("memory")}
-				onFocused={() => ring.setFocus("memory")}
-				width="100%"
-			/>
-			<Select
-				label="Runtime"
-				// From the registry, like Kind above it: the runtimes this build ships
-				// are whatever `providers/index.ts` registered, and a hand-kept copy
-				// here is a list that silently stays a phase behind.
-				options={(context?.providers.runtimes() ?? []).map((provider) => ({
-					value: provider.id,
-					label: provider.displayName,
-				}))}
-				value={runtime}
-				onChange={(value) => setRuntime(value as RuntimeKind)}
-				focused={ring.isFocused("runtime")}
-				onFocused={() => ring.setFocus("runtime")}
-				width="100%"
-			/>
-			<Checkbox
-				label="EULA"
-				hint="required before a server will start"
-				caption="I accept the Minecraft EULA (minecraft.net/eula)"
-				checked={eula}
-				onChange={setEula}
-				focused={ring.isFocused("eula")}
-				onFocused={() => ring.setFocus("eula")}
-			/>
+			{/* Row-major and in ring order, so Tab and the eye agree. One column on a
+			    narrow terminal, two once there is room for both. */}
+			<FormGrid>
+				<Input
+					label="Name"
+					hint={id === "" ? "required" : `id: ${id}`}
+					value={name}
+					onChange={setName}
+					focused={ring.isFocused("name")}
+					onFocused={() => ring.setFocus("name")}
+					width="100%"
+				/>
+				{/* Kind and its explanation are one cell: the line belongs to the field
+				    above it, and letting the grid place it separately would strand it
+				    beside a different field. */}
+				<box flexDirection="column">
+					<Select
+						label="Kind"
+						// The provider's own one-liner, so the dropdown layout explains
+						// each choice; the tab layout has no room for it, hence the line
+						// below.
+						options={(context?.providers.servers() ?? []).map((provider) => ({
+							value: provider.id,
+							label: provider.displayName,
+							description: provider.description,
+						}))}
+						value={kind}
+						onChange={setKind}
+						focused={ring.isFocused("kind")}
+						onFocused={() => ring.setFocus("kind")}
+						width="100%"
+					/>
+					{kindProvider ? (
+						<text fg={colors.muted} paddingX={2} truncate wrapMode="none">
+							{kindProvider.description}
+						</text>
+					) : null}
+				</box>
+				<VersionField
+					state={versions}
+					value={minecraftVersion}
+					onChange={setMinecraftVersion}
+					focus={ring}
+					latestHint="newest release for this kind, resolved at create time"
+				/>
+				<Input
+					label="Memory"
+					hint="JVM heap, e.g. 2G or 4096M"
+					value={memory}
+					onChange={setMemory}
+					focused={ring.isFocused("memory")}
+					onFocused={() => ring.setFocus("memory")}
+					width="100%"
+				/>
+				<Select
+					label="Runtime"
+					// From the registry, like Kind above it: the runtimes this build ships
+					// are whatever `providers/index.ts` registered, and a hand-kept copy
+					// here is a list that silently stays a phase behind.
+					options={(context?.providers.runtimes() ?? []).map((provider) => ({
+						value: provider.id,
+						label: provider.displayName,
+					}))}
+					value={runtime}
+					onChange={(value) => setRuntime(value as RuntimeKind)}
+					focused={ring.isFocused("runtime")}
+					onFocused={() => ring.setFocus("runtime")}
+					width="100%"
+				/>
+				<Checkbox
+					label="EULA"
+					hint="required before a server will start"
+					caption="I accept the Minecraft EULA (minecraft.net/eula)"
+					checked={eula}
+					onChange={setEula}
+					focused={ring.isFocused("eula")}
+					onFocused={() => ring.setFocus("eula")}
+				/>
+			</FormGrid>
 
 			{job ? (
 				<box flexDirection="column" marginTop={1} gap={0}>
