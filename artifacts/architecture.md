@@ -232,6 +232,23 @@ concept of; it is recorded in `mctl.json.shadowBans` as an MCTL-side marker and 
 server at all, so the UI names them as absent — the same rule the Resources panel follows for
 TPS.
 
+**Installed content — `core/server/content.ts` + `core/server/content-meta.ts`.** The fifth read
+path, and the expensive twin of the jar *counts* `inspect.ts` reports: `readServerContent` opens
+every archive in `mods/`, `plugins/` and the world's `datapacks/` and reads the manifest inside it,
+so each row is named by the mod rather than by its filename. `content-meta.ts` is pure text-in,
+data-out and holds one reader per ecosystem manifest (Fabric, Quilt, Forge/NeoForge, legacy
+`mcmod.info`, Bukkit, `pack.mcmeta`); its TOML and YAML readers are deliberately narrow extractors,
+which does not touch the JSON-only rule — that rule is about what MCTL *writes*. `lib/zip.ts` is the
+leaf underneath, reading named entries out of an archive without loading it.
+
+The write side is `setContentEnabled`, and it is the **one mutation MCTL makes inside a server
+directory besides `mctl.json` and the create-time `eula.txt`**: a rename to or from `*.jar.disabled`,
+which is how the whole ecosystem parks a jar. It refuses an existing target (so nothing is ever
+overwritten), a path outside the server directory, and datapacks — whose enablement is recorded by
+the *world*, not by the filename, so renaming one would leave `level.dat` naming a pack that is gone.
+`ContentSection.toggleable` carries that fact to both front-ends. The change lands at the server's
+next start, because loaders read their directory once during boot.
+
 **Skins — `core/skins/` + `lib/png.ts` + `types/skin.ts`.** A player's head is fetched, not
 invented. `resolveHeadSkin({name, uuid})` walks a fixed **fallback chain — Mojang → TLauncher →
 Ely.by** — and turns the first skin PNG it gets into a `HeadSkin`: the same palette-plus-8×8-grid
@@ -756,6 +773,11 @@ the grid never waits on the network. Like the console's
 command line, its grid joins the container's focus ring only while its tab is active, so the tab
 bar keeps ←/→ the rest of the time. `PlayerActionsDialog` is the two-stage modal (menu, then a
 single argument field) that turns a selection into one `runPlayerAction` call.
+
+The **Content** tab is the second screen with its own data source and its own write: it reads
+through `hooks/use-server-content.ts` (over `core/server/content.ts`) rather than the shared
+`insight`, lists one section per directory with a Phase-5 *Browse marketplace* placeholder, and joins
+the container's ring so ↑/↓ select and Space parks or restores a jar. Its CLI peer is `mctl content`.
 
 What is not measurable is named rather than omitted — TPS/MSPT, heap occupancy and per-process
 network I/O on Performance; Phase-4 tunnels on Network; Phase-4 archives on Backups. The Settings tab

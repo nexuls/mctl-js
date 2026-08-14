@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (responsive form grid + in-field loading spinner)_
+_Last updated: 2026-08-14 (installed content: listing, metadata, enable/disable)_
 
 ---
 
@@ -13,6 +13,48 @@ Every entry is dated. Dates are the date of the commit that landed the work, not
 list — the first six entries are the most recent, the rest run oldest-first below them. "user request"
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
+
+- **The Content tab lists what is installed, and can park it (2026-08-14, user request).**
+  "Display the list of installed mods/plugins/resource packs. Load the files and display the metadata
+  in a list view. Add option to enable or disable mods. Add a dummy button for market place."
+  - `src/lib/zip.ts` (**new**) — a read-only ZIP reader (`readZipEntries` / `readZipText`), stored and
+    deflated members, ZIP64 and encrypted entries throw `ZipError`. It **seeks**: EOCD from the tail,
+    then the central directory, then only the wanted entries' local headers — a mod jar is tens of MB
+    and its manifest is a few hundred bytes. `src/lib/zip.fixture.ts` (**new**, test-only) builds real
+    archives (real CRC-32s, real deflate) so both test files can make fixtures without importing each
+    other.
+  - `src/core/server/content-meta.ts` (**new**) — pure manifest readers: `fabric.mod.json`,
+    `quilt.mod.json`, `META-INF/neoforge.mods.toml`, `META-INF/mods.toml`, `mcmod.info`,
+    `plugin.yml` / `paper-plugin.yml`, `pack.mcmeta`, plus `parseJarMeta` (the precedence) and
+    `manifestVersion` (Forge's `${file.jarVersion}` resolved from `META-INF/MANIFEST.MF`). The TOML
+    and YAML readers are deliberately narrow — MCTL still writes JSON only.
+  - `src/core/server/content.ts` (**new**) — `readServerContent(server, levelName)` (the expensive
+    twin of `inspect.ts`'s counts) and `setContentEnabled(server, item, enabled)`, which renames to
+    and from `*.jar.disabled`. Refuses an existing target, a path outside the server directory, and
+    datapacks (a world records which are on, so a rename would corrupt `level.dat`'s view).
+  - `src/hooks/use-server-content.ts` (**new**) — 15 s self-chaining poll, immediate refresh on a
+    toggle, `toggle` returning `null | message` like `usePlayers.act`.
+  - `src/app/Server/tabs/Content.tsx` — rewritten: a section per list with its counts, its directory
+    and a *Browse marketplace* placeholder (Phase 5), one row per item (checkbox, name, description,
+    and version/loader/size above 72 cells), then the unchanged Resource pack and On disk panels.
+    Joins the container's ring as `CONTENT_ID`: ↑/↓ select, Space toggles, `m` opens the placeholder.
+  - `src/cli/commands/content.ts` (**new**) + router — `mctl content <id> [--json]` and
+    `mctl content enable|disable <id> <file>`, the tab's CLI peer over the same core functions.
+  - Tests (**515 total, 53 files**, +53): `lib/zip.test.ts` (9), `core/server/content-meta.test.ts`
+    (23), `core/server/content.test.ts` (15, real jars in a real server directory — including the
+    overwrite, outside-the-directory and datapack refusals), `app/Server/tabs/Content.test.tsx` (6,
+    real frames over real jars).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 515 pass / 0 fail, `bun run format` and
+    `bunx biome check src` clean bar one pre-existing warning (`components/Table.tsx` unused import).
+    Driven **in tmux at 120×42 and 70×30** against a sandbox `$HOME` holding real fixture jars: a
+    Fabric mod, a Forge mod whose `${file.jarVersion}` resolved to `19.21.0.247`, a Bukkit plugin, a
+    zipped datapack, a parked jar and a deliberately corrupt one. Space renamed `lithium-0.14.jar` to
+    `.disabled` on disk, the row moved to the disabled group and the caret stayed on it; `m` and a
+    datapack toggle both raised their toasts; at 70 cells the version column drops with no wrap. CLI
+    exercised for list, `--json`, enable by display name, disable by filename, an unknown name (exit
+    2), a datapack (exit 1) and the overwrite guard (exit 1).
+  - **Not done, deliberately:** installing anything. The marketplace buttons report that they are
+    Phase-5 placeholders rather than doing nothing silently.
 
 - **Forms became a responsive grid; the version field spins (2026-08-14, user request).**
   - `src/components/FormGrid.tsx` (**new**) — `FormGrid` measures its own width and lays children out

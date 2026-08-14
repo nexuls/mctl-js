@@ -5,6 +5,51 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Installed content: manifests, and a rename MCTL is allowed to do (2026-08-14, user request)
+
+User: "display the list of installed mods/plugins/resource packs. Load the files and display the
+metadata in a list view. Add option to enable or disable mods. Add a dummy button for market place."
+
+- **Disabling is a rename to `*.jar.disabled`, and that is a deliberate exception to "MCTL writes
+  only `mctl.json` into a server directory."** It is the ecosystem's own convention (every loader
+  matches `mods/*.jar`), it never destroys anything, and `setContentEnabled` refuses if the target
+  name already exists — a stale parked copy of the same jar is exactly the case where a naive rename
+  eats the user's other file. Pinned by a test. Keep any future write here in that shape.
+- **Datapacks are listed but must never be toggled by renaming.** `level.dat`'s `DataPacks` tags
+  record which are enabled, so a rename leaves the world naming a pack that no longer exists.
+  `ContentSection.toggleable` says so in the model and both front-ends refuse rather than discovering
+  it at runtime.
+- **A jar names itself in whatever its loader reads, so there are six manifests, not one.**
+  `fabric.mod.json`, `quilt.mod.json` (everything nested under `quilt_loader`, contributors written
+  as `{"Name": "Role"}` so the *keys* are the people), `META-INF/neoforge.mods.toml` (NeoForge ≥
+  20.5) then `META-INF/mods.toml`, `mcmod.info` (Forge ≤ 1.12, sometimes wrapped in `{"modList":…}`),
+  `plugin.yml`/`paper-plugin.yml`, `pack.mcmeta`. Order matters: a Fabric mod bundling a companion
+  `plugin.yml` is a Fabric mod.
+  - **Forge's template writes `version="${file.jarVersion}"`** and the loader substitutes it at
+    runtime from `META-INF/MANIFEST.MF`'s `Implementation-Version`. Unresolved, every Forge mod in
+    the list shows that literal placeholder.
+  - **A `pack.mcmeta` has a description and no name**, which is why `ContentItem.derivedName` means
+    "nothing described this at all", not "the name came from the filename" — the first cut said
+    "no readable manifest" under every datapack.
+  - The TOML and YAML readers are **narrow extractors, not parsers** (first `[[mods]]` table;
+    unindented `key: value` plus the `- item` lines after an empty `authors:`). MCTL's JSON-only rule
+    is about what it *writes*; these are someone else's files and are only ever read.
+- **`lib/zip.ts` seeks rather than loading.** EOCD from the tail → central directory → the wanted
+  entries only. Two facts that break a naive reader: the **local** header carries its own extra field
+  whose length differs from the central record's, so the data offset must come from the local one;
+  and the EOCD signature can occur inside an archive comment, so scan **backwards** and take the last
+  match. ZIP64 sentinels (`0xffffffff`) throw rather than being read as offsets.
+- **`ContentItem.key` is the *enabled* filename**, so a toggle does not move the UI's selection —
+  the same problem `PlayerProfile.key` solves for a roster that is rebuilt every poll.
+- The CLI's lookup prefers an **exact filename** before any looser match: with both `x.jar` and
+  `x.jar.disabled` present, every other rule makes both names ambiguous, and the exact name is
+  precisely how a user disambiguates.
+- Enabling or disabling takes effect at the **next start** (a loader reads `mods/` once during boot).
+  Both front-ends say so; a bare "Enabled" would misrepresent it.
+- Found while driving the pty, **pre-existing and left alone**: `app/Router.tsx` boots into
+  `initialRoute="server"` with `params={{serverId:"create-server"}}` (a hardcoded debug route in the
+  user's working tree), so the app opens on a "not found" page until `1` is pressed.
+
 ## Forms are a responsive grid; the version field spins (2026-08-14, user request)
 
 User: "Update the new server screen and settings forms. Re-organise the fields in a responsive grid
