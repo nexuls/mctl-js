@@ -596,9 +596,8 @@ export function Settings() {
 								label="Theme"
 								hint="`terminal` follows the host palette"
 								options={themes.map((t) => ({
-									label: t.name,
+									label: `${t.name}  (${t.source})`,
 									value: t.id,
-									description: t.source,
 								}))}
 								value={themeId}
 								width="100%"
