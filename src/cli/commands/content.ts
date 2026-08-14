@@ -21,6 +21,7 @@ import {
 	setContentEnabled,
 	type ContentItem,
 } from "../../core/server/content.ts";
+import { createProviderRegistry } from "../../providers/index.ts";
 import { renderTable, toJson, wantsJson } from "../format.ts";
 import { reportConfigError } from "./list.ts";
 
@@ -50,7 +51,13 @@ async function loadTarget(id: string) {
 	const properties = await loadServerProperties(server.path).catch(
 		() => undefined,
 	);
-	return { server, levelName: properties?.levelName ?? "world" };
+	// The registry, not the whole core context: this command reads and renames,
+	// and all it needs from a provider is whether the kind loads mods or plugins.
+	return {
+		server,
+		levelName: properties?.levelName ?? "world",
+		providers: createProviderRegistry(),
+	};
 }
 
 /**
@@ -124,7 +131,11 @@ export async function runContent(argv: string[]): Promise<number> {
 		return 2;
 	}
 
-	const listing = await readServerContent(target.server, target.levelName);
+	const listing = await readServerContent(
+		target.server,
+		target.levelName,
+		target.providers,
+	);
 
 	if (!action) {
 		if (wantsJson(argv)) {
@@ -133,6 +144,15 @@ export async function runContent(argv: string[]): Promise<number> {
 		}
 		for (const section of listing.sections) {
 			const heading = section.id.toUpperCase();
+			// A kind that cannot load this sort of content is worth one line, not a
+			// table — unless someone has put files there anyway, which is a thing
+			// they need told rather than a section to skip.
+			if (!section.supported && section.items.length === 0) {
+				console.log(
+					`${heading}: ${target.server.kind} servers do not load ${section.id}\n`,
+				);
+				continue;
+			}
 			if (!section.present) {
 				console.log(`${heading}: no ${section.directory} directory\n`);
 				continue;
@@ -141,7 +161,11 @@ export async function runContent(argv: string[]): Promise<number> {
 				console.log(`${heading}: ${section.directory} is empty\n`);
 				continue;
 			}
-			console.log(`${heading} (${section.directory})`);
+			console.log(
+				section.supported
+					? `${heading} (${section.directory})`
+					: `${heading} (${section.directory}) — ${target.server.kind} servers do not load ${section.id}, so these are ignored`,
+			);
 			console.log(
 				renderTable(
 					["", "NAME", "VERSION", "FROM", "FILE"],

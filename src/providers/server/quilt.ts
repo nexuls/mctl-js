@@ -122,6 +122,9 @@ export class QuiltProvider implements ServerProvider {
 	readonly id = "quilt";
 	readonly displayName = "Quilt";
 	readonly description = "Fabric fork — runs most Fabric mods, own toolchain";
+	// A loader kind is a vanilla server underneath, so it takes datapacks too;
+	// Bukkit-family plugins are a different API and are not loaded at all.
+	readonly content = { mods: true, plugins: false, datapacks: true };
 
 	/** Every Minecraft version Quilt supports, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

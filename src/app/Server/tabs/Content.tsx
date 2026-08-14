@@ -288,10 +288,25 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 
 	/** A section's panel: its counts and its marketplace button, then its rows. */
 	const panel = (section: ContentSection) => {
+		// A kind that does not load this sort of content has no panel at all: a
+		// Paper server is not a Fabric server missing its mods, and an empty "Mods"
+		// list implies mods are a thing it could be given.
+		//
+		// Unless files are there anyway — someone dropped a Fabric jar into a Paper
+		// server's `mods/`. Then the panel is drawn *and says so*, because a jar
+		// that will never load is exactly the thing a user needs told.
+		if (!section.supported && section.items.length === 0) return null;
 		const enabled = section.items.filter((item) => item.enabled).length;
 		const disabled = section.items.length - enabled;
 		return (
 			<Panel key={section.id} title={SECTION_TITLES[section.id]}>
+				{section.supported ? null : (
+					<box marginBottom={1}>
+						<text fg={colors.warning} truncate wrapMode="none">
+							{`${icons.warning} A ${server.kind} server does not load ${SECTION_TITLES[section.id].toLowerCase()} — these files are ignored.`}
+						</text>
+					</box>
+				)}
 				<box
 					flexDirection="row"
 					justifyContent="space-between"
@@ -303,14 +318,17 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 							? `${icons.folder} ${section.directory} ${icons.separator} ${enabled} enabled${disabled > 0 ? `, ${disabled} disabled` : ""}`
 							: `${icons.folder} ${section.directory} ${icons.separator} ${empty} (no directory)`}
 					</text>
-					<Button
-						size="small"
-						kind="ghost"
-						variant="info"
-						onClick={() => market(section.id)}
-					>
-						Browse marketplace
-					</Button>
+					{/* No marketplace where nothing from it could ever load. */}
+					{section.supported ? (
+						<Button
+							size="small"
+							kind="ghost"
+							variant="info"
+							onClick={() => market(section.id)}
+						>
+							Browse marketplace
+						</Button>
+					) : null}
 				</box>
 				<box marginTop={1} flexDirection="column">
 					<SectionBody

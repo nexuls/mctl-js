@@ -117,13 +117,14 @@ test("a mod is listed under the name its manifest gives it", async () => {
 test("a parked jar is listed, unticked", async () => {
 	await jar("mods/live.jar", fabricMod("Live", "1.0"));
 	await jar("mods/parked.jar.disabled", fabricMod("Parked", "1.0"));
-	const frame = await mount();
-	expect(frame).toContain("Live");
-	expect(frame).toContain("Parked");
-	// `[x]` for the loaded one, `[ ]` for the parked one, in the ascii set.
-	expect(frame).toContain("[x]");
-	expect(frame).toContain("[ ]");
-	expect(frame).toContain("1 enabled, 1 disabled");
+	const lines = (await mount()).split("\n");
+	const row = (name: string) => lines.find((line) => line.includes(name)) ?? "";
+	// The `ascii` set's checkbox is `x` when ticked and a blank when not, so the
+	// assertion is about the glyph *before the name*: the loaded mod has one, the
+	// parked one has empty space where it would be.
+	expect(row("Live")).toMatch(/x\s+Live/);
+	expect(row("Parked")).toMatch(/│\s+Parked/);
+	expect(lines.join("\n")).toContain("1 enabled, 1 disabled");
 });
 
 test("rows are in name order whatever their state, separated by a rule", async () => {
@@ -148,9 +149,11 @@ test("clicking a row's checkbox parks the jar", async () => {
 	const harness = await mountTab();
 	const lines = harness.captureCharFrame().split("\n");
 	// The checkbox is the row's only control, so this is the whole enable/disable
-	// gesture in the TUI — there is no caret and no Space to press.
-	const y = lines.findIndex((line) => line.includes("[x] Sodium"));
-	const x = (lines[y] as string).indexOf("[x]") + 1;
+	// gesture in the TUI — there is no caret and no Space to press. The click lands
+	// on the name because the glyph and the caption share one box, and that box
+	// carries the handler.
+	const y = lines.findIndex((line) => line.includes("Sodium"));
+	const x = (lines[y] as string).indexOf("Sodium");
 	await harness.mockMouse.click(x, y);
 	await Bun.sleep(200);
 	expect(existsSync(join(dir, "mods", "sodium.jar.disabled"))).toBe(true);

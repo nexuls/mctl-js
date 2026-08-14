@@ -86,6 +86,9 @@ export class FabricProvider implements ServerProvider {
 	readonly id = "fabric";
 	readonly displayName = "Fabric";
 	readonly description = "Lightweight mod loader — fast to update, needs mods";
+	// A loader kind is a vanilla server underneath, so it takes datapacks too;
+	// Bukkit-family plugins are a different API and are not loaded at all.
+	readonly content = { mods: true, plugins: false, datapacks: true };
 
 	/**
 	 * Every Minecraft version Fabric supports, newest first.

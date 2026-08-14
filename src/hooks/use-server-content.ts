@@ -23,6 +23,7 @@ import {
 	type ServerContentListing,
 } from "../core/server/content.ts";
 import type { Server } from "../types/server.ts";
+import { useMctl } from "./use-mctl.tsx";
 
 /** How often the directories are re-read. */
 const POLL_MS = 15_000;
@@ -62,12 +63,19 @@ export function useServerContent(
 	const [loading, setLoading] = useState(true);
 	const [nonce, setNonce] = useState(0);
 
+	// The registry answers "does this kind take mods at all?", which is a property
+	// of the provider and not of the directory. It arrives with the core context,
+	// so it is `undefined` for the first render or two — hence its presence in the
+	// signature below: the round that ran without it must be redone, or the tab
+	// would spend its life showing sections the kind cannot load.
+	const providers = useMctl().context?.providers;
+
 	// Keyed on what should restart the poll, not on the view model itself: the
 	// page hands back a fresh `server` object every couple of seconds, and keying
 	// on its identity would tear a round down before it could finish.
-	const signature = `${server?.id ?? ""}|${server?.available ?? ""}|${levelName ?? ""}`;
-	const latest = useRef({ server, levelName });
-	latest.current = { server, levelName };
+	const signature = `${server?.id ?? ""}|${server?.available ?? ""}|${levelName ?? ""}|${providers ? "1" : "0"}`;
+	const latest = useRef({ server, levelName, providers });
+	latest.current = { server, levelName, providers };
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: keyed on `signature`/`nonce` by design; see above.
 	useEffect(() => {
@@ -81,6 +89,7 @@ export function useServerContent(
 				const next = await readServerContent(
 					current,
 					latest.current.levelName ?? "world",
+					latest.current.providers,
 				);
 				if (mounted) setListing(next);
 			} catch {

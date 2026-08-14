@@ -43,6 +43,7 @@ import type {
 	VersionInfo,
 } from "../../types/install.ts";
 import type { JavaRequirement } from "../../types/java.ts";
+import type { ContentSupport } from "../../types/content.ts";
 import type { ServerProvider } from "../../types/provider.ts";
 import { VersionNotFoundError } from "./mojang-meta.ts";
 
@@ -103,6 +104,7 @@ export abstract class FillProvider implements ServerProvider {
 	abstract readonly id: string;
 	abstract readonly displayName: string;
 	abstract readonly description: string;
+	abstract readonly content: ContentSupport;
 
 	/** The `fill.papermc.io` project id, e.g. `"paper"`. */
 	protected abstract readonly project: string;

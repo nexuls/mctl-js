@@ -13,5 +13,6 @@ export class PaperProvider extends FillProvider {
 	readonly displayName = "Paper";
 	readonly description =
 		"Fast Bukkit/Spigot fork — plugins, no client-side mods";
+	readonly content = { mods: false, plugins: true, datapacks: true };
 	protected readonly project = "paper";
 }

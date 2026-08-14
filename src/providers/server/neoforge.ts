@@ -107,6 +107,9 @@ export class NeoForgeProvider implements ServerProvider {
 	readonly displayName = "NeoForge";
 	readonly description =
 		"Community fork of Forge — the active branch since 1.20.2";
+	// A loader kind is a vanilla server underneath, so it takes datapacks too;
+	// Bukkit-family plugins are a different API and are not loaded at all.
+	readonly content = { mods: true, plugins: false, datapacks: true };
 
 	/** Every Minecraft version NeoForge builds for, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

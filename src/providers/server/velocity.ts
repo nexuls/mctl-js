@@ -28,6 +28,9 @@ export class VelocityProvider extends FillProvider {
 	readonly displayName = "Velocity";
 	readonly description =
 		"Proxy, not a server — versioned in its own right, forwards players";
+	// A proxy runs no world, so there is nowhere for a datapack to live; its
+	// plugins are Velocity's own API, not Bukkit's.
+	readonly content = { mods: false, plugins: true, datapacks: false };
 	protected readonly project = "velocity";
 	protected override readonly jarName = "velocity.jar";
 	protected override readonly programArgs: string[] = [];

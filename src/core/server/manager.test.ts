@@ -46,6 +46,7 @@ class StubProvider implements ServerProvider {
 	readonly id = "stub";
 	readonly displayName = "Stub";
 	readonly description = "test double";
+	readonly content = { mods: true, plugins: false, datapacks: true };
 	/** Set to a nonexistent path to make the install fail mid-job. */
 	jarPath: string;
 

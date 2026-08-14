@@ -5,6 +5,36 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## A kind declares what content it loads (2026-08-14, user request)
+
+User: "Every server type doesn't support mods or plugins. Add a field in the server registry for
+mods/plugins support and render them accordingly."
+
+- **The field is on the *provider*, not on a server**: `ServerProvider.content: ContentSupport`
+  (`Readonly<Record<ContentSectionId, boolean>>`), required like `description` so a new kind must
+  decide. "Server registry" here meant the provider registry — the Location Registry holds locations
+  only and must never learn about contents.
+- **`types/content.ts` is a new leaf** holding `ContentSectionId` + `ContentSupport`, because
+  `types/provider.ts` cannot import from `core/` and `core/server/content.ts` needs the same
+  vocabulary. `content.ts` re-exports both so no front-end import changed.
+- **`supported` and `present` are different facts, and both are needed.** `present` is "the directory
+  exists"; `supported` is "this kind loads this at all". A Fabric server with no `mods/` is
+  `supported && !present` (it could have them); a Paper server is `!supported` however many jars are
+  in there. **Unsupported sections are still read**, and a section with files in it is drawn with a
+  warning instead of being hidden — a jar that will never load is the single most useful thing to
+  tell someone. Only an unsupported *and empty* section disappears.
+- **Who takes what** (the two that are easy to get wrong): **Velocity is a proxy** — plugins yes,
+  datapacks *no*, because it has no world; **Vanilla takes datapacks only**. Paper/Purpur:
+  plugins + datapacks. Fabric/Quilt/Forge/NeoForge: mods + datapacks (a loader is a vanilla server
+  underneath), never Bukkit plugins.
+- **An unknown kind reports everything supported**, not nothing. Same forward-compatibility rule as
+  `mctl.json.kind` and the network profile: a config written by a newer MCTL must not make its server
+  look like it takes no content. `contentSupport(kind, providers?)` is exported and never throws.
+- The registry reaches `readServerContent` as an **optional third argument**. The hook takes it from
+  `useMctl().context?.providers` and folds `providers ? "1" : "0"` into its poll signature — the
+  context arrives a render or two after mount, and the round that ran without it must be redone.
+  `mctl content` builds `createProviderRegistry()` directly rather than the whole core context.
+
 ## The Content list lost its caret and gained checkboxes (2026-08-14, user request)
 
 User: "Edit the ContentRow component UI. Always order based on names, not by enabled/disabled. Remove

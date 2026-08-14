@@ -3,11 +3,40 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (Content rows: checkboxes, name order, no selection)_
+_Last updated: 2026-08-14 (providers declare which content they load)_
 
 ---
 
 ## Done
+
+- **A kind declares what content it loads (2026-08-14, user request).** "Every server type doesn't
+  support mods or plugins. Add a field in the server registry for mods/plugins support and render
+  them accordingly."
+  - `src/types/content.ts` (**new**) — `ContentSectionId` (moved here from the content service, which
+    re-exports it) and `ContentSupport`, a complete `Record` so a new section id is a compile error in
+    every provider.
+  - `src/types/provider.ts` — **`ServerProvider.content: ContentSupport`**, required. All eight
+    providers carry one (`FillProvider` declares it abstract; Paper and Velocity differ), plus the two
+    test stubs. Velocity is plugins-only (a proxy has no world, so no datapacks); Vanilla is
+    datapacks-only; the four loaders are mods + datapacks.
+  - `src/core/server/content.ts` — `ContentSection.supported`, and `readServerContent` takes an
+    optional `ProviderRegistry`. Unsupported directories are **still read**; the exported
+    `contentSupport(kind, providers?)` never throws and reports an unknown kind as supporting
+    everything.
+  - `src/hooks/use-server-content.ts` — resolves the registry from `useMctl()` and re-runs the poll
+    once the context lands. `src/cli/commands/content.ts` — builds `createProviderRegistry()` and
+    prints one line for an unsupported empty section, a warning header for one with files in it.
+  - `src/app/Server/tabs/Content.tsx` — an unsupported *empty* section draws no panel at all; one with
+    files draws a warning line and no marketplace button.
+  - Tests (**520 total**, +3): the section-vs-directory distinction, files in an unsupported directory
+    still being listed, and the unknown-kind/no-registry fallback.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 520 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. Driven for real in a sandbox `$HOME` holding four
+    fabricated servers (paper/fabric/vanilla/velocity) with real fixture jars: `mctl content` printed
+    the right line for each, and **in tmux at 120×40** the Paper server showed the Mods panel with its
+    warning and no marketplace button, Vanilla showed only Datapacks, and Velocity only Plugins.
+  - **Noticed, not changed:** the Resource pack panel is still drawn for Velocity, which has no
+    `server.properties` at all. Same class of problem, different field — worth a look next.
 
 - **The Content list is checkboxes in name order (2026-08-14, user request).** "Always order based on
   names, not by enabled/disabled. Remove the selection logic, render with a border between. Add

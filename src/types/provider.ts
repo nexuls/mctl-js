@@ -12,6 +12,7 @@
  * writing it now would be designing against imaginary implementations.
  */
 
+import type { ContentSupport } from "./content.ts";
 import type {
 	InstallRequest,
 	InstallStrategy,
@@ -57,6 +58,23 @@ export interface ServerProvider extends Provider {
 	 * must survive being truncated at roughly 60 cells.
 	 */
 	readonly description: string;
+
+	/**
+	 * Which sorts of add-on this kind actually loads.
+	 *
+	 * Not a filesystem question, which is why it belongs to the provider: a Paper
+	 * server has no `mods/` directory and never will, while a Fabric server that
+	 * has none simply has nothing installed yet. Both look identical on disk, and
+	 * only the kind knows the difference — so a UI offering "Mods" to a Paper
+	 * server, or a marketplace button that could only ever install something the
+	 * server ignores, is a bug this field exists to prevent.
+	 *
+	 * Required, like {@link description}, so a new provider must decide rather
+	 * than inherit a default that happens to be wrong for it. Note the two that
+	 * are easy to get backwards: **Velocity is a proxy**, so it takes plugins but
+	 * has no world and therefore no datapacks; **Vanilla takes datapacks only**.
+	 */
+	readonly content: ContentSupport;
 
 	/**
 	 * Every installable Minecraft version, newest first.

@@ -36,6 +36,9 @@ export class VanillaProvider implements ServerProvider {
 	readonly id = "vanilla";
 	readonly displayName = "Vanilla";
 	readonly description = "Mojang's official server — no plugins, no mods";
+	// Mojang's server loads no third-party code at all; a datapack is data the
+	// game itself reads, which is why it is the one thing it does take.
+	readonly content = { mods: false, plugins: false, datapacks: true };
 
 	/** Every Minecraft version Mojang publishes, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

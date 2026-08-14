@@ -112,6 +112,7 @@ function stubProvider(id: string, versions: VersionInfo[]): ServerProvider {
 		id,
 		displayName: id,
 		description: "test double",
+		content: { mods: true, plugins: false, datapacks: true },
 		async minecraftVersions() {
 			return versions;
 		},

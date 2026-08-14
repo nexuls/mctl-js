@@ -34,7 +34,9 @@ import { join, resolve, sep } from "node:path";
 import { pathExists, readDirIfExists, readTextIfExists } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { readZipText } from "../../lib/zip.ts";
+import type { ContentSectionId, ContentSupport } from "../../types/content.ts";
 import type { Server } from "../../types/server.ts";
+import type { ProviderRegistry } from "../registry/provider-registry.ts";
 import {
 	JAR_MANIFESTS,
 	PACK_MANIFEST,
@@ -49,8 +51,10 @@ const logger = log("content");
 /** Suffix a parked jar carries. Loaders match `*.jar`, so this is simply not seen. */
 export const DISABLED_SUFFIX = ".disabled";
 
-/** Which list a piece of content belongs to. */
-export type ContentSectionId = "mods" | "plugins" | "datapacks";
+// Re-exported so the front-ends keep importing their content vocabulary from
+// the service that produces it; the type itself lives in `types/content.ts`,
+// where `types/provider.ts` can reach it without importing `core/`.
+export type { ContentSectionId, ContentSupport };
 
 /** One installed mod, plugin or datapack. */
 export interface ContentItem {
@@ -107,6 +111,16 @@ export interface ContentSection {
 	present: boolean;
 	/** Whether MCTL offers the enable/disable switch here (see the module note). */
 	toggleable: boolean;
+	/**
+	 * Whether this *kind of server* loads this sort of content at all, from the
+	 * provider's {@link ServerProvider.content}. Distinct from `present`, which is
+	 * only about the directory: a Fabric server with no `mods/` yet is
+	 * `supported: true, present: false`, while a Paper server is
+	 * `supported: false` however many jars someone drops into a `mods/` folder —
+	 * and those jars are still listed, because files that will never load are
+	 * worth saying out loud rather than hiding.
+	 */
+	supported: boolean;
 	/** The items, alphabetically by display name — never grouped by state. */
 	items: ContentItem[];
 }
@@ -243,6 +257,7 @@ async function readSection(
 	dir: string,
 	relative: string,
 	toggleable: boolean,
+	supported: boolean,
 ): Promise<ContentSection> {
 	if (!(await pathExists(dir))) {
 		return {
@@ -250,6 +265,7 @@ async function readSection(
 			directory: relative,
 			present: false,
 			toggleable,
+			supported,
 			items: [],
 		};
 	}
@@ -267,7 +283,14 @@ async function readSection(
 	// out from under the pointer; a stable alphabetical order keeps it where it
 	// is, and the checkbox already says which state it is in.
 	items.sort((a, b) => a.name.localeCompare(b.name));
-	return { id: section, directory: relative, present: true, toggleable, items };
+	return {
+		id: section,
+		directory: relative,
+		present: true,
+		toggleable,
+		supported,
+		items,
+	};
 }
 
 /**
@@ -281,27 +304,75 @@ async function readSection(
  * Never throws. An unreadable directory or archive degrades to an absent
  * section or a filename-only item, because this renders a page.
  *
+ * Every section is read whether or not the kind supports it, and carries
+ * {@link ContentSection.supported} saying which it is — a jar sitting in a Paper
+ * server's `mods/` is a real file that will never load, and a listing that
+ * silently omitted it would leave the user with no way to find out.
+ *
  * @param server the server view model.
  * @param levelName the active world directory, from `server.properties`;
  *   datapacks live inside it and `world` is Minecraft's own default.
+ * @param providers the registry, to resolve the kind's content support. Omit it
+ *   — as the tests and any caller without one do — and every section is reported
+ *   as supported, which is also what an *unknown* kind gets: a build that has
+ *   never heard of this server cannot claim it loads nothing.
  */
 export async function readServerContent(
 	server: Server,
 	levelName = "world",
+	providers?: ProviderRegistry,
 ): Promise<ServerContentListing> {
 	if (!server.available) return { id: server.id, sections: [] };
+	const support = contentSupport(server.kind, providers);
 	const sections = await Promise.all([
-		readSection("mods", join(server.path, "mods"), "mods/", true),
-		readSection("plugins", join(server.path, "plugins"), "plugins/", true),
+		readSection("mods", join(server.path, "mods"), "mods/", true, support.mods),
+		readSection(
+			"plugins",
+			join(server.path, "plugins"),
+			"plugins/",
+			true,
+			support.plugins,
+		),
 		readSection(
 			"datapacks",
 			join(server.path, levelName, "datapacks"),
 			`${levelName}/datapacks/`,
 			// See the module note: enablement lives in the world, not the filename.
 			false,
+			support.datapacks,
 		),
 	]);
 	return { id: server.id, sections };
+}
+
+/** What a build that cannot resolve the kind assumes: show everything. */
+const ALL_SUPPORTED: ContentSupport = {
+	mods: true,
+	plugins: true,
+	datapacks: true,
+};
+
+/**
+ * What the given kind loads, from its provider.
+ *
+ * Exported because both front-ends need the same answer *before* there is a
+ * listing — the create form and `mctl content` alike — and because resolving it
+ * in one place is what stops "does Paper take mods?" from being answered twice.
+ *
+ * Never throws: an unregistered kind (a `mctl.json` written by a newer MCTL, the
+ * same forward-compatibility rule `kind` and the network profile follow) reports
+ * everything as supported rather than declaring the server takes nothing.
+ */
+export function contentSupport(
+	kind: string,
+	providers?: ProviderRegistry,
+): ContentSupport {
+	if (!providers) return ALL_SUPPORTED;
+	try {
+		return providers.server(kind).content;
+	} catch {
+		return ALL_SUPPORTED;
+	}
 }
 
 /**

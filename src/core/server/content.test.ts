@@ -14,7 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathExists } from "../../lib/fs.ts";
 import { buildZip } from "../../lib/zip.fixture.ts";
+import type { ServerProvider } from "../../types/provider.ts";
 import type { Server } from "../../types/server.ts";
+import { ProviderRegistry } from "../registry/provider-registry.ts";
 import {
 	ContentError,
 	nameFromFile,
@@ -285,6 +287,69 @@ describe("setContentEnabled", () => {
 		const item = (await section("mods")).items[0] as ContentItem;
 		expect(await setContentEnabled(server, item, true)).toBe("thing.jar");
 		expect(await readdir(join(dir, "mods"))).toEqual(["thing.jar"]);
+	});
+});
+
+describe("content support", () => {
+	/** A registry holding one kind that takes plugins and datapacks, not mods. */
+	function paperish(): ProviderRegistry {
+		return new ProviderRegistry().registerServer({
+			id: "paper",
+			displayName: "Paper",
+			description: "test double",
+			content: { mods: false, plugins: true, datapacks: true },
+			async minecraftVersions() {
+				return [];
+			},
+			async loaderVersions() {
+				return [];
+			},
+			async javaRequirement() {
+				return null;
+			},
+			async resolveInstall() {
+				throw new Error("not used");
+			},
+			launchSpec() {
+				throw new Error("not used");
+			},
+		} as ServerProvider);
+	}
+
+	test("a section reports what the kind loads, not what is on disk", async () => {
+		server.kind = "paper";
+		await mkdir(join(dir, "plugins"), { recursive: true });
+		const listing = await readServerContent(server, "world", paperish());
+		const support = Object.fromEntries(
+			listing.sections.map((s) => [s.id, s.supported]),
+		);
+		expect(support).toEqual({ mods: false, plugins: true, datapacks: true });
+		// `supported` is about the kind and `present` about the directory: the two
+		// disagree in both directions here, which is the whole point of the field.
+		const plugins = listing.sections.find((s) => s.id === "plugins");
+		expect(plugins?.present).toBe(true);
+		expect(plugins?.items).toEqual([]);
+	});
+
+	test("files in an unsupported directory are still listed", async () => {
+		server.kind = "paper";
+		await jar("mods/stray.jar", [
+			{ name: "fabric.mod.json", data: '{"id":"stray","name":"Stray"}' },
+		]);
+		const listing = await readServerContent(server, "world", paperish());
+		const mods = listing.sections.find((s) => s.id === "mods");
+		// Hiding it would leave the user no way to discover why their mod does
+		// nothing; the section says "unsupported", it does not say "empty".
+		expect(mods?.supported).toBe(false);
+		expect(mods?.items.map((item) => item.name)).toEqual(["Stray"]);
+	});
+
+	test("an unknown kind, or no registry at all, supports everything", async () => {
+		server.kind = "some-future-loader";
+		const unknown = await readServerContent(server, "world", paperish());
+		expect(unknown.sections.every((s) => s.supported)).toBe(true);
+		const none = await readServerContent(server);
+		expect(none.sections.every((s) => s.supported)).toBe(true);
 	});
 });
 

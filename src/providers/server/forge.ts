@@ -74,6 +74,9 @@ export class ForgeProvider implements ServerProvider {
 	readonly displayName = "Forge";
 	readonly description =
 		"The long-standing mod loader — the largest mod library";
+	// A loader kind is a vanilla server underneath, so it takes datapacks too;
+	// Bukkit-family plugins are a different API and are not loaded at all.
+	readonly content = { mods: true, plugins: false, datapacks: true };
 
 	/**
 	 * Every Minecraft version Forge builds for, newest first.
