@@ -250,8 +250,9 @@ export function AppRouter() {
 	return (
 		// Temporarily hardcode the first server as the initial route
 		<RouterProvider
-			initialRoute="server"
-			params={{ serverId: "create-server" }}
+			initialRoute="dashboard"
+			// params={{ serverId: "create-server" }}
+			// params={{ serverId: "first-paper-server" }}
 		>
 			{/* The input capture the shell reads is provided in `App.tsx`, above both
 			    this router and the setup wizard. The hint registry sits here instead:
