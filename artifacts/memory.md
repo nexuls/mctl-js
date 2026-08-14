@@ -28,8 +28,20 @@ the icons 3x3 cell."
   `logoFile="examplemod.png"` gets left in. So the declared name is only used when the archive really
   holds it, and otherwise `pickIconEntry` applies the convention: a **root-level** PNG, preferring
   `icon.png`/`logo.png`/`pack.png`, then one whose name mentions an icon or logo. That is what finds
-  JEI's `jei-icon.png` — JEI comments its `logoFile` out entirely. **Never reach into `assets/`**:
-  it is hundreds of 16×16 item sprites and picking one would look deliberate.
+  JEI's `jei-icon.png` — JEI comments its `logoFile` out entirely.
+- **Where an archive keeps its icon differs by ecosystem, so the root is not the only place looked
+  at** (2026-08-14, user: "The plugins / Datapack / Resource packs have icons too"). `plugin.yml`
+  has **no icon field whatsoever**, and a Bukkit/Paper plugin ships its logo inside its resources —
+  Geyser's real jar has `assets/geyser/icon.png` and nothing at the root, so the root-only rule gave
+  every plugin in the app a blank column. A pack zipped by compressing its own *directory* likewise
+  has `<name>/pack.png` one level down. So `pickIconEntry` also takes a **nested** entry — but only
+  one whose **basename is exactly** `icon.png`/`logo.png`/`pack.png`, never under a `textures/`
+  segment, shallowest first then alphabetically (the central directory's order must not decide it).
+  - **The exact-basename rule is the whole guard**, and it is one letter wide: `assets/…/gui/icons.png`
+    is Minecraft's own sprite sheet, `icon.png` is a logo. The loose `icon|logo` match stays
+    **root-only** — applied to nested names it would pick a random item sprite, which is the failure
+    the original "never reach into `assets/`" rule was written to prevent. That rule is now narrower,
+    not gone.
 - **`lib/zip.ts` gained `readZipEntry(path, choose)`** — the caller is handed every entry name and
   returns the one to read. One open, one central-directory parse, one entry inflated. The obvious
   alternative (list, close, reopen, read) parses the directory twice for no gain.

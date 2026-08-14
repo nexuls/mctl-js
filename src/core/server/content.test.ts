@@ -457,4 +457,35 @@ describe("icons", () => {
 		// would be a second copy of something that cannot go stale.
 		expect(packs.items[0]?.icon).toBe(join(pack, "pack.png"));
 	});
+
+	test("a plugin's icon comes out of its resources", async () => {
+		// `plugin.yml` declares no icon, so a Bukkit plugin's picture is only ever
+		// found by convention — Geyser's real shape, verified against its own jar.
+		await jar("plugins/Geyser-Spigot.jar", [
+			{ name: "plugin.yml", data: "name: Geyser-Spigot\nversion: 2.4.2\n" },
+			{ name: "assets/geyser/icon.png", data: LOGO },
+		]);
+		expect(
+			await Bun.file((await section("plugins")).items[0]?.icon ?? "").text(),
+		).toBe(LOGO);
+	});
+
+	test("a zipped pack's pack.png is found through its wrapping folder", async () => {
+		await jar("world/datapacks/vanilla-tweaks.zip", [
+			{ name: "pack.mcmeta", data: '{"pack":{"pack_format":48}}' },
+			{ name: "vanilla-tweaks/pack.png", data: LOGO },
+		]);
+		expect(
+			await Bun.file((await section("datapacks")).items[0]?.icon ?? "").text(),
+		).toBe(LOGO);
+	});
+
+	test("a plugin's item sprites are never mistaken for its icon", async () => {
+		await jar("plugins/spritey.jar", [
+			{ name: "plugin.yml", data: "name: Spritey\n" },
+			{ name: "assets/spritey/textures/item/wand.png", data: LOGO },
+			{ name: "assets/minecraft/gui/icons.png", data: LOGO },
+		]);
+		expect((await section("plugins")).items[0]?.icon).toBeUndefined();
+	});
 });

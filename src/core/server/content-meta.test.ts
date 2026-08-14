@@ -415,4 +415,46 @@ describe("pickIconEntry", () => {
 	test("an unrelated root PNG is not an icon", () => {
 		expect(pickIconEntry(["screenshot.png"])).toBeUndefined();
 	});
+
+	test("finds a plugin's icon inside its resources", () => {
+		// `plugin.yml` has no icon field at all, so a Bukkit plugin's picture is
+		// only ever found by convention. Geyser ships exactly this path.
+		expect(
+			pickIconEntry([
+				"plugin.yml",
+				"assets/geyser/icon.png",
+				"org/geysermc/Main.class",
+			]),
+		).toBe("assets/geyser/icon.png");
+	});
+
+	test("finds pack.png in a zip that wraps the pack in a folder", () => {
+		// A datapack or resource pack zipped by compressing its *directory* has
+		// everything one level down, which the loaders tolerate and MCTL should too.
+		expect(pickIconEntry(["MyPack/pack.mcmeta", "MyPack/pack.png"])).toBe(
+			"MyPack/pack.png",
+		);
+	});
+
+	test("a nested PNG must be named exactly, not merely mention an icon", () => {
+		// `icons.png` is Minecraft's own GUI sprite sheet — one letter away from a
+		// logo and nothing like one.
+		expect(
+			pickIconEntry(["assets/minecraft/gui/icons.png", "pack.mcmeta"]),
+		).toBeUndefined();
+	});
+
+	test("the shallowest nested icon wins, then alphabetical order", () => {
+		expect(
+			pickIconEntry([
+				"deep/deeper/icon.png",
+				"zeta/icon.png",
+				"alpha/icon.png",
+			]),
+		).toBe("alpha/icon.png");
+	});
+
+	test("a root icon still beats a nested one", () => {
+		expect(pickIconEntry(["assets/x/icon.png", "logo.png"])).toBe("logo.png");
+	});
 });

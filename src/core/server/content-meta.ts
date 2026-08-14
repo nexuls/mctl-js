@@ -131,32 +131,76 @@ function iconEntry(value: unknown): string | undefined {
 }
 
 /**
+ * Filenames that mean "this is the thing's own picture" wherever they are found,
+ * in preference order. Exact basenames only — `icons.png` is a Minecraft GUI
+ * sprite sheet, `icon.png` is a logo, and one letter is the whole difference.
+ */
+const ICON_BASENAMES = ["icon.png", "logo.png", "pack.png"] as const;
+
+/**
  * The icon to read out of an archive that declared none, chosen from its own
  * entry listing.
  *
- * Pure, exported and tested because it is a **convention, not a spec**: a jar
- * that names no logo very often still ships one at its root, and that is where
- * every loader's own tooling puts it (JEI's `jei-icon.png`, a datapack's
- * `pack.png`). Only root-level PNGs are considered — `assets/<modid>/textures/…`
- * is full of item sprites, and picking one of those at random would put a
- * 16×16 cog beside a mod's name and look deliberate.
+ * Pure, exported and tested because it is a **convention, not a spec**: an
+ * archive that names no logo very often still ships one, and where it ships it
+ * differs by ecosystem — which is why the root is not the only place looked at:
  *
- * Preference order: an exact `icon.png` / `logo.png` / `pack.png`, then any root
- * PNG whose name mentions an icon or a logo, then nothing — a jar whose root
- * happens to hold an unrelated PNG gets no icon rather than a wrong one.
+ *  - **Mods** put it at the root (JEI's `jei-icon.png`, which is why the loose
+ *    `icon|logo` match exists at all — JEI comments its `logoFile` out).
+ *  - **Bukkit/Paper plugins** have no icon field in `plugin.yml` whatsoever, and
+ *    ship it inside their resources instead — Geyser's is `assets/geyser/icon.png`.
+ *  - **Datapacks and resource packs** carry `pack.png` beside `pack.mcmeta`,
+ *    which is the root of a correctly built pack but one folder down in a zip
+ *    someone made by compressing the pack's directory.
+ *
+ * So a nested entry is considered **only when its basename is one of
+ * {@link ICON_BASENAMES} exactly**, and never under a `textures/` directory.
+ * That is the whole guard against the failure this must not have:
+ * `assets/<modid>/textures/…` holds hundreds of 16×16 item sprites, and putting
+ * one of those beside a mod's name would look deliberate rather than wrong.
+ *
+ * Preference order: a root `icon.png` / `logo.png` / `pack.png`, then any root
+ * PNG whose name mentions an icon or a logo, then the shallowest exactly-named
+ * nested one (ties broken alphabetically, so the answer never depends on the
+ * order the central directory happens to list entries in). Failing all of that,
+ * nothing — an archive whose root holds an unrelated PNG gets no icon rather
+ * than a wrong one.
  */
 export function pickIconEntry(names: readonly string[]): string | undefined {
-	const root = names.filter(
-		(name) => !name.includes("/") && name.toLowerCase().endsWith(".png"),
-	);
-	const named = (wanted: string) =>
-		root.find((name) => name.toLowerCase() === wanted);
-	return (
-		named("icon.png") ??
-		named("logo.png") ??
-		named("pack.png") ??
-		root.find((name) => /icon|logo/i.test(name))
-	);
+	const pngs = names.filter((name) => name.toLowerCase().endsWith(".png"));
+	const root = pngs.filter((name) => !name.includes("/"));
+
+	for (const wanted of ICON_BASENAMES) {
+		const hit = root.find((name) => name.toLowerCase() === wanted);
+		if (hit) return hit;
+	}
+	const loose = root.find((name) => /icon|logo/i.test(name));
+	if (loose) return loose;
+
+	const nested = pngs
+		.filter((name) => name.includes("/"))
+		.filter((name) => {
+			const segments = name.toLowerCase().split("/");
+			if (segments.includes("textures")) return false;
+			return ICON_BASENAMES.includes(
+				(segments.at(-1) ?? "") as (typeof ICON_BASENAMES)[number],
+			);
+		})
+		.sort((a, b) => {
+			const depth = a.split("/").length - b.split("/").length;
+			if (depth !== 0) return depth;
+			const rank =
+				ICON_BASENAMES.indexOf(
+					(a.toLowerCase().split("/").at(-1) ??
+						"") as (typeof ICON_BASENAMES)[number],
+				) -
+				ICON_BASENAMES.indexOf(
+					(b.toLowerCase().split("/").at(-1) ??
+						"") as (typeof ICON_BASENAMES)[number],
+				);
+			return rank !== 0 ? rank : a.localeCompare(b);
+		});
+	return nested[0];
 }
 
 /** Parse JSON, or `undefined` when the text is not JSON at all. */

@@ -9,6 +9,31 @@ _Last updated: 2026-08-14 (content rows draw mod icons)_
 
 ## Done
 
+- **Plugins and zipped packs draw their icons too (2026-08-14, user request).** "The plugins /
+  Datapack / Resource packs have icons too. Try to render them." Nothing in the UI or the extraction
+  path needed changing — the one rule that decides *which* entry is the icon was root-only, and no
+  plugin keeps its icon at the root.
+  - `src/core/server/content-meta.ts` — `pickIconEntry` now also accepts a **nested** PNG whose
+    basename is exactly `icon.png`/`logo.png`/`pack.png`, excluding anything under a `textures/`
+    segment, shallowest first then alphabetically. Root entries still win, and the loose
+    `icon|logo` name match stays root-only (nested, it would pick an item sprite). New
+    `ICON_BASENAMES`.
+  - This covers all three the user named: a Bukkit/Paper plugin (`plugin.yml` has no icon field at
+    all, so `assets/<plugin>/icon.png` is the only way one is ever found), and a datapack or resource
+    pack zipped by compressing its own folder (`<name>/pack.png`). Both go through the existing
+    per-archive cache and the existing `<image>` column, which were already section-agnostic.
+  - Tests (**550 total**, +8): five over `pickIconEntry` (the plugin path, the wrapped pack, exact
+    basename vs `icons.png`, shallowest-then-alphabetical, root still winning) and three end-to-end
+    over real archives in a real server directory (a plugin jar, a wrapped datapack zip, and a jar
+    holding only sprites getting no icon).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 550 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. Against the user's **real** `first-paper-server`,
+    `mctl content --json` extracted Geyser's `assets/geyser/icon.png` (a real 512×512 PNG) where it
+    previously had none, and **in tmux at 120×45** the Plugins panel draws it beside the row.
+  - **Not done, and it needs a decision:** the *Resource pack* panel has no icon, because it is not a
+    file — `server.properties` holds a **URL**, and drawing its `pack.png` would mean downloading a
+    user-configured archive (routinely tens of MB) on the render path. Ask before adding it.
+
 - **Content rows lead with the mod's own icon (2026-08-14, user request).** "Most of the mods or
   plugins has an icon with it. Use opentui image element… Display the icon on the begining of the
   row." Followed by: "Make the row hight 3. Let the description span to two row. Make the icons 3x3
