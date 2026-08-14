@@ -26,8 +26,12 @@ roadmap in `plan.md`.
   - `src/app/VersionField.tsx` — a `Spinner` sits in the field while the list is being fetched; the
     hint no longer spends its line on "loading versions…" and only names the wait when it has nothing
     else to say.
-  - `src/app/ServerCreate/index.tsx` — the six fields moved into a `FormGrid` (Kind keeps its
-    description line inside its own cell).
+  - `src/app/ServerCreate/index.tsx` — the six fields moved into a `FormGrid`, paired **by height**
+    after the user reported the first cut as badly organised: Name|Memory, Kind|Version,
+    Runtime|EULA, with the ring order following. Kind dropped its per-option descriptions (halving
+    a dropdown row's height; the line under the field already describes the highlighted kind) and
+    both list fields cap at six rows. The version hint and EULA caption were shortened — an
+    over-long `bottomTitle` is *dropped* by OpenTUI, not truncated.
   - `src/app/Settings/index.tsx` — Locations (the two overrides), Defaults (Kind/Version,
     Memory/Runtime, full-width EULA), Backups (full-width switch, then Provider/Compression) and
     Appearance (Theme/Icons) all grid; the hardcoded `width="50%"` fields are gone.

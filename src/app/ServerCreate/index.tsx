@@ -50,12 +50,18 @@ import { useServerVersions } from "../../hooks/use-server-versions.ts";
 import { ProgressBar } from "../../components/index.ts";
 
 /**
- * Field ids in the focus ring, in tab order. The version field's own ids are
+ * Field ids in the focus ring, in tab order — which is also the order the grid
+ * lays them out in, so Tab and the eye agree. The version field's own ids are
  * spliced in after `kind` (it contributes a variable number — one per channel
  * the selected kind publishes), and the two buttons close the ring.
+ *
+ * The pairing is by **height**, not by topic: a grid row is as tall as its
+ * tallest cell, so a three-row text input beside a ten-row dropdown leaves a
+ * hole the size of the dropdown. The two one-line text fields go together, the
+ * two list pickers go together, and the two small controls close the form.
  */
-const FIELDS_BEFORE_VERSION = ["name", "kind"];
-const FIELDS_AFTER_VERSION = ["memory", "runtime", "eula"];
+const FIELDS_BEFORE_VERSION = ["name", "memory", "kind"];
+const FIELDS_AFTER_VERSION = ["runtime", "eula"];
 
 /** Ids whose control is a text input — these hold the shell's key capture. */
 const TEXT_FIELDS = new Set<string>(["name", "memory"]);
@@ -187,7 +193,8 @@ export function ServerCreate() {
 			/>
 
 			{/* Row-major and in ring order, so Tab and the eye agree. One column on a
-			    narrow terminal, two once there is room for both. */}
+			    narrow terminal, two once there is room for both. The pairs are chosen
+			    so the two cells of a row are about as tall as each other. */}
 			<FormGrid>
 				<Input
 					label="Name"
@@ -198,25 +205,40 @@ export function ServerCreate() {
 					onFocused={() => ring.setFocus("name")}
 					width="100%"
 				/>
+				<Input
+					label="Memory"
+					hint="JVM heap, e.g. 2G or 4096M"
+					value={memory}
+					onChange={setMemory}
+					focused={ring.isFocused("memory")}
+					onFocused={() => ring.setFocus("memory")}
+					width="100%"
+				/>
 				{/* Kind and its explanation are one cell: the line belongs to the field
 				    above it, and letting the grid place it separately would strand it
 				    beside a different field. */}
 				<box flexDirection="column">
 					<Select
 						label="Kind"
-						// The provider's own one-liner, so the dropdown layout explains
-						// each choice; the tab layout has no room for it, hence the line
-						// below.
+						hint="the server implementation"
+						// No per-option description: `Select`'s dropdown gives *every* row
+						// two lines as soon as one option has one, which made this field
+						// twice the height of the version picker beside it. Nothing is
+						// lost — moving the highlight changes the selection, so the line
+						// below the field already explains whichever kind is under the
+						// cursor.
 						options={(context?.providers.servers() ?? []).map((provider) => ({
 							value: provider.id,
 							label: provider.displayName,
-							description: provider.description,
 						}))}
 						value={kind}
 						onChange={setKind}
 						focused={ring.isFocused("kind")}
 						onFocused={() => ring.setFocus("kind")}
 						width="100%"
+						// Matched to the version picker's, so the two list fields sharing a
+						// row are the same height.
+						maxVisible={6}
 					/>
 					{kindProvider ? (
 						<text fg={colors.muted} paddingX={2} truncate wrapMode="none">
@@ -229,16 +251,10 @@ export function ServerCreate() {
 					value={minecraftVersion}
 					onChange={setMinecraftVersion}
 					focus={ring}
-					latestHint="newest release for this kind, resolved at create time"
-				/>
-				<Input
-					label="Memory"
-					hint="JVM heap, e.g. 2G or 4096M"
-					value={memory}
-					onChange={setMemory}
-					focused={ring.isFocused("memory")}
-					onFocused={() => ring.setFocus("memory")}
-					width="100%"
+					// Short on purpose: a bottom-border title that does not fit the
+					// field is dropped by OpenTUI, not truncated, so a long hint on a
+					// half-width field is a hint nobody ever sees.
+					latestHint="newest release, resolved at create time"
 				/>
 				<Select
 					label="Runtime"
@@ -258,7 +274,7 @@ export function ServerCreate() {
 				<Checkbox
 					label="EULA"
 					hint="required before a server will start"
-					caption="I accept the Minecraft EULA (minecraft.net/eula)"
+					caption="I accept the EULA (minecraft.net/eula)"
 					checked={eula}
 					onChange={setEula}
 					focused={ring.isFocused("eula")}

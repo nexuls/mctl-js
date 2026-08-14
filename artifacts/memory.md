@@ -24,9 +24,22 @@ field instead of just showing loading in the hint."
   sanctioned case — the trap recorded below (a `flexGrow`/`flexBasis` *section* inside a **column**
   parent overlapping its text, hit twice: Dashboard, then the Network page) is untouched by this.
   Sizing cells to content instead lets a long hint widen its column and stagger the fields below it.
-- **A row is as tall as its tallest cell**, so pairing a 10-row dropdown (Kind, whose options carry
-  descriptions) with a 3-row input leaves whitespace beside the short one. Accepted: the create form
-  went from running off the bottom of a 40-row terminal to fitting with room to spare.
+- **A row is as tall as its tallest cell, so fields are paired by *height*, not by topic.** The
+  first cut paired Name with Kind and the user reported the form back as "not well organised": a
+  three-row input beside a ten-row dropdown leaves a hole the size of the dropdown. The create form
+  now reads Name|Memory, Kind|Version, Runtime|EULA — two text inputs, two list pickers, two small
+  controls — and the ring order follows the same pairing.
+  - The Kind picker also **dropped its per-option descriptions** (halving its height, since
+    `Select`'s dropdown gives *every* row two lines as soon as one option has one — the same rule
+    that shaped the version picker). Nothing is lost: moving the highlight *is* selecting, so the
+    description line under the field already describes whichever kind is under the cursor. Confirmed
+    in a pty.
+  - Both list fields carry `maxVisible={6}` so the two cells of that row match.
+- **An over-long `bottomTitle` is dropped entirely by OpenTUI, not truncated.** The version field's
+  hint simply vanished once the field was half-width — a silent loss, and impossible to spot except
+  by looking. Hints on a field that may be laid out in a column must be short enough for that column
+  (~40 cells): "newest release, resolved at create time", not "newest release for this kind,
+  resolved at create time". Same fix for the EULA caption, which *does* truncate (it is body text).
 - **The spinner lives *in* the field, via `Select`'s new `prefix`/`suffix` passthrough to
   `FormField`.** A word on the bottom border is easy to miss and cannot distinguish a fetch that is
   still running from one that has stalled. The hint went back to its normal duty; it only names the
