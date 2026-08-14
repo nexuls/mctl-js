@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (Select mouse support; the field label caret removed)_
+_Last updated: 2026-08-14 (version picker + per-kind descriptions)_
 
 ---
 
@@ -13,6 +13,42 @@ Every entry is dated. Dates are the date of the commit that landed the work, not
 list — the first six entries are the most recent, the rest run oldest-first below them. "user request"
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
+
+- **The version field became a picker; kinds describe themselves (2026-08-14, user request).**
+  - `src/types/install.ts` — `VersionInfo.type` gained `beta` and `alpha`;
+    `providers/server/mojang-meta.ts` maps `old_beta`/`old_alpha` onto them instead of `other`.
+  - `src/types/provider.ts` — **`ServerProvider.description`**, required. All eight providers (plus
+    the abstract `FillProvider` and the manager test's stub) carry one.
+  - `src/core/server/versions.ts` (**new**) — `listMinecraftVersions(providers, kind)` plus the pure
+    `availableChannels` / `filterVersions`, `VERSION_CHANNELS`, `CHANNEL_LABELS`, `DEFAULT_CHANNELS`
+    (releases only). Nothing cached; `lib/http.ts` already ETag-caches the manifests.
+  - `src/hooks/use-server-versions.ts` (**new**) — fetches for the selected kind, holds the shown
+    channels, never blocks a render. Per-kind memo in a ref so flipping the Kind select back does
+    not blank the picker for a round trip.
+  - `src/app/VersionField.tsx` (**new**) — the picker + the "also show" channel row, taking the
+    fetched list as a prop (hence fully testable offline). `versionFieldIds(state)` is exported so
+    each page splices the variable-length ring into its own.
+  - `src/app/ServerCreate/index.tsx` — version input → `VersionField`; the Kind select's options
+    carry the provider description and the selected kind's is drawn under the field.
+  - `src/app/Settings/index.tsx` — same field in the Defaults group, which now leads with Kind
+    (the version list belongs to it); `ringIds` takes the channel ids.
+  - `src/cli/commands/versions.ts` (**new**) + router — `mctl versions [kind] [--channel …] [--all]
+    [--json]`, the picker's CLI peer over the same core functions.
+  - Tests (**450 total, 47 files**, +18): `core/server/versions.test.ts` (10, the channel rules +
+    the registry delegation) and `app/VersionField.test.tsx` (8, real frames: which channels get a
+    toggle, the hint's three states, a snapshot naming its channel, and a value that outlived its
+    list staying selected).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 450 pass / 0 fail, `bun run format` and
+    `bunx biome check src` clean. Driven **in tmux at 120×40** against a sandbox `$HOME`: the create
+    form's picker filled from the live APIs, Paper showed one toggle and Vanilla three, Space on
+    *Snapshots* refilled the list (102 → 845 of 906), the kind description tracked the Kind tabs,
+    and a version picked in Settings + Ctrl+S wrote `"minecraftVersion": "26.1.2"`. CLI checked
+    against live upstream for vanilla/fabric/velocity, `--channel alpha`, an unknown channel
+    (usage error) and an unknown kind.
+  - **Not done, deliberately:** the setup wizard's Defaults step is still a text input — it runs
+    before there is a config (so no `MctlContext`) and is the screen most likely to be met offline.
+    A full TUI create with a picked version was not run (it is a real download); the value reaches
+    `createServer` as the same string the input produced.
 
 - **`Select` answers the mouse; the field label lost its caret (2026-08-14, user request).**
   - `src/components/support.ts` — `tabSelectHit` + `TabSelectHit`/`TabSelectGeometry` (new, pure and

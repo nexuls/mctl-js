@@ -5,6 +5,47 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The version field became a picker; kinds describe themselves (2026-08-14, user request)
+
+User: "fetch the versions dynamically from the upstream api of the selected server type and render
+them in a select field. Also add some checkboxes weather to show the beta/alpha/snapshots … (By
+default hide). Also, add description for each server type."
+
+- **Every provider already had `minecraftVersions()`** — nothing but the two front-ends' *pickers*
+  was missing. The work was a core read service (`core/server/versions.ts`), a hook, a field, and a
+  CLI peer; no provider gained a method.
+- **`VersionInfo.type` gained `beta` and `alpha`.** Mojang's manifest spells them `old_beta` /
+  `old_alpha` and they are ~130 of its 906 entries; folding them into `other` made them one
+  unfilterable lump, which is precisely what the user asked to separate. `other` survives as the
+  catch-all for a value upstream adds later.
+- **`Select`'s dropdown gives *every* row two lines the moment one option has a `description`**
+  (`hasDescriptions` in `Form.tsx`). A per-version description therefore halved how much of a
+  900-entry list was on screen and pushed the rest of the create form off the bottom. So the version
+  labels carry their own channel (`24w46a (snapshot)`; a release is its bare id) and no version
+  option has a description at all. Same reason the picker caps at `maxVisible={6}`.
+- **The channel toggles answer Space, never Enter.** Both hosting pages submit on Enter from any
+  focused field, so a chip that answered Enter would flip a filter *and* create a server in one
+  keypress.
+- **There is no "Releases" checkbox.** Unchecking it leaves a picker that can only install a
+  snapshot, which is never what the gesture meant; the row reads "also show …" instead of being a
+  set of filters one of which must not be touched.
+- **The checkbox row's length is data, so the focus ring's is too.** `versionFieldIds(state)` is
+  exported and spliced into each page's ring — Vanilla publishes four channels, Fabric two, Purpur
+  and Velocity one (no row at all). `useFocusRing` clamps, so a kind switch mid-cycle is safe.
+- **A value the list does not contain is re-added as an option**, labelled `(not listed)`. Without
+  it `Select` falls back to index 0 (`Math.max(0, findIndex)`) and silently rewrites a configured
+  default whenever the fetch failed, the channel is hidden, or the kind stopped publishing it.
+- **Settings' Defaults group now leads with Kind**, because the version list below it is *that
+  kind's* — picking the version first meant picking from the wrong catalogue.
+- **The wizard's Defaults step is deliberately still a text input.** It runs before there is a
+  config, hence before there is an `MctlContext`, and it is the one screen most likely to be met
+  offline. `app/choices.ts` keeps its own compile-checked descriptions for the same reason; the
+  provider's wording is authoritative where a registry is reachable.
+- Verified in tmux at 120×40 against a sandbox `$HOME`: Paper offers one toggle and Vanilla three;
+  Space on *Snapshots* refilled the list live (102 → 845 of 906); the kind's description tracks the
+  Kind tabs; and a version picked in Settings + Ctrl+S wrote `"minecraftVersion": "26.1.2"`.
+  `mctl versions vanilla --channel alpha` reached back to `rd-132211` (2009-05-13).
+
 ## Select answers the mouse; the field label lost its caret (2026-08-14, user request)
 
 User: "For the Select Component enable mouse wheel to select back and forth for dropdown mode. For

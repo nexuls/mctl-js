@@ -187,6 +187,15 @@ so one bad server never breaks a listing.
 
 ---
 
+**Versions — `core/server/versions.ts`.** The fourth read path: what a *kind* can install, as
+opposed to what a server *is*. `listMinecraftVersions(providers, kind)` is one delegation to the
+provider; the value is in the pure `availableChannels` / `filterVersions` beside it, which is where
+"releases only by default" is defined once for both front-ends (`hooks/use-server-versions.ts` →
+`app/VersionField.tsx`, and `mctl versions`). Nothing is cached here — `lib/http.ts` already
+ETag-caches the upstream manifests, and a second cache would be a mutable copy of a copy. The
+channel vocabulary lives on `VersionInfo.type`, and `beta`/`alpha` are members rather than `other`
+because Mojang publishes ~130 of them and a picker must be able to hide them separately.
+
 **Inspection — `core/server/inspect.ts`.** The read-only twin of discovery: where `discover.ts`
 answers "what servers exist and are they up", inspection answers "and what are they *doing*".
 `inspectServer(server)` composes Minecraft's own `server.properties` (`core/server/properties.ts`),
@@ -259,6 +268,11 @@ code). Core resolves a server kind and runtime by the `kind` / `runtime` fields 
 names (`mctl.json.network` is a profile name, not a provider id). An unresolvable id is a typed,
 user-facing `UnknownProviderError`, because it means the server was made by a build that knows a kind
 this one does not.
+
+A `ServerProvider` also carries a **`description`** — required, because the create form offers nine
+kind names that mean nothing on their own, and an optional field is one a new provider silently
+omits. It is the authoritative wording; `app/choices.ts` keeps a compile-checked copy only for the
+setup wizard, which runs before a registry is reachable.
 
 **The one wiring point is `providers/index.ts` (`createProviderRegistry()`)**, called by each
 front-end. Nothing under `core/` or `hooks/` may import a concrete provider — that is the arrow that
