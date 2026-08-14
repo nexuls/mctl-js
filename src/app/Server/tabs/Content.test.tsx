@@ -10,6 +10,7 @@
  */
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,14 +71,11 @@ function fabricMod(name: string, version: string, description?: string) {
 	];
 }
 
-/** Mount the tab and return the frame as one string. */
-async function mount(width = 100, height = 40): Promise<string> {
+/** Mount the tab and hand back the harness, settled on its first listing. */
+async function mountTab(width = 100, height = 40) {
 	const registry = await new ThemeRegistry().load();
-	const { renderer, renderOnce, captureCharFrame } = await createTestRenderer({
-		width,
-		height,
-	});
-	createRoot(renderer).render(
+	const harness = await createTestRenderer({ width, height });
+	createRoot(harness.renderer).render(
 		<ThemeProvider registry={registry} initialThemeId="github">
 			{/* Pinned to `ascii`, like every other rendered test here: `useIcons`
 			    without a set resolves off the *runner's* environment, and a Nerd Font
@@ -89,12 +87,17 @@ async function mount(width = 100, height = 40): Promise<string> {
 			</IconProvider>
 		</ThemeProvider>,
 	);
-	renderOnce();
+	harness.renderOnce();
 	// The listing is read from disk after mount, so the frame needs a beat: one
 	// render is a blank tree, and the first round has to land before the rows do.
 	await Bun.sleep(120);
-	renderOnce();
-	return captureCharFrame();
+	harness.renderOnce();
+	return harness;
+}
+
+/** Mount the tab and return the frame as one string. */
+async function mount(width = 100, height = 40): Promise<string> {
+	return (await mountTab(width, height)).captureCharFrame();
 }
 
 test("a mod is listed under the name its manifest gives it", async () => {
@@ -121,6 +124,37 @@ test("a parked jar is listed, unticked", async () => {
 	expect(frame).toContain("[x]");
 	expect(frame).toContain("[ ]");
 	expect(frame).toContain("1 enabled, 1 disabled");
+});
+
+test("rows are in name order whatever their state, separated by a rule", async () => {
+	await jar("mods/zzz.jar", fabricMod("Zzz", "1.0"));
+	await jar("mods/aaa.jar.disabled", fabricMod("Aaa", "1.0"));
+	const lines = (await mount()).split("\n");
+	const row = (name: string) => lines.findIndex((line) => line.includes(name));
+	// "Aaa" is parked and still comes first: grouping by state would move a row
+	// out from under the pointer the moment its checkbox was clicked.
+	expect(row("Aaa")).toBeLessThan(row("Zzz"));
+	// One rule between the two rows, and none under the last one. A row rule is a
+	// run of ─ *inside* a panel's sides, which is what tells it apart from the
+	// panels' own top and bottom borders.
+	const isRule = (line: string | undefined) =>
+		/^\s*│\s*─+\s*│\s*$/.test(line ?? "");
+	expect(isRule(lines[row("Aaa") + 1])).toBe(true);
+	expect(lines.filter(isRule).length).toBe(1);
+});
+
+test("clicking a row's checkbox parks the jar", async () => {
+	await jar("mods/sodium.jar", fabricMod("Sodium", "0.6.0"));
+	const harness = await mountTab();
+	const lines = harness.captureCharFrame().split("\n");
+	// The checkbox is the row's only control, so this is the whole enable/disable
+	// gesture in the TUI — there is no caret and no Space to press.
+	const y = lines.findIndex((line) => line.includes("[x] Sodium"));
+	const x = (lines[y] as string).indexOf("[x]") + 1;
+	await harness.mockMouse.click(x, y);
+	await Bun.sleep(200);
+	expect(existsSync(join(dir, "mods", "sodium.jar.disabled"))).toBe(true);
+	expect(existsSync(join(dir, "mods", "sodium.jar"))).toBe(false);
 });
 
 test("a jar with no readable manifest shows its filename and says why", async () => {

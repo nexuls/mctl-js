@@ -107,7 +107,7 @@ export interface ContentSection {
 	present: boolean;
 	/** Whether MCTL offers the enable/disable switch here (see the module note). */
 	toggleable: boolean;
-	/** The items, enabled first, then alphabetically by display name. */
+	/** The items, alphabetically by display name — never grouped by state. */
 	items: ContentItem[];
 }
 
@@ -262,13 +262,11 @@ async function readSection(
 		await Promise.all(files.map((file) => readItem(section, dir, file)))
 	).filter((item): item is ContentItem => item !== undefined);
 
-	// Enabled first, then by display name: a parked mod is still installed, but it
-	// is not what the list is about, and interleaving the two hides how many of
-	// each there are.
-	items.sort((a, b) => {
-		if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-		return a.name.localeCompare(b.name);
-	});
+	// By display name, and by nothing else. Grouping the enabled ones first makes
+	// a row *move* when it is toggled, so the thing the user just clicked jumps
+	// out from under the pointer; a stable alphabetical order keeps it where it
+	// is, and the checkbox already says which state it is in.
+	items.sort((a, b) => a.name.localeCompare(b.name));
 	return { id: section, directory: relative, present: true, toggleable, items };
 }
 

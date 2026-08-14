@@ -104,7 +104,7 @@ describe("readServerContent", () => {
 		});
 	});
 
-	test("a parked jar is listed as disabled, after the enabled ones", async () => {
+	test("a parked jar is listed as disabled, in name order with the rest", async () => {
 		await jar("mods/aaa-parked.jar.disabled", [
 			{ name: "fabric.mod.json", data: '{"id":"aaa","name":"Aaa"}' },
 		]);
@@ -112,11 +112,11 @@ describe("readServerContent", () => {
 			{ name: "fabric.mod.json", data: '{"id":"zzz","name":"Zzz"}' },
 		]);
 		const mods = await section("mods");
-		// Enabled first even though "Aaa" sorts before "Zzz": a parked mod is still
-		// installed, but it is not what the list is about.
+		// Name order regardless of state: grouping the parked ones at the bottom
+		// would make a row jump the moment its checkbox is clicked.
 		expect(mods.items.map((item) => [item.name, item.enabled])).toEqual([
-			["Zzz", true],
 			["Aaa", false],
+			["Zzz", true],
 		]);
 	});
 

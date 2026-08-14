@@ -3,11 +3,35 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (installed content: listing, metadata, enable/disable)_
+_Last updated: 2026-08-14 (Content rows: checkboxes, name order, no selection)_
 
 ---
 
 ## Done
+
+- **The Content list is checkboxes in name order (2026-08-14, user request).** "Always order based on
+  names, not by enabled/disabled. Remove the selection logic, render with a border between. Add
+  checkbox component for enable/disable."
+  - `src/core/server/content.ts` — a section's items sort by display name alone; the enabled-first
+    grouping is gone (a toggled row used to jump out from under the pointer).
+  - `src/components/Form.tsx` — `Checkbox` gained `noBorder` (drop the field frame for inline use),
+    `boxed` (`[x]`/`[ ]`, needed because the `ascii` set's unchecked glyph is the empty string) and
+    `captionColor`.
+  - `src/app/Server/tabs/Content.tsx` — `ContentRow` is a `Checkbox` carrying the item's name, the
+    facts right-aligned, and the description/filename lines indented under the name; rows are
+    separated by a bottom-border rule, with none under the last. The caret, the selection state and
+    effect, the keyboard handler and the context hints are all gone.
+  - `src/app/Server/index.tsx` — `CONTENT_ID` removed from the page's focus ring; the tab takes no
+    keys, so a stop there would be a Tab that lands on nothing.
+  - Tests (**517 total, 53 files**, +2): the tab's name-ordering + one-rule-between-rows frame, and a
+    **real mouse click** on a row's checkbox renaming `sodium.jar` to `.disabled` on disk. The core
+    ordering test now asserts name order.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 517 pass / 0 fail, `bun run format` clean,
+    `bunx biome check src` clean bar the one pre-existing `Table.tsx` warning. Frames read at 100
+    cells over four real jars (one parked, one corrupt).
+  - **Known trade-off:** enabling/disabling is now **mouse-only in the TUI** — `mctl content
+    enable|disable` is the keyboard path. Restoring keys means a focus ring over the checkboxes,
+    which is the selection logic this removed.
 
 Every entry is dated. Dates are the date of the commit that landed the work, not the order of this
 list — the first six entries are the most recent, the rest run oldest-first below them. "user request"

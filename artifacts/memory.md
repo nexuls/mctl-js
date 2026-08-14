@@ -5,6 +5,32 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## The Content list lost its caret and gained checkboxes (2026-08-14, user request)
+
+User: "Edit the ContentRow component UI. Always order based on names, not by enabled/disabled. Remove
+the selection logic, render with a border between. Add checkbox component for enable/disable."
+
+- **Items sort by display name only** (`core/server/content.ts`). Enabled-first grouping made a row
+  *move* the moment it was toggled — the thing under the pointer jumps somewhere else — which is
+  exactly wrong once the checkbox is the control. The state is on the row, so it does not need to be
+  in the ordering too.
+- **The Content tab now answers no keys at all.** The caret, the flat `ordered` sequence, the
+  selection effect, `useKeyboard` and its context hints are gone, and `CONTENT_ID` was removed from
+  the Server page's focus ring (a Tab stop that lands on nothing is worse than no stop). **Trade-off,
+  stated rather than hidden: enable/disable is mouse-only in the TUI**; the keyboard peer is
+  `mctl content enable|disable`. Restoring keyboard access means a ring over the checkboxes, which is
+  selection again — ask before adding it back.
+- **`Checkbox` gained `noBorder`, `boxed` and `captionColor`** so the shared control can be used
+  inline in a list row. `boxed` (`[x]` / `[ ]`) is not decoration: **the `ascii` set's `checkOff` is
+  the empty string**, so an unticked bare checkbox in a column of rows shows *nothing*.
+- **A `borderColor` on a box whose `border` is `false` or absent makes OpenTUI draw all four sides.**
+  `border={last ? false : ["bottom"]}` with an unconditional `borderColor` put the final row in a box
+  of its own. Both props travel together (`const rule: BoxProps = last ? {} : {border, borderColor}`)
+  or neither does. Found in a rendered frame, not by reading the types.
+- **A `<text>` renderable ignores `padding*`.** The row's description line is indented by a wrapping
+  `<box paddingLeft={5}>`; the old code padded with literal spaces inside the string, which is why the
+  problem had not been met before.
+
 ## Installed content: manifests, and a rename MCTL is allowed to do (2026-08-14, user request)
 
 User: "display the list of installed mods/plugins/resource packs. Load the files and display the

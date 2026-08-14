@@ -758,6 +758,17 @@ export interface CheckboxProps {
 	focused?: boolean;
 	/** Fired when the control is clicked, so the page can focus it. */
 	onFocused?: () => void;
+	/** Drop the field frame, leaving a bare glyph + caption for use inside a row. */
+	noBorder?: boolean;
+	/**
+	 * Draw the glyph inside `[ ]` brackets. Worth setting wherever a *column* of
+	 * checkboxes is read at a glance: in the `ascii` icon set an unchecked box is
+	 * the empty string, so without the brackets an off row shows nothing at all
+	 * and the reader has to infer it from the gap.
+	 */
+	boxed?: boolean;
+	/** Caption ink. Defaults to the foreground colour. */
+	captionColor?: string;
 }
 
 /**
@@ -773,6 +784,9 @@ export function Checkbox({
 	onChange,
 	focused = false,
 	onFocused,
+	noBorder = false,
+	boxed = false,
+	captionColor,
 }: CheckboxProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
@@ -788,6 +802,7 @@ export function Checkbox({
 			hint={hint}
 			focused={focused}
 			onFocused={onFocused}
+			noBorder={noBorder}
 		>
 			<box
 				flexDirection="row"
@@ -797,9 +812,16 @@ export function Checkbox({
 				onMouseDown={() => onChange?.(!checked)}
 			>
 				<text fg={checked ? colors.success : colors.muted} flexShrink={0}>
-					{`${checked ? icons.checkOn : icons.checkOff} `}
+					{boxed
+						? `[${checked ? icons.checkOn : icons.checkOff}]`
+						: `${checked ? icons.checkOn : icons.checkOff} `}
 				</text>
-				<text fg={colors.foreground} truncate wrapMode="none">
+				<text
+					fg={captionColor ?? colors.foreground}
+					truncate
+					wrapMode="none"
+					flexShrink={1}
+				>
 					{caption}
 				</text>
 			</box>

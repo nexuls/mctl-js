@@ -13,10 +13,15 @@
  * Page-layer (AGENTS.md § 3): every value arrives on a view model from
  * `hooks/use-server-content.ts`; this file reads no files and renames nothing.
  *
+ * The list is **rows separated by a rule, with no selected row**: the checkbox on
+ * each row is the only control, so there is nothing for a caret to point at. That
+ * is also why the items arrive in plain name order — see `core/server/content.ts`
+ * — and why the tab takes no keys at all.
+ *
  * **Enabling and disabling is a rename**, to and from `*.jar.disabled` — the
  * ecosystem's own convention, and the reason a disabled jar is listed at all.
  * It takes effect at the server's next start, because loaders read `mods/` once
- * during boot; the toast says so rather than letting the switch imply a live
+ * during boot; the toast says so rather than letting the checkbox imply a live
  * change. **Datapacks have no switch**: the *world* records which are enabled,
  * so renaming one would leave `level.dat` naming a pack that no longer exists —
  * said out loud in the section rather than offered and quietly broken.
@@ -30,11 +35,9 @@
  * Phase-5 subsystem. They report that rather than doing nothing silently.
  */
 
-import { TextAttributes } from "@opentui/core";
-import { useEffect, useState } from "react";
-import { useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { Button } from "../../../components/index.ts";
-import { useHints } from "../../../hooks/use-hints.tsx";
+import type { BoxProps } from "@opentui/react";
+import { useTerminalDimensions } from "@opentui/react";
+import { Button, Checkbox } from "../../../components/index.ts";
 import { useIcons } from "../../../hooks/use-icons.tsx";
 import { useServerContent } from "../../../hooks/use-server-content.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
@@ -85,8 +88,20 @@ function sizeLabel(item: ContentItem): string | undefined {
 }
 
 /**
- * One installed item: a checkbox, its name, and — when there is room — the
- * version, the manifest it came from and its size.
+ * Where a row's second line starts, so it sits under the item's name rather than
+ * under its checkbox. Derived, not eyeballed: the {@link Checkbox}'s frame pays a
+ * cell of padding, `[x]` is three, and the caption is a cell further along.
+ */
+const ROW_TEXT_INDENT = 5;
+
+/**
+ * One installed item: a checkbox carrying its name, and — when there is room —
+ * the version, the manifest it came from and its size.
+ *
+ * The checkbox *is* the control: clicking it enables or disables the item, so a
+ * row has no selected state and nothing else on it is clickable. `last` drops the
+ * separator under the final row — the rule belongs *between* items, and one under
+ * the bottom of the list would read as the section having a footer.
  *
  * The description is a second, dimmed line rather than a column: manifest
  * descriptions run to a sentence or more, and a column that wide would push
@@ -94,15 +109,13 @@ function sizeLabel(item: ContentItem): string | undefined {
  */
 function ContentRow({
 	item,
-	selected,
 	detailed,
-	onSelect,
+	last,
 	onToggle,
 }: {
 	item: ContentItem;
-	selected: boolean;
 	detailed: boolean;
-	onSelect: () => void;
+	last: boolean;
 	onToggle: () => void;
 }) {
 	const { colors } = useTheme();
@@ -117,49 +130,56 @@ function ContentRow({
 		item.directory ? "folder" : sizeLabel(item),
 	].filter((fact): fact is string => fact !== undefined && fact !== "");
 
+	// The separator is applied as a *pair* of props or not at all: a `borderColor`
+	// on a box with `border` false (or absent) makes OpenTUI infer that a border
+	// was wanted and draw all four sides, so the last row would end up in a box of
+	// its own. Verified in a rendered frame — see `memory.md`.
+	const rule: BoxProps = last
+		? {}
+		: { border: ["bottom"], borderColor: colors.border };
+
 	return (
-		<box
-			flexDirection="column"
-			paddingX={1}
-			backgroundColor={selected ? colors.border : undefined}
-			onMouseDown={() => (selected ? onToggle() : onSelect())}
-		>
+		<box flexDirection="column" {...rule}>
 			<box flexDirection="row" gap={1} alignItems="center">
-				<text fg={selected ? colors.primary : colors.muted} flexShrink={0}>
-					{selected ? icons.caret : " "}
-				</text>
 				{/* The checkbox is drawn for datapacks too, showing them as present —
-				    it simply never changes, and the section says why. */}
-				<text fg={item.enabled ? colors.success : colors.muted} flexShrink={0}>
-					{`[${item.enabled ? icons.checkOn : icons.checkOff}]`}
-				</text>
-				<text
-					fg={ink}
-					attributes={item.enabled ? TextAttributes.BOLD : undefined}
-					truncate
-					wrapMode="none"
-					flexShrink={1}
-				>
-					{item.name}
-				</text>
+				    clicking one raises the toast that says why it cannot change. */}
+				<Checkbox
+					noBorder
+					// boxed
+					caption={item.name}
+					captionColor={ink}
+					checked={item.enabled}
+					onChange={onToggle}
+				/>
 				{detailed ? (
 					<>
 						<box flexGrow={1} />
-						<text fg={colors.muted} flexShrink={0} truncate wrapMode="none">
+						<text
+							fg={colors.muted}
+							flexShrink={0}
+							paddingRight={1}
+							truncate
+							wrapMode="none"
+						>
 							{facts.join(` ${icons.separator} `)}
 						</text>
 					</>
 				) : null}
 			</box>
+			{/* Padding lives on a wrapping box: a `<text>` renderable ignores it. */}
 			{item.description ? (
-				<text fg={colors.muted} truncate wrapMode="none">
-					{`      ${item.description}`}
-				</text>
+				<box paddingLeft={ROW_TEXT_INDENT} paddingRight={1}>
+					<text fg={colors.muted} truncate wrapMode="none">
+						{item.description}
+					</text>
+				</box>
 			) : null}
 			{item.derivedName ? (
-				<text fg={colors.muted} truncate wrapMode="none">
-					{`      ${item.file} ${icons.separator} no readable manifest, so this is the filename`}
-				</text>
+				<box paddingLeft={ROW_TEXT_INDENT} paddingRight={1}>
+					<text fg={colors.muted} truncate wrapMode="none">
+						{`${item.file} ${icons.separator} no readable manifest, so this is the filename`}
+					</text>
+				</box>
 			) : null}
 		</box>
 	);
@@ -168,15 +188,11 @@ function ContentRow({
 /** A section's list, or the one line explaining why it has nothing to show. */
 function SectionBody({
 	section,
-	selectedKey,
 	detailed,
-	onSelect,
 	onToggle,
 }: {
 	section: ContentSection;
-	selectedKey: string | undefined;
 	detailed: boolean;
-	onSelect: (item: ContentItem) => void;
 	onToggle: (item: ContentItem) => void;
 }) {
 	if (!section.present) {
@@ -191,13 +207,12 @@ function SectionBody({
 	}
 	return (
 		<box flexDirection="column">
-			{section.items.map((item) => (
+			{section.items.map((item, index) => (
 				<ContentRow
 					key={item.key}
 					item={item}
-					selected={item.key === selectedKey}
 					detailed={detailed}
-					onSelect={() => onSelect(item)}
+					last={index === section.items.length - 1}
 					onToggle={() => onToggle(item)}
 				/>
 			))}
@@ -205,7 +220,7 @@ function SectionBody({
 	);
 }
 
-export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
+export function ContentTab({ server, insight, size }: ServerTabProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { width } = useTerminalDimensions();
@@ -214,8 +229,6 @@ export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
 		server,
 		insight?.properties?.levelName,
 	);
-	const [selectedKey, setSelectedKey] = useState<string>();
-
 	const empty = icons.emptyValue;
 	const raw = insight?.properties?.raw ?? {};
 	const measuring = `measuring${icons.ellipsis}`;
@@ -224,34 +237,16 @@ export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
 	const packUrl = raw["resource-pack"] ?? "";
 	const packRequired = raw["require-resource-pack"] === "true";
 
-	// One flat sequence in display order, so the caret moves between sections
-	// without the page having to know which one it is in — the same shape the
-	// Players tab's grid uses.
-	const ordered = listing.sections.flatMap((section) => section.items);
-	const orderedKeys = ordered.map((item) => item.key).join("|");
+	// Only ever a count: the rows carry no selection, so the tab has no reason to
+	// flatten the sections into one sequence beyond knowing whether the first
+	// listing has landed yet.
+	const installed = listing.sections.reduce(
+		(total, section) => total + section.items.length,
+		0,
+	);
 
-	// Keep the selection alive across polls and seed it on the first listing.
-	// Keyed on the *keys* rather than on `ordered`: the listing is rebuilt every
-	// round, so the array identity changes while its membership rarely does.
-	useEffect(() => {
-		const keys = orderedKeys === "" ? [] : orderedKeys.split("|");
-		if (keys.length === 0) {
-			if (selectedKey !== undefined) setSelectedKey(undefined);
-			return;
-		}
-		if (!selectedKey || !keys.includes(selectedKey)) setSelectedKey(keys[0]);
-	}, [orderedKeys, selectedKey]);
-
-	const selected = ordered.find((item) => item.key === selectedKey);
-	const index = ordered.findIndex((item) => item.key === selectedKey);
 	const sectionOf = (item: ContentItem) =>
 		listing.sections.find((section) => section.id === item.section);
-
-	const move = (delta: number) => {
-		if (ordered.length === 0) return;
-		const next = Math.max(0, Math.min(ordered.length - 1, index + delta));
-		setSelectedKey(ordered[next]?.key);
-	};
 
 	const market = (section: ContentSection["id"]) => {
 		toast.info(`${SECTION_TITLES[section]} marketplace is not built yet`, {
@@ -278,36 +273,18 @@ export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
 		// What actually happened, and when it will matter: a loader reads its
 		// directory once at boot, so a toggle on a running server changes nothing
 		// until it restarts. Saying "enabled" alone would misrepresent that.
-		toast.success(`${enabling ? "Enabled" : "Disabled"} ${item.name}`, {
-			description:
-				server.state === "running"
-					? `Renamed on disk. ${server.id} is running, so it takes effect on the next restart.`
-					: "Renamed on disk. It takes effect the next time this server starts.",
-		});
+		// toast.success(`${enabling ? "Enabled" : "Disabled"} ${item.name}`, {
+		// 	description:
+		// 		server.state === "running"
+		// 			? `Renamed on disk. ${server.id} is running, so it takes effect on the next restart.`
+		// 			: "Renamed on disk. It takes effect the next time this server starts.",
+		// });
 	};
 
-	// The tab only answers the keyboard while it holds the page's focus ring —
-	// otherwise ←/→ belong to the tab bar, exactly as they do for the console and
-	// the player grid.
-	useKeyboard((key) => {
-		if (!focused) return;
-		if (key.name === "down" || key.name === "j") move(1);
-		else if (key.name === "up" || key.name === "k") move(-1);
-		else if ((key.name === "space" || key.name === "return") && selected) {
-			void run(selected);
-		} else if (key.name === "m" && selected) {
-			market(selected.section);
-		}
-	});
-
-	useHints(
-		[
-			{ keys: [icons.arrowUp, icons.arrowDown], label: "select" },
-			{ keys: "Space", label: "enable/disable" },
-			{ keys: "m", label: "marketplace" },
-		],
-		{ scope: "context", active: focused === true },
-	);
+	// No keyboard handler and no context hints: the list has no caret to move, so
+	// the tab claims none of the page's keys and ←/→ always belong to the tab bar.
+	// Switching an item is the checkbox's click; the keyboard peer is
+	// `mctl content enable|disable`.
 
 	/** A section's panel: its counts and its marketplace button, then its rows. */
 	const panel = (section: ContentSection) => {
@@ -338,9 +315,7 @@ export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
 				<box marginTop={1} flexDirection="column">
 					<SectionBody
 						section={section}
-						selectedKey={selectedKey}
 						detailed={detailed}
-						onSelect={(item) => setSelectedKey(item.key)}
 						onToggle={(item) => void run(item)}
 					/>
 				</box>
@@ -450,7 +425,7 @@ export function ContentTab({ server, insight, size, focused }: ServerTabProps) {
 
 	return (
 		<box flexDirection="column" paddingX={1}>
-			{loading && ordered.length === 0 ? (
+			{loading && installed === 0 ? (
 				<box paddingBottom={1}>
 					<EmptyNote>Reading what is installed…</EmptyNote>
 				</box>
