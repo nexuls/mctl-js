@@ -35,6 +35,8 @@ Commands:
   start|stop|restart <id>
   logs <id> [-f]       stream a server's console
   exec <id> <cmd...>   send a command to a running server's console
+  content <id>         list installed mods/plugins/datapacks
+                       (content enable|disable <id> <file>)
   java list|install    inspect or install Java runtimes
   network [up|down]    join addresses, tunnels, and DNS
 
@@ -123,6 +125,11 @@ export async function runCli(argv: string[]): Promise<number> {
 	if (command === "logs" || command === "exec") {
 		const { runLogs, runExec } = await import("./commands/logs.ts");
 		return command === "logs" ? runLogs(argv.slice(1)) : runExec(argv.slice(1));
+	}
+
+	if (command === "content") {
+		const { runContent } = await import("./commands/content.ts");
+		return runContent(argv.slice(1));
 	}
 
 	if (command === "network") {
