@@ -72,6 +72,13 @@ const CONSOLE_ID = "__console";
 const PLAYERS_ID = "__players";
 
 /**
+ * Ring id of the Content tab's list. Same rule as the two above: it joins the
+ * ring only while its tab is active, so ←/→ still switch tabs whenever the list
+ * does not hold the focus — and ↑/↓ and Space belong to the list when it does.
+ */
+const CONTENT_ID = "__content";
+
+/**
  * Tabs that manage their own vertical scrolling and are therefore hosted in a
  * plain box — the same rule the shell applies to pages (`OWN_SCROLL` in
  * `Router.tsx`), for the same reason: an inner scrollbox needs a definite
@@ -125,6 +132,7 @@ export function ServerDetail() {
 			{ id: "remove", disabled: running },
 			...(tab === "console" ? [CONSOLE_ID] : []),
 			...(tab === "players" ? [PLAYERS_ID] : []),
+			...(tab === "content" ? [CONTENT_ID] : []),
 		],
 		// A modal takes the keyboard while it is up: with both rings listening, one
 		// Tab would move the page's focus *behind* the dialog.
@@ -251,7 +259,9 @@ export function ServerDetail() {
 			case "world":
 				return <WorldTab {...tabProps} />;
 			case "content":
-				return <ContentTab {...tabProps} />;
+				return (
+					<ContentTab {...tabProps} focused={ring.isFocused(CONTENT_ID)} />
+				);
 			case "backups":
 				return <BackupsTab {...tabProps} />;
 			case "performance":
