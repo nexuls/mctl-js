@@ -86,6 +86,20 @@ export function skinCacheDir(): string {
 	return join(cacheDir(), "skins");
 }
 
+/**
+ * Icons extracted out of mod and plugin archives, one PNG per item (see
+ * `core/server/content.ts`).
+ *
+ * They live here, rather than being held as bytes on the listing, for two
+ * reasons: the listing is re-read on a poll and a fresh `Uint8Array` every time
+ * would make every image on screen reload, and a jar's logo is routinely
+ * hundreds of kilobytes that no one wants inflated twice a minute. Disposable
+ * like the rest of the cache — a wipe costs one re-extraction.
+ */
+export function contentIconCacheDir(): string {
+	return join(cacheDir(), "content-icons");
+}
+
 // ── State: ~/.local/state/mctl (XDG_STATE_HOME) — DURABLE, not disposable ─────
 
 /** Root of durable local state: registry, event log, runtime descriptors. */

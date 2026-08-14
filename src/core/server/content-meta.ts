@@ -55,6 +55,13 @@ export interface ContentMeta {
 	authors?: string[];
 	/** Minecraft or API version the manifest declares, when it does. */
 	minecraftVersion?: string;
+	/**
+	 * Entry path *inside the archive* of the icon the manifest points at, when it
+	 * points at one — not a path on disk, and not yet known to exist. The caller
+	 * reads it out of the same archive; see {@link pickIconEntry} for what happens
+	 * when a manifest names none.
+	 */
+	icon?: string;
 }
 
 /** Entry names {@link parseJarMeta} asks a jar for, most specific first. */
@@ -100,6 +107,58 @@ function stringList(value: unknown): string[] | undefined {
 	return names.length > 0 ? names : undefined;
 }
 
+/**
+ * The icon entry a Fabric or Quilt manifest declares.
+ *
+ * Both spell it either as one path or as a `{size: path}` map — Fabric's schema
+ * allows `"icon": {"32": "…", "128": "…"}` so a launcher can pick a resolution.
+ * The **largest** is taken: a terminal cell grid is a coarse target and the
+ * renderer downsamples, so a 32px source is the one that looks like mush.
+ */
+function iconEntry(value: unknown): string | undefined {
+	if (typeof value === "string") return value.trim() || undefined;
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return undefined;
+	}
+	const sized = Object.entries(value as Record<string, unknown>)
+		.map(([size, path]) => ({ size: Number(size), path }))
+		.filter(
+			(candidate): candidate is { size: number; path: string } =>
+				Number.isFinite(candidate.size) && typeof candidate.path === "string",
+		)
+		.sort((a, b) => b.size - a.size);
+	return sized[0]?.path.trim() || undefined;
+}
+
+/**
+ * The icon to read out of an archive that declared none, chosen from its own
+ * entry listing.
+ *
+ * Pure, exported and tested because it is a **convention, not a spec**: a jar
+ * that names no logo very often still ships one at its root, and that is where
+ * every loader's own tooling puts it (JEI's `jei-icon.png`, a datapack's
+ * `pack.png`). Only root-level PNGs are considered — `assets/<modid>/textures/…`
+ * is full of item sprites, and picking one of those at random would put a
+ * 16×16 cog beside a mod's name and look deliberate.
+ *
+ * Preference order: an exact `icon.png` / `logo.png` / `pack.png`, then any root
+ * PNG whose name mentions an icon or a logo, then nothing — a jar whose root
+ * happens to hold an unrelated PNG gets no icon rather than a wrong one.
+ */
+export function pickIconEntry(names: readonly string[]): string | undefined {
+	const root = names.filter(
+		(name) => !name.includes("/") && name.toLowerCase().endsWith(".png"),
+	);
+	const named = (wanted: string) =>
+		root.find((name) => name.toLowerCase() === wanted);
+	return (
+		named("icon.png") ??
+		named("logo.png") ??
+		named("pack.png") ??
+		root.find((name) => /icon|logo/i.test(name))
+	);
+}
+
 /** Parse JSON, or `undefined` when the text is not JSON at all. */
 function json(text: string): Record<string, unknown> | unknown[] | undefined {
 	try {
@@ -140,6 +199,7 @@ export function parseFabricMod(text: string): ContentMeta | undefined {
 			(data.depends as Record<string, unknown>) ?? {},
 			"minecraft",
 		),
+		icon: iconEntry(data.icon),
 	};
 }
 
@@ -166,6 +226,7 @@ export function parseQuiltMod(text: string): ContentMeta | undefined {
 		version: str(loader, "version"),
 		description: oneLine(str(metadata, "description")),
 		authors: contributors.length > 0 ? contributors : undefined,
+		icon: iconEntry((metadata as Record<string, unknown> | undefined)?.icon),
 	};
 }
 
@@ -300,6 +361,7 @@ export function parseModsToml(
 				?.split(",")
 				.map((author) => author.trim()),
 		),
+		icon: iconEntry(fields.get("logoFile")),
 	};
 }
 
@@ -328,6 +390,7 @@ export function parseMcmodInfo(text: string): ContentMeta | undefined {
 				(first as Record<string, unknown>).authors,
 		),
 		minecraftVersion: str(first, "mcversion"),
+		icon: iconEntry((first as Record<string, unknown>).logoFile),
 	};
 }
 

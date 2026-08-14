@@ -29,11 +29,18 @@
  * offered as a switch that quietly corrupts a world's state.
  */
 
-import { rename, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { rename, stat, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { pathExists, readDirIfExists, readTextIfExists } from "../../lib/fs.ts";
+import {
+	ensureDir,
+	pathExists,
+	readDirIfExists,
+	readTextIfExists,
+} from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
-import { readZipText } from "../../lib/zip.ts";
+import { contentIconCacheDir } from "../../lib/paths.ts";
+import { readZipEntry, readZipText } from "../../lib/zip.ts";
 import type { ContentSectionId, ContentSupport } from "../../types/content.ts";
 import type { Server } from "../../types/server.ts";
 import type { ProviderRegistry } from "../registry/provider-registry.ts";
@@ -42,6 +49,7 @@ import {
 	PACK_MANIFEST,
 	parseJarMeta,
 	parsePackMcmeta,
+	pickIconEntry,
 	type ContentLoader,
 	type ContentMeta,
 } from "./content-meta.ts";
@@ -96,6 +104,17 @@ export interface ContentItem {
 	enabled: boolean;
 	/** True for an unpacked datapack (a directory rather than an archive). */
 	directory: boolean;
+	/**
+	 * Absolute path to this item's icon as a PNG **on disk**, when it has one and
+	 * it could be extracted — for an unpacked datapack the pack's own `pack.png`,
+	 * for an archive a copy in `~/.cache/mctl/content-icons/`.
+	 *
+	 * A path rather than the bytes on purpose: it is a stable string across the
+	 * polls that rebuild this listing, so a front-end's image does not reload
+	 * every time. Absent for anything that ships no icon, and for one too large to
+	 * be worth reading — never a reason for the item not to be listed.
+	 */
+	icon?: string;
 }
 
 /** One list on the Content tab. */
@@ -190,6 +209,59 @@ async function readPackMeta(
 	}
 }
 
+/**
+ * Largest icon worth extracting, in bytes.
+ *
+ * Mod logos are routinely a megabyte of 512×512 PNG (Create Aeronautics ships
+ * exactly that) and are drawn here into a handful of terminal cells. The cap is
+ * generous enough to admit every real logo and mean enough to refuse a texture
+ * atlas someone parked at a jar's root; over it the item simply has no icon.
+ */
+const MAX_ICON_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Extract an item's icon into the cache and return its path, or `undefined`.
+ *
+ * The cache key is the jar's own path, size and mtime, so a *replaced* jar
+ * (an update keeping the same filename) re-extracts while an unchanged one is
+ * only ever read once however often the listing is rebuilt. That matters: this
+ * runs for every jar in `mods/` on a poll, and inflating a megabyte of PNG
+ * twice a minute for a picture that has not changed is exactly the cost the
+ * cache exists to remove.
+ *
+ * Never throws — an icon is decoration, and a jar that will not give one up
+ * still gets listed.
+ */
+async function readIcon(
+	path: string,
+	meta: ContentMeta | undefined,
+	sizeBytes: number | undefined,
+	modifiedAt: number | undefined,
+): Promise<string | undefined> {
+	const key = createHash("sha256")
+		.update(`${path}\0${sizeBytes ?? 0}\0${modifiedAt ?? 0}`)
+		.digest("hex");
+	const cached = join(contentIconCacheDir(), `${key}.png`);
+	try {
+		if (await pathExists(cached)) return cached;
+		const found = await readZipEntry(path, (names) => {
+			// A declared logo wins, but only if the archive actually holds it: a
+			// `logoFile` left over from a template names a file that was never
+			// shipped, and the root-PNG convention still finds the real one.
+			const declared = meta?.icon;
+			if (declared && names.includes(declared)) return declared;
+			return pickIconEntry(names);
+		});
+		if (!found || found.bytes.byteLength > MAX_ICON_BYTES) return undefined;
+		await ensureDir(contentIconCacheDir());
+		await writeFile(cached, found.bytes);
+		return cached;
+	} catch (err) {
+		logger.debug({ path, err: String(err) }, "no icon extracted");
+		return undefined;
+	}
+}
+
 /** Build one item from a directory entry, reading whatever describes it. */
 async function readItem(
 	section: ContentSectionId,
@@ -217,6 +289,15 @@ async function readItem(
 				? undefined
 				: await readJarMeta(path);
 
+	// An unpacked datapack keeps its `pack.png` beside its `pack.mcmeta`, so it is
+	// already a file on disk and needs no extraction or cache entry at all.
+	const packPng = join(path, "pack.png");
+	const icon = directory
+		? (await pathExists(packPng))
+			? packPng
+			: undefined
+		: await readIcon(path, meta, size, modifiedAt);
+
 	const name = meta?.name ?? meta?.id;
 	return {
 		key: `${section}:${enabledName(file)}`,
@@ -234,6 +315,7 @@ async function readItem(
 		modifiedAt,
 		enabled: !file.endsWith(DISABLED_SUFFIX),
 		directory,
+		icon,
 	};
 }
 

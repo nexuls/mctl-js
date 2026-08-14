@@ -14,7 +14,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildZip } from "./zip.fixture.ts";
-import { readZipEntries, readZipText, ZipError } from "./zip.ts";
+import { readZipEntries, readZipEntry, readZipText, ZipError } from "./zip.ts";
 
 let dir: string;
 
@@ -120,5 +120,39 @@ describe("offsets", () => {
 		]);
 		const found = await readZipText(path, ["fabric.mod.json"]);
 		expect(found.get("fabric.mod.json")).toBe('{"id":"second"}');
+	});
+});
+
+describe("readZipEntry", () => {
+	test("chooses from the archive's own listing and reads only that entry", async () => {
+		const path = await archive("mod.jar", [
+			{ name: "fabric.mod.json", data: '{"id":"x"}' },
+			{ name: "icon.png", data: "not-really-a-png" },
+			{ name: "assets/x/textures/thing.png", data: "sprite" },
+		]);
+		const seen: string[][] = [];
+		const found = await readZipEntry(path, (names) => {
+			seen.push([...names]);
+			return names.find((name) => name === "icon.png");
+		});
+		// The chooser sees every name, which is the point — the caller decides
+		// without the reader knowing anything about what it is looking for.
+		expect(seen[0]).toEqual([
+			"fabric.mod.json",
+			"icon.png",
+			"assets/x/textures/thing.png",
+		]);
+		expect(found?.name).toBe("icon.png");
+		expect(Buffer.from(found?.bytes ?? []).toString()).toBe("not-really-a-png");
+	});
+
+	test("choosing nothing reads nothing", async () => {
+		const path = await archive("mod.jar", [{ name: "a.txt", data: "hi" }]);
+		expect(await readZipEntry(path, () => undefined)).toBeUndefined();
+	});
+
+	test("a name the archive does not hold is undefined, not a throw", async () => {
+		const path = await archive("mod.jar", [{ name: "a.txt", data: "hi" }]);
+		expect(await readZipEntry(path, () => "nope.png")).toBeUndefined();
 	});
 });

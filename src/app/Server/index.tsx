@@ -384,7 +384,7 @@ export function ServerDetail() {
 					{body}
 				</box>
 			) : (
-				<ScrollBox key={tab} flexGrow={1}>
+				<ScrollBox key={tab} flexGrow={1} enableAccel>
 					{body}
 				</ScrollBox>
 			)}

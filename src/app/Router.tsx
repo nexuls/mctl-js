@@ -249,7 +249,10 @@ function titleFor(route: RouteId): string {
 export function AppRouter() {
 	return (
 		// Temporarily hardcode the first server as the initial route
-		<RouterProvider initialRoute="dashboard">
+		<RouterProvider
+			initialRoute="server"
+			params={{ serverId: "create-server" }}
+		>
 			{/* The input capture the shell reads is provided in `App.tsx`, above both
 			    this router and the setup wizard. The hint registry sits here instead:
 			    the strip is the shell's chrome, and the wizard draws its own footer. */}

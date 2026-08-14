@@ -25,10 +25,17 @@ import type { Server } from "../../../types/server.ts";
 import { ContentTab } from "./Content.tsx";
 
 let dir: string;
+let cache: string;
 let server: Server;
+let previousCacheHome: string | undefined;
 
 beforeEach(async () => {
 	dir = await mkdtemp(join(tmpdir(), "mctl-content-tab-"));
+	// Icons are extracted into `cacheDir()`, which resolves XDG when it is called
+	// — without this the suite writes into the developer's real `~/.cache/mctl`.
+	cache = await mkdtemp(join(tmpdir(), "mctl-content-tab-cache-"));
+	previousCacheHome = process.env.XDG_CACHE_HOME;
+	process.env.XDG_CACHE_HOME = cache;
 	server = {
 		id: "survival",
 		name: "Survival",
@@ -45,7 +52,19 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await rm(dir, { recursive: true, force: true });
+	await rm(cache, { recursive: true, force: true });
+	if (previousCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+	else process.env.XDG_CACHE_HOME = previousCacheHome;
 });
+
+/**
+ * A real 1×1 PNG. Real, rather than arbitrary bytes, because the row genuinely
+ * hands this to an `<image>` renderable, which decodes what it is given.
+ */
+const PNG = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+	"base64",
+);
 
 /** Write a jar holding the given entries at `relative`. */
 async function jar(
@@ -137,10 +156,11 @@ test("rows are in name order whatever their state, separated by a rule", async (
 	expect(row("Aaa")).toBeLessThan(row("Zzz"));
 	// One rule between the two rows, and none under the last one. A row rule is a
 	// run of ─ *inside* a panel's sides, which is what tells it apart from the
-	// panels' own top and bottom borders.
+	// panels' own top and bottom borders. It sits three lines under the name,
+	// because a row is a name line plus the two rows reserved for a description.
 	const isRule = (line: string | undefined) =>
 		/^\s*│\s*─+\s*│\s*$/.test(line ?? "");
-	expect(isRule(lines[row("Aaa") + 1])).toBe(true);
+	expect(isRule(lines[row("Aaa") + 3])).toBe(true);
 	expect(lines.filter(isRule).length).toBe(1);
 });
 
@@ -195,4 +215,69 @@ test("datapacks are listed but say they cannot be switched here", async () => {
 	const frame = await mount();
 	expect(frame).toContain("Vanilla Tweaks");
 	expect(frame).toContain("/datapack");
+});
+
+test("every row is three rows tall, however long its description", async () => {
+	// A row is a name line plus a two-line description block, so the rules
+	// between rows land four lines apart (three rows and the rule itself). Rows
+	// that sized themselves to their own text would step between two and three
+	// and make the list ragged.
+	await jar("mods/alpha.jar", fabricMod("Alpha", "1.0", "Short."));
+	await jar(
+		"mods/beta.jar",
+		fabricMod(
+			"Beta",
+			"1.0",
+			"A description long enough that it has to wrap onto the second row the layout reserves for it.",
+		),
+	);
+	const lines = (await mount()).split("\n");
+	const alpha = lines.findIndex((line) => line.includes("Alpha"));
+	const beta = lines.findIndex((line) => line.includes("Beta"));
+	expect(alpha).toBeGreaterThan(-1);
+	expect(beta - alpha).toBe(4);
+	// The long one wraps onto the second reserved row rather than being cut off
+	// at the end of the first.
+	expect(lines[beta + 1]).toContain("A description long enough");
+	expect(lines[beta + 2]).toContain("for it.");
+});
+
+test("an icon indents the whole section, including rows that have none", async () => {
+	await jar("mods/plain.jar", fabricMod("Plain", "1.0"));
+	const withoutIcons = await mount();
+
+	await jar("mods/withicon.jar", [
+		...fabricMod("Withicon", "1.0"),
+		{ name: "icon.png", data: PNG },
+	]);
+	const withIcons = await mount();
+
+	/** The column the given name starts at. */
+	const column = (frame: string, name: string) =>
+		frame
+			.split("\n")
+			.find((line) => line.includes(name))
+			?.indexOf(name);
+
+	// Both names move right by the icon column, not just the row that fills it —
+	// otherwise the names in a section step in and out depending on what each
+	// jar happened to ship.
+	const before = column(withoutIcons, "Plain") ?? 0;
+	const after = column(withIcons, "Plain") ?? 0;
+	expect(after - before).toBe(4);
+	expect(column(withIcons, "Withicon")).toBe(after);
+});
+
+test("below the icon width the column is dropped again", async () => {
+	await jar("mods/withicon.jar", [
+		...fabricMod("Withicon", "1.0"),
+		{ name: "icon.png", data: PNG },
+	]);
+	const narrow = (await mount(50)).split("\n");
+	const wide = (await mount(100)).split("\n");
+	const columnOf = (lines: string[]) =>
+		lines.find((line) => line.includes("Withicon"))?.indexOf("Withicon");
+	// Four cells are worth more to the name than to the picture on a small
+	// terminal, so the icon column is not reserved at all down there.
+	expect((columnOf(wide) ?? 0) - (columnOf(narrow) ?? 0)).toBe(4);
 });

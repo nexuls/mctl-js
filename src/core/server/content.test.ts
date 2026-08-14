@@ -26,10 +26,18 @@ import {
 } from "./content.ts";
 
 let dir: string;
+let cache: string;
 let server: Server;
+let previousCacheHome: string | undefined;
 
 beforeEach(async () => {
 	dir = await mkdtemp(join(tmpdir(), "mctl-content-"));
+	// Extracted icons land under `cacheDir()`, which resolves XDG at call time —
+	// so without this the suite would write into the developer's real
+	// `~/.cache/mctl` every run.
+	cache = await mkdtemp(join(tmpdir(), "mctl-content-cache-"));
+	previousCacheHome = process.env.XDG_CACHE_HOME;
+	process.env.XDG_CACHE_HOME = cache;
 	server = {
 		id: "survival",
 		name: "Survival",
@@ -46,6 +54,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await rm(dir, { recursive: true, force: true });
+	await rm(cache, { recursive: true, force: true });
+	if (previousCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+	else process.env.XDG_CACHE_HOME = previousCacheHome;
 });
 
 /** Write a jar holding the given manifest entries into `mods/` (or elsewhere). */
@@ -366,3 +377,84 @@ async function modsDir(): Promise<string> {
 	await mkdir(path, { recursive: true });
 	return path;
 }
+
+describe("icons", () => {
+	/** Bytes standing in for a logo; nothing here decodes a PNG, it only copies. */
+	const LOGO = "PNG-BYTES-FOR-THE-LOGO";
+
+	test("a declared logoFile is extracted into the cache", async () => {
+		await jar("mods/create-6.0.jar", [
+			{
+				name: "META-INF/neoforge.mods.toml",
+				data: `[[mods]]\nmodId="create"\ndisplayName="Create"\nlogoFile="icon.png"\n`,
+			},
+			{ name: "icon.png", data: LOGO },
+		]);
+		const mods = await section("mods");
+		const icon = mods.items[0]?.icon;
+		// A path, not bytes: the listing is rebuilt on a poll, and a fresh array
+		// each time would make every image on screen reload.
+		expect(icon).toBeString();
+		expect(icon?.startsWith(cache)).toBe(true);
+		expect(await Bun.file(icon ?? "").text()).toBe(LOGO);
+	});
+
+	test("a jar declaring no logo still gets the PNG at its root", async () => {
+		// JEI's real shape: the template's `logoFile` line is commented out, and
+		// the actual icon sits at the archive root under its own name.
+		await jar("mods/jei-19.44.jar", [
+			{ name: "META-INF/neoforge.mods.toml", data: `[[mods]]\nmodId="jei"\n` },
+			{ name: "jei-icon.png", data: LOGO },
+		]);
+		expect(
+			await Bun.file((await section("mods")).items[0]?.icon ?? "").text(),
+		).toBe(LOGO);
+	});
+
+	test("a logoFile the jar never shipped falls back rather than failing", async () => {
+		await jar("mods/stale-1.0.jar", [
+			{
+				name: "META-INF/neoforge.mods.toml",
+				data: `[[mods]]\nmodId="stale"\nlogoFile="examplemod.png"\n`,
+			},
+			{ name: "logo.png", data: LOGO },
+		]);
+		expect(
+			await Bun.file((await section("mods")).items[0]?.icon ?? "").text(),
+		).toBe(LOGO);
+	});
+
+	test("a jar with no icon is still listed", async () => {
+		await jar("mods/plain-1.0.jar", [
+			{ name: "fabric.mod.json", data: '{"id":"plain","name":"Plain"}' },
+		]);
+		const mods = await section("mods");
+		expect(mods.items).toHaveLength(1);
+		expect(mods.items[0]?.icon).toBeUndefined();
+	});
+
+	test("the second read reuses the cached file instead of re-extracting", async () => {
+		await jar("mods/create-6.0.jar", [
+			{ name: "fabric.mod.json", data: '{"id":"create","name":"Create"}' },
+			{ name: "icon.png", data: LOGO },
+		]);
+		const first = (await section("mods")).items[0]?.icon;
+		// Rewriting the cached file is how "did it extract again?" is observable:
+		// a second extraction would put the jar's real bytes back.
+		await writeFile(first ?? "", "REPLACED");
+		const second = (await section("mods")).items[0]?.icon;
+		expect(second).toBe(first);
+		expect(await Bun.file(second ?? "").text()).toBe("REPLACED");
+	});
+
+	test("an unpacked datapack uses its own pack.png, uncopied", async () => {
+		const pack = join(dir, "world/datapacks/vanilla-tweaks");
+		await mkdir(pack, { recursive: true });
+		await writeFile(join(pack, "pack.mcmeta"), '{"pack":{"pack_format":48}}');
+		await writeFile(join(pack, "pack.png"), LOGO);
+		const packs = await section("datapacks");
+		// A folder's icon is already a file on disk; copying it into the cache
+		// would be a second copy of something that cannot go stale.
+		expect(packs.items[0]?.icon).toBe(join(pack, "pack.png"));
+	});
+});

@@ -13,6 +13,14 @@
  * Page-layer (AGENTS.md § 3): every value arrives on a view model from
  * `hooks/use-server-content.ts`; this file reads no files and renames nothing.
  *
+ * **Each row leads with the item's own icon**, the logo its manifest points at
+ * (or the PNG at the root of its archive), extracted by the same core service
+ * and arriving here as a *path* — an `<image>` renderable takes it from there and
+ * draws it with Kitty graphics, Sixel or Unicode blocks depending on the
+ * terminal. The column is reserved for every row in a section where anything has
+ * one, so the names stay aligned; below {@link ICON_ROW_WIDTH} it is dropped
+ * entirely.
+ *
  * The list is **rows separated by a rule, with no selected row**: the checkbox on
  * each row is the only control, so there is nothing for a caret to point at. That
  * is also why the items arrive in plain name order — see `core/server/content.ts`
@@ -82,6 +90,31 @@ const SECTION_MARKETS: Record<ContentSection["id"], string> = {
  */
 const DETAILED_ROW_WIDTH = 72;
 
+/**
+ * Terminal width at or above which rows carry their item's icon. Below it the
+ * four cells the column costs are worth more to the name than to the picture.
+ */
+const ICON_ROW_WIDTH = 56;
+
+/**
+ * The icon's cell box, and with it the height of every row: three cells square,
+ * beside a name line and a two-line description. Rows are a fixed three tall so
+ * the list reads as a column of even cards — a row that sized itself to its own
+ * description would step between two and three and make the rules beneath them
+ * uneven.
+ */
+const ICON_WIDTH = 3;
+const ICON_HEIGHT = 3;
+
+/**
+ * Rows the description is given. It **wraps** into them rather than being
+ * truncated to one line: manifest descriptions run to a sentence or two, and two
+ * rows is enough for nearly all of them. Anything longer is clipped by the box —
+ * OpenTUI wraps text regardless of `overflow`, which only hides what the wrap
+ * produced, and that is exactly the behaviour wanted here.
+ */
+const DESCRIPTION_ROWS = 2;
+
 /** `1.2 MB`, or nothing at all for an unpacked datapack (a folder has no size). */
 function sizeLabel(item: ContentItem): string | undefined {
 	return item.sizeBytes === undefined ? undefined : formatBytes(item.sizeBytes);
@@ -103,18 +136,23 @@ const ROW_TEXT_INDENT = 5;
  * separator under the final row — the rule belongs *between* items, and one under
  * the bottom of the list would read as the section having a footer.
  *
- * The description is a second, dimmed line rather than a column: manifest
- * descriptions run to a sentence or more, and a column that wide would push
- * everything else off a normal terminal.
+ * The description is a dimmed block under the name rather than a column:
+ * manifest descriptions run to a sentence or more, and a column that wide would
+ * push everything else off a normal terminal. It is given two rows and wraps
+ * into them, which — with the icon three cells tall beside it — is what makes
+ * every row exactly three rows high.
  */
 function ContentRow({
 	item,
 	detailed,
+	icons: showIcons,
 	last,
 	onToggle,
 }: {
 	item: ContentItem;
 	detailed: boolean;
+	/** Whether this section reserves the leading icon column at all. */
+	icons: boolean;
 	last: boolean;
 	onToggle: () => void;
 }) {
@@ -138,8 +176,8 @@ function ContentRow({
 		? {}
 		: { border: ["bottom"], borderColor: colors.border };
 
-	return (
-		<box flexDirection="column" {...rule}>
+	const body = (
+		<box flexDirection="column" flexGrow={1}>
 			<box flexDirection="row" gap={1} alignItems="center">
 				{/* The checkbox is drawn for datapacks too, showing them as present —
 				    clicking one raises the toast that says why it cannot change. */}
@@ -166,21 +204,46 @@ function ContentRow({
 					</>
 				) : null}
 			</box>
-			{/* Padding lives on a wrapping box: a `<text>` renderable ignores it. */}
-			{item.description ? (
-				<box paddingLeft={ROW_TEXT_INDENT} paddingRight={1}>
-					<text fg={colors.muted} truncate wrapMode="none">
-						{item.description}
-					</text>
-				</box>
-			) : null}
-			{item.derivedName ? (
-				<box paddingLeft={ROW_TEXT_INDENT} paddingRight={1}>
-					<text fg={colors.muted} truncate wrapMode="none">
-						{`${item.file} ${icons.separator} no readable manifest, so this is the filename`}
-					</text>
-				</box>
-			) : null}
+			{/*
+			 * Padding lives on a wrapping box: a `<text>` renderable ignores it.
+			 * The box is a fixed two rows tall and clips, so a long description
+			 * wraps into the space the row already reserves and a short one leaves
+			 * the row exactly as tall as every other.
+			 */}
+			<box
+				paddingLeft={ROW_TEXT_INDENT}
+				paddingRight={1}
+				height={DESCRIPTION_ROWS}
+				overflow="hidden"
+			>
+				<text fg={colors.muted}>
+					{item.derivedName
+						? `${item.file} ${icons.separator} no readable manifest, so this is the filename`
+						: (item.description ?? "")}
+				</text>
+			</box>
+		</box>
+	);
+
+	if (!showIcons) return <box {...rule}>{body}</box>;
+
+	return (
+		<box flexDirection="row" gap={1} {...rule}>
+			{/*
+			 * The column is reserved whether or not *this* item has an icon, so the
+			 * names in a section stay in one line rather than stepping in and out by
+			 * four cells depending on what each jar happened to ship.
+			 *
+			 * `fit` (not `cover`) because a mod logo is authored as a whole picture:
+			 * cropping one to fill a 4×2 box throws away the part that identifies it.
+			 * The protocol is left at `auto`, which resolves to Kitty or Sixel where
+			 * the terminal has them and Unicode half-blocks everywhere else — under
+			 * tmux that is always blocks.
+			 */}
+			<box width={ICON_WIDTH} height={ICON_HEIGHT} flexShrink={0}>
+				{item.icon ? <image source={item.icon} fit="fit" /> : null}
+			</box>
+			{body}
 		</box>
 	);
 }
@@ -189,10 +252,12 @@ function ContentRow({
 function SectionBody({
 	section,
 	detailed,
+	icons,
 	onToggle,
 }: {
 	section: ContentSection;
 	detailed: boolean;
+	icons: boolean;
 	onToggle: (item: ContentItem) => void;
 }) {
 	if (!section.present) {
@@ -212,6 +277,7 @@ function SectionBody({
 					key={item.key}
 					item={item}
 					detailed={detailed}
+					icons={icons}
 					last={index === section.items.length - 1}
 					onToggle={() => onToggle(item)}
 				/>
@@ -315,8 +381,8 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 				>
 					<text fg={colors.muted} truncate wrapMode="none">
 						{section.present
-							? `${icons.folder} ${section.directory} ${icons.separator} ${enabled} enabled${disabled > 0 ? `, ${disabled} disabled` : ""}`
-							: `${icons.folder} ${section.directory} ${icons.separator} ${empty} (no directory)`}
+							? `${icons.folder}  ${section.directory} ${icons.separator} ${enabled} enabled${disabled > 0 ? `, ${disabled} disabled` : ""}`
+							: `${icons.folder}  ${section.directory} ${icons.separator} ${empty} (no directory)`}
 					</text>
 					{/* No marketplace where nothing from it could ever load. */}
 					{section.supported ? (
@@ -334,6 +400,13 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 					<SectionBody
 						section={section}
 						detailed={detailed}
+						// The column costs its four cells whether or not a given row
+						// fills them, so it is only reserved where something in this
+						// section actually has a picture to put in it.
+						icons={
+							width >= ICON_ROW_WIDTH &&
+							section.items.some((item) => item.icon !== undefined)
+						}
 						onToggle={(item) => void run(item)}
 					/>
 				</box>

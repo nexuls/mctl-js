@@ -83,7 +83,7 @@ export const SERVER_TABS: readonly ServerTab[] = [
 ] as const;
 
 /** The default tab a freshly-opened server page shows. */
-export const DEFAULT_SERVER_TAB: ServerTabId = "overview";
+export const DEFAULT_SERVER_TAB: ServerTabId = "content";
 
 /** Look a tab up by id, falling back to the default. */
 export function serverTab(id: string): ServerTab {

@@ -202,6 +202,40 @@ export async function readZipEntries(
 }
 
 /**
+ * Read **one** entry whose name the caller picks from the archive's own listing.
+ *
+ * The twin of {@link readZipEntries} for the case where the wanted name is not
+ * known in advance: `choose` is handed every entry name in the archive and
+ * returns the one to read, or `undefined` to read nothing. Only that entry's
+ * bytes are ever inflated, and the archive is opened once — which is the whole
+ * point, since the alternative (list, close, reopen, read) parses the central
+ * directory twice.
+ *
+ * @param path archive on disk.
+ * @param choose picks a name out of the archive's entries; a name it returns
+ *   that the archive does not hold yields `undefined` rather than throwing.
+ * @throws {@link ZipError} when the file is not a readable ZIP, plus any
+ *   filesystem error from opening it.
+ */
+export async function readZipEntry(
+	path: string,
+	choose: (names: readonly string[]) => string | undefined,
+): Promise<{ name: string; bytes: Uint8Array } | undefined> {
+	const handle = await open(path, "r");
+	try {
+		const { size } = await handle.stat();
+		const entries = await readCentralDirectory(handle, size);
+		const wanted = choose(entries.map((entry) => entry.name));
+		if (wanted === undefined) return undefined;
+		const entry = entries.find((candidate) => candidate.name === wanted);
+		if (!entry) return undefined;
+		return { name: entry.name, bytes: await readEntry(handle, entry) };
+	} finally {
+		await handle.close();
+	}
+}
+
+/**
  * The UTF-8 twin of {@link readZipEntries}, for the text manifests that are the
  * only thing MCTL reads out of an archive.
  */

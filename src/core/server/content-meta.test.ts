@@ -15,6 +15,7 @@ import {
 	parseJarMeta,
 	parseMcmodInfo,
 	parseModsToml,
+	pickIconEntry,
 	parsePackMcmeta,
 	parsePluginYml,
 	parseQuiltMod,
@@ -171,6 +172,15 @@ description='''An item and recipe viewing mod.''' #mandatory Supports multiline 
 			description: "An item and recipe viewing mod.",
 			authors: ["mezz"],
 		});
+	});
+
+	test("the mod block's logoFile is the declared icon", () => {
+		expect(
+			parseModsToml(
+				`[[mods]]\nmodId="create"\nlogoFile = "icon.png" #optional\n`,
+				"neoforge",
+			)?.icon,
+		).toBe("icon.png");
 	});
 
 	test("a # inside a quoted value is content, not a comment", () => {
@@ -348,5 +358,61 @@ describe("manifestVersion", () => {
 
 	test("absent when the manifest does not declare one", () => {
 		expect(manifestVersion("Manifest-Version: 1.0\r\n")).toBeUndefined();
+	});
+});
+
+describe("icons", () => {
+	test("Fabric's sized icon map yields the largest", () => {
+		// A launcher picks a resolution from this map; a terminal downsamples, so
+		// the biggest source is the one that survives the trip to a 3x3 cell box.
+		expect(
+			parseFabricMod(
+				JSON.stringify({
+					id: "sodium",
+					icon: { "32": "assets/small.png", "128": "assets/big.png" },
+				}),
+			)?.icon,
+		).toBe("assets/big.png");
+	});
+
+	test("a plain Fabric icon string is taken as it is", () => {
+		expect(
+			parseFabricMod(JSON.stringify({ id: "sodium", icon: "icon.png" }))?.icon,
+		).toBe("icon.png");
+	});
+
+	test("mcmod.info declares its logo as logoFile", () => {
+		expect(
+			parseMcmodInfo(JSON.stringify([{ modid: "old", logoFile: "logo.png" }]))
+				?.icon,
+		).toBe("logo.png");
+	});
+});
+
+describe("pickIconEntry", () => {
+	test("prefers a root icon.png", () => {
+		expect(pickIconEntry(["logo.png", "icon.png", "pack.png"])).toBe(
+			"icon.png",
+		);
+	});
+
+	test("falls back to a root PNG that names itself an icon", () => {
+		// JEI ships exactly this: no declared logo, and `jei-icon.png` at the root.
+		expect(pickIconEntry(["jei-icon.png", "pack.mcmeta"])).toBe("jei-icon.png");
+	});
+
+	test("never reaches into assets/", () => {
+		// A mod's textures are hundreds of 16x16 item sprites; picking one would
+		// put an arbitrary cog beside the mod's name and look deliberate.
+		expect(
+			pickIconEntry([
+				"assets/jei/textures/gui/icon.png",
+				"META-INF/MANIFEST.MF",
+			]),
+		).toBeUndefined();
+	});
+
+	test("an unrelated root PNG is not an icon", () => {
+		expect(pickIconEntry(["screenshot.png"])).toBeUndefined();
 	});
 });
