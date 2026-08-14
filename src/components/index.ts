@@ -84,6 +84,9 @@ export {
 	onAccent,
 	clamp,
 	optionsFitAsTabs,
+	type TabSelectGeometry,
+	type TabSelectHit,
+	tabSelectHit,
 } from "./support.ts";
 
 export {

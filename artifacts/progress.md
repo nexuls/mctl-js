@@ -3,7 +3,7 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-13 (Phase 4a — networking; the self-contained known gaps closed)_
+_Last updated: 2026-08-14 (Select mouse support; the field label caret removed)_
 
 ---
 
@@ -13,6 +13,27 @@ Every entry is dated. Dates are the date of the commit that landed the work, not
 list — the first six entries are the most recent, the rest run oldest-first below them. "user request"
 / "user report" marks work the user asked for mid-session; entries with neither were driven by the
 roadmap in `plan.md`.
+
+- **`Select` answers the mouse; the field label lost its caret (2026-08-14, user request).**
+  - `src/components/support.ts` — `tabSelectHit` + `TabSelectHit`/`TabSelectGeometry` (new, pure and
+    exported): a pointer offset inside a `<tab-select>` resolved to the tab or end arrow drawn there,
+    reconstructing the scroll maths the renderable keeps private.
+  - `src/components/Form.tsx` — `Select` gained the whole pointer vocabulary: wheel over the dropdown
+    walks the selection (clamped, and consumed so the page does not scroll too), a click picks the tab
+    under the pointer, and resting on an end arrow walks toward the hidden options at one per 180 ms.
+    An effect pushes the controlled index into the `<tab-select>` renderable (it has no
+    `selectedIndex` prop, so the strip could highlight a tab the value had moved off), and `pick` now
+    ignores a pick that lands on the current value — otherwise that sync echoes back as an `onChange`.
+  - `src/components/Form.tsx` — `FormField` no longer prefixes its label with `▸` while focused.
+  - Tests (**432 total, 45 files**, +11): `components/support.test.ts` (7, the tab geometry: scroll
+    offset, arrows winning over the tab beneath them, empty slots, a strip narrower than one tab) and
+    `components/Form.mouse.test.tsx` (4, the real control driven with `harness.mockMouse`).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 432 pass / 0 fail, `bun run format` and
+    `bunx biome check src` clean. Driven in **tmux with real mouse escape sequences** against a
+    sandbox `$HOME`: at 120 cols a click on *Fabric* selected it; at 60 cols (dropdown layout) three
+    wheel-downs walked Paper→Forge and scrolled the list, two wheel-ups walked back, and the page
+    behind it never scrolled; at 90 cols (strip overflowing) hovering `›` walked the strip to the end
+    and stopped, `‹` walked it back, and moving off the cell froze it.
 
 - **The standing gaps, closed (2026-08-13, user request: "implement all the gaps").** Everything in
   *Known gaps* that did not need credentials, RCON, or a whole phase behind it.

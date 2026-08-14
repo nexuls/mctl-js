@@ -24,16 +24,25 @@
 import type {
 	BoxRenderable,
 	InputRenderable,
+	MouseEvent as TuiMouseEvent,
 	SelectOption,
 	TabSelectOption,
+	TabSelectRenderable,
 	TextareaRenderable,
 } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import type { BoxProps, InputProps as OpenTuiInputProps } from "@opentui/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../hooks/use-theme.tsx";
 import { useIcons } from "../hooks/use-icons.tsx";
-import { onAccent, optionsFitAsTabs, variantColor } from "./support.ts";
+import {
+	clamp,
+	onAccent,
+	optionsFitAsTabs,
+	type TabSelectHit,
+	tabSelectHit,
+	variantColor,
+} from "./support.ts";
 import { useBoxWidth } from "./use-box-width.ts";
 
 export { Label } from "./Label.tsx";
@@ -139,7 +148,6 @@ export function FormField({
 	...rest
 }: FormFieldProps) {
 	const { colors } = useTheme();
-	const { icons } = useIcons();
 	const borderColor = invalid
 		? colors.error
 		: focused
@@ -151,14 +159,11 @@ export function FormField({
 			? colors.primary
 			: colors.muted;
 
-	// The accent border alone is a weak focus cue on a screen of stacked fields —
-	// it is one thin line, and an `invalid` field is already accented in another
-	// colour. A caret in front of the label says which field the keyboard is in
-	// without ambiguity. The title rides the border, so this costs no row and no
-	// reflow (it only shifts the label two cells along the top edge).
-	const title = label
-		? `${focused ? ` ${icons.caret}` : ""} ${label}${required ? " *" : ""} `
-		: undefined;
+	// The label sits on the border unadorned: focus is carried by the accent
+	// border and title colour alone. A caret used to be prefixed here as a
+	// stronger cue, but it shifted the label along the top edge on every focus
+	// move, which read as the frame twitching rather than as a focus ring.
+	const title = label ? ` ${label}${required ? " *" : ""} ` : undefined;
 
 	return (
 		<box
@@ -374,6 +379,12 @@ export function TextArea({
 // Select — adaptive tabs / dropdown.
 // ---------------------------------------------------------------------------
 
+/**
+ * How long the pointer must rest on a `<tab-select>` end arrow between steps.
+ * Slow enough to stop at a specific option, fast enough to walk a long list.
+ */
+const ARROW_REPEAT_MS = 180;
+
 /** One selectable option. */
 export interface SelectItem<T = string> {
 	/** Visible label. */
@@ -424,6 +435,13 @@ export interface SelectProps<T = string> {
  *
  * Selection is controlled: the chosen value is located by identity each render,
  * and both layouts report changes back as the option's `value`.
+ *
+ * Both OpenTUI controls are keyboard-only, so the mouse behaviour is this
+ * component's: the **wheel** walks a dropdown's selection, a **click** picks a
+ * tab, and **resting on a tab strip's end arrow** walks toward the options that
+ * are scrolled out of view. All three move the selection, because in both
+ * controls the scroll offset is derived from the selected option — there is no
+ * viewport to move on its own.
  */
 export function Select<T = string>({
 	label,
@@ -440,7 +458,11 @@ export function Select<T = string>({
 }: SelectProps<T>) {
 	const { colors } = useTheme();
 	const ref = useRef<BoxRenderable | null>(null);
+	const tabRef = useRef<TabSelectRenderable | null>(null);
 	const measured = useBoxWidth(ref);
+	// Which end arrow of the tab strip the pointer is resting on, if any — `-1`
+	// for the leading arrow, `1` for the trailing one. Drives the repeat below.
+	const [arrowHover, setArrowHover] = useState<-1 | 1 | null>(null);
 
 	const selectedIndex = Math.max(
 		0,
@@ -461,10 +483,67 @@ export function Select<T = string>({
 		inner,
 	);
 
+	// A pick that lands on the value already held is not reported: the control is
+	// a value picker, so "chose the same thing" is not an edit. It also keeps the
+	// tab strip's index sync (below) from echoing back as a spurious change —
+	// pushing the index in makes the renderable announce a selection, which would
+	// otherwise reach the page as a second `onChange` for a value it just set.
 	const pick = (index: number) => {
 		const opt = options[index];
-		if (opt) onChange?.(opt.value);
+		if (opt && opt.value !== value) onChange?.(opt.value);
 	};
+	/** Move the selection by `delta`, stopping at either end. */
+	const step = (delta: number) => {
+		const next = clamp(selectedIndex + delta, 0, options.length - 1);
+		if (next !== selectedIndex) pick(next);
+	};
+
+	/**
+	 * Resolve a pointer event to the tab (or end arrow) under it. The renderable
+	 * reports its own screen position, so the pointer's absolute cell becomes an
+	 * offset inside the strip; see {@link tabSelectHit} for the layout maths.
+	 */
+	const hitAt = (event: TuiMouseEvent): TabSelectHit => {
+		const el = tabRef.current;
+		if (!el) return { kind: "none" };
+		return tabSelectHit({
+			offsetX: event.x - el.screenX,
+			offsetY: event.y - el.screenY,
+			width: el.width,
+			tabWidth: el.tabWidth,
+			count: options.length,
+			selectedIndex,
+		});
+	};
+
+	// `<tab-select>` keeps its selected index to itself: there is no prop for it,
+	// only `setSelectedIndex`, and that index is what draws the highlight *and*
+	// fixes the strip's scroll offset. So the controlled value has to be pushed
+	// in whenever the two drift — without this a mouse pick reports the right
+	// value and the strip goes on highlighting the old tab, and an arrow walk
+	// never scrolls. Runs after every render because the strip is also mounted
+	// and unmounted as the field resizes between layouts.
+	useEffect(() => {
+		const el = tabRef.current;
+		if (el && el.getSelectedIndex() !== selectedIndex) {
+			el.setSelectedIndex(selectedIndex);
+		}
+	});
+
+	// Resting the pointer on an end arrow keeps walking the strip that way, so a
+	// user can reveal off-screen options without touching the keyboard. It walks
+	// the *selection* because that is the only handle there is: `<tab-select>`
+	// derives its scroll offset from the selected tab, so the viewport cannot be
+	// moved independently. Deliberately without a dependency array: each step
+	// re-renders, which restarts the timer, so the repeat is paced at one option
+	// per interval and always reads the current selection. The *first* step is
+	// fired by the pointer handler instead, so entering the arrow responds at
+	// once rather than after a delay.
+	useEffect(() => {
+		if (arrowHover === null) return;
+		const timer = setInterval(() => step(arrowHover), ARROW_REPEAT_MS);
+		return () => clearInterval(timer);
+	});
 
 	const tabOptions: TabSelectOption[] = options.map((o) => ({
 		name: ` ${o.label} `,
@@ -497,6 +576,7 @@ export function Select<T = string>({
 		>
 			{asTabs && !forceDropdown ? (
 				<tab-select
+					ref={tabRef}
 					width="100%"
 					tabWidth={maxOptionWidth + 6}
 					options={tabOptions}
@@ -510,6 +590,23 @@ export function Select<T = string>({
 					selectedBackgroundColor="transparent"
 					selectedTextColor={variantColor(colors, "primary")}
 					onChange={(index) => pick(index)}
+					// `<tab-select>` is keyboard-only upstream, so clicking a tab picks
+					// it here. The click still bubbles up to FormField, which is what
+					// moves the page's focus ring onto this field.
+					onMouseDown={(event) => {
+						const hit = hitAt(event);
+						if (hit.kind === "tab") pick(hit.index);
+						else if (hit.kind === "scroll") step(hit.direction);
+					}}
+					// Entering an end arrow steps once immediately; resting on it hands
+					// over to the repeat above. Any other cell cancels the repeat.
+					onMouseMove={(event) => {
+						const hit = hitAt(event);
+						const direction = hit.kind === "scroll" ? hit.direction : null;
+						if (direction !== null && arrowHover === null) step(direction);
+						setArrowHover(direction);
+					}}
+					onMouseOut={() => setArrowHover(null)}
 				/>
 			) : (
 				<select
@@ -529,6 +626,19 @@ export function Select<T = string>({
 					selectedTextColor={variantColor(colors, "primary")}
 					selectedDescriptionColor={variantColor(colors, "primary")}
 					onChange={(index) => pick(index)}
+					// The wheel walks the selection, which is also what scrolls the list
+					// (`<select>` derives its scroll offset from the selection). It clamps
+					// rather than wrapping the way the keyboard does: a wheel is a
+					// continuous gesture, and flipping from the last option back to the
+					// first mid-flick reads as the list jumping. The event is consumed so
+					// the page's scrollbox does not scroll underneath the pointer.
+					onMouseScroll={(event) => {
+						const direction = event.scroll?.direction;
+						if (direction !== "up" && direction !== "down") return;
+						event.stopPropagation();
+						const delta = Math.max(1, event.scroll?.delta ?? 1);
+						step(direction === "up" ? -delta : delta);
+					}}
 				/>
 			)}
 		</FormField>

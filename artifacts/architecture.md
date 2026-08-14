@@ -556,7 +556,21 @@ and only its container owns the ring.
 layout: `Tabs` puts `icons.caret` in the active pill's left padding cell (rendered as text, so the
 tab's width — and the rule segment aligned to it — never changes) and blends the pill back toward the
 background when the bar is unfocused; `Button` adds a faint accent wash plus a bold label, and ignores
-`focused` while `disabled`; `FormField` prefixes its border label with `▸`.
+`focused` while `disabled`. `FormField` is the one exception to the "drawn" rule: it carries focus in
+the accent border and title colour only. It used to prefix its border label with `▸`, but that shifted
+the label along the top edge on every focus move and read as the frame twitching (user call,
+2026-08-14).
+
+**Form controls answer the mouse; the OpenTUI ones do not.** `<select>` and `<tab-select>` are
+keyboard-only upstream, so `Select` supplies the pointer behaviour itself: the wheel walks a
+dropdown's selection (consuming the event, so the page's scrollbox stays put), a click picks the tab
+under the pointer, and resting on a tab strip's end arrow walks toward the options scrolled out of
+view. All three move the *selection*, because in both controls the scroll offset is derived from the
+selected option — there is no viewport to move on its own. Mapping a screen cell to a tab means
+reconstructing geometry the renderable keeps private, which is the pure, tested
+`components/support.tabSelectHit`. `<tab-select>` also takes no `selectedIndex` prop, so the
+controlled value is pushed in through the renderable in an effect; without that a mouse pick reports
+the right value while the strip highlights the old tab.
 
 ## Keyboard hints — `hooks/use-hints.tsx` + the shell's strip
 

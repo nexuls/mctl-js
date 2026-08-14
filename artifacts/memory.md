@@ -5,6 +5,50 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Select answers the mouse; the field label lost its caret (2026-08-14, user request)
+
+User: "For the Select Component enable mouse wheel to select back and forth for dropdown mode. For
+tab-select enable mouse click, and also on mouse hover on ending arrow should move the options in
+view. Remove the leading carate in the label in form elements. Its looking awefull."
+
+- **`<select>` and `<tab-select>` are keyboard-only in `@opentui/core` 0.4.5.** Neither registers a
+  single mouse listener, so every pointer behaviour here is `Select`'s own: `onMouseScroll` on the
+  dropdown, `onMouseDown`/`onMouseMove`/`onMouseOut` on the tab strip.
+- **Both controls derive their scroll offset from the selection**, so "scroll the list" and "move the
+  selection" are the same act — there is no viewport to move independently. That is why hovering an
+  end arrow *changes the value*, which is worth knowing before someone reads it as a bug.
+- **`<tab-select>` takes no `selectedIndex` prop** — only a `setSelectedIndex` method — so it was
+  never actually controlled. The value was already able to drift from the highlighted tab; a mouse
+  pick made it obvious (the callback reported the right kind while the strip still highlighted the
+  old one). An effect now pushes the controlled index into the renderable whenever the two differ.
+  - Consequence, and the reason `pick` gained a `opt.value !== value` guard: `setSelectedIndex`
+    **emits `selectionChanged`**, which the React binding maps to `onChange` — so the sync echoed
+    back as a second `onChange` for the value the page had just set.
+- **The tab strip's geometry has to be reconstructed** (`components/support.tabSelectHit`, pure +
+  tested): `scrollOffset` is private and derived as `clamp(selected - floor(visible/2), 0, count -
+  visible)` with `visible = floor(width / tabWidth)`; tabs are `tabWidth` apart from that offset; and
+  the `‹`/`›` arrows are painted **over** the first and last cell of the row, so they win over the tab
+  beneath them. All of it mirrors `TabSelectRenderable.refreshFrameBuffer` — recheck it on an OpenTUI
+  bump.
+  - **The arrows only exist in the gap between two width tests**: `optionsFitAsTabs` (≈ `label + 3`
+    per option) decides the strip is used at all, while the strip itself gives each tab `label + 6`.
+    A test needs labels short enough for the first and numerous enough to overflow the second.
+- **The hover repeat is a `useEffect` with no dependency array on purpose.** Each step re-renders,
+  which restarts the interval, so the repeat is paced at one option per 180 ms and always reads the
+  current selection. The first step is fired by the pointer handler so entering the arrow is instant.
+- **`createRoot(renderer).render()` a second time remounts the tree** (already recorded under player
+  heads) — which silently defeats any test of a *repeating* interaction, since the hover state is
+  thrown away after the first step. Feed the value back through `useState` inside the tree instead.
+- **`harness.mockMouse` (from `@opentui/core/testing`) drives real clicks, moves and wheels**, and
+  `MouseEvent.x/y` are absolute terminal cells, so a handler converts them with the renderable's
+  `screenX`/`screenY` (not `x`/`y`, which are parent-relative).
+- **A pty can be driven with the mouse too**: `tmux send-keys -l $'\033[<0;36;11M'` (press),
+  `…m` (release), `35;x;y` for a bare motion, `64`/`65` for wheel up/down — 1-based coords. That is
+  how the three behaviours were confirmed in the real app.
+- The wheel **consumes** the event (`stopPropagation`), otherwise the shell's scrollbox scrolls under
+  the pointer at the same time, and it **clamps** instead of wrapping the way the keyboard does — a
+  wheel is a continuous gesture and flipping last→first mid-flick reads as the list jumping.
+
 ## Closing the standing gaps (2026-08-13, user request: "implement all the gaps")
 
 - **"Fill in the gaps in progress.md" meant *implement* them**, not document them. The first pass
@@ -248,8 +292,8 @@ Disabled buttons are also acquiring tabs."
   - `Button` — a focused button gets an `alpha(accent, 0.18)` wash *only when the state colours left
     the background empty*, plus a BOLD label. A borderless `ghost`/`small` chip previously differed
     from rest by a colour shift alone, which is invisible unless you know to look.
-  - `FormField` — the label on the top border becomes `▸ Label` while focused. The accent border alone
-    was too weak on a stack of fields, and an `invalid` field is already accented in another colour.
+  - `FormField` — **reverted 2026-08-14**: the label used to become `▸ Label` while focused; the user
+    called it "awful" and it is gone. The border and title colour carry focus on their own.
   - `Button` also treats `focused` as false while `disabled`, so a page that forgets to update its ring
     cannot make a dead button look live.
 - Rings audited and given disabled members: Server (start/stop/restart/remove + its delete dialog,
