@@ -140,6 +140,46 @@ modId="minecraft"
 	test("a file with no [[mods]] block yields nothing", () => {
 		expect(parseModsToml('modLoader="javafml"', "forge")).toBeUndefined();
 	});
+
+	// NeoForge's own generated template annotates every line, including the table
+	// header. Both JEI and Create Aeronautics ship it verbatim, and both listed
+	// under their filenames until the reader learned to drop these comments.
+	test("the annotated NeoForge template is read", () => {
+		const meta = parseModsToml(
+			`
+# The overall format is standard TOML format, v0.5.0.
+modLoader="javafml" #mandatory
+loaderVersion="[4,)" #mandatory
+license="The MIT License (MIT)"
+
+[[mods]] #mandatory
+
+# The modid of the mod
+modId="jei" #mandatory
+version="19.44.0.401" #mandatory
+displayName="Just Enough Items" #mandatory
+authors="mezz" #optional
+description='''An item and recipe viewing mod.''' #mandatory Supports multiline text
+`,
+			"neoforge",
+		);
+		expect(meta).toMatchObject({
+			loader: "neoforge",
+			id: "jei",
+			name: "Just Enough Items",
+			version: "19.44.0.401",
+			description: "An item and recipe viewing mod.",
+			authors: ["mezz"],
+		});
+	});
+
+	test("a # inside a quoted value is content, not a comment", () => {
+		const meta = parseModsToml(
+			`[[mods]]\nmodId="tagged"\ndisplayName="Use #tags"\n`,
+			"neoforge",
+		);
+		expect(meta?.name).toBe("Use #tags");
+	});
 });
 
 describe("parsePluginYml", () => {

@@ -186,6 +186,36 @@ function unquote(raw: string): string {
 }
 
 /**
+ * Drop a TOML line comment, respecting quoted strings.
+ *
+ * Both halves matter and both were real: NeoForge's own template writes
+ * `[[mods]] #mandatory` on the *table header* and `modId="jei" #mandatory` on
+ * values, so a reader that only strips comments from bare values (or only from
+ * lines that do not start with a quote) reads neither. A `#` inside a quoted
+ * string is content — `description = "Use #tags"` — so the scan tracks quote
+ * state rather than taking the first `#` it sees.
+ *
+ * Multi-line (`'''`/`"""`) values are *not* handled here: their fence is opened
+ * on one line and closed on another, so the caller strips those separately.
+ */
+function stripComment(line: string): string {
+	let quote: string | undefined;
+	for (let i = 0; i < line.length; i += 1) {
+		const char = line[i];
+		if (quote) {
+			// Only a TOML *basic* (double-quoted) string takes backslash escapes;
+			// a literal single-quoted one has no way to contain its own delimiter.
+			if (char === "\\" && quote === '"') i += 1;
+			else if (char === quote) quote = undefined;
+			continue;
+		}
+		if (char === '"' || char === "'") quote = char;
+		else if (char === "#") return line.slice(0, i);
+	}
+	return line;
+}
+
+/**
  * The first `[[mods]]` table of a Forge/NeoForge `mods.toml`.
  *
  * A **narrow** reader, not a TOML parser: it walks lines, tracks the current
@@ -210,7 +240,9 @@ export function parseModsToml(
 		if (line.startsWith("[")) {
 			// A new table header after the first `[[mods]]` ends the block we want.
 			if (inMods) break;
-			inMods = line.replace(/\s+/g, "") === "[[mods]]";
+			// NeoForge's template writes `[[mods]] #mandatory`, so the header has to
+			// lose its comment before it is compared.
+			inMods = stripComment(line).replace(/\s+/g, "") === "[[mods]]";
 			continue;
 		}
 		if (!inMods) continue;
@@ -246,12 +278,9 @@ export function parseModsToml(
 			}
 			raw = body;
 		} else {
-			// Trailing comment on a value line, e.g. `version="1.0" # bumped`.
-			const comment = raw.indexOf(" #");
-			if (comment >= 0 && !raw.startsWith('"') && !raw.startsWith("'")) {
-				raw = raw.slice(0, comment);
-			}
-			raw = unquote(raw);
+			// Trailing comment on a value line, e.g. `version="1.0" # bumped` or
+			// NeoForge's own `modId="jei" #mandatory`.
+			raw = unquote(stripComment(raw));
 		}
 		fields.set(key, raw.trim());
 	}
