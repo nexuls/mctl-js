@@ -3,11 +3,31 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (providers declare which content they load)_
+_Last updated: 2026-08-14 (annotated mods.toml manifests read again)_
 
 ---
 
 ## Done
+
+- **Mods whose `mods.toml` annotates every line are named again (2026-08-14, user-reported defect).**
+  "See the `create-server` server. Some mods are not properly displaying. like JEI and create
+  aeronotics." Both showed their filename with no version, description or loader.
+  - `src/core/server/content-meta.ts` — new pure `stripComment(line)`, quote-aware, used by both the
+    `[[mods]]` header test and the value path. NeoForge's generated template writes
+    `[[mods]] #mandatory`, so the reader never entered the block at all; and the old value stripper's
+    `!raw.startsWith('"')` guard made `modId="jei" #mandatory` unstrippable and then unquotable.
+    The `'''…'''` branch is untouched — it already ends at its closing fence.
+  - Tests (**522 total**, +2): the fully-annotated NeoForge template parsed end to end, and a `#`
+    inside a quoted value kept as content.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 522 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. Against the user's **real** `create-server`:
+    `mctl content create-server` names all six mods (Cloth Config v15 API, Create, Create
+    Aeronautics, Ferrite Core, Jade, Just Enough Items) with versions and descriptions, no
+    `derivedName` left; confirmed in the Content tab **in tmux at 120×45**.
+  - **Noticed, not changed:** every row's checkbox glyph renders blank in the user's working tree —
+    `boxed` is commented out on the `Checkbox` in `app/Server/tabs/Content.tsx` (an uncommitted local
+    edit), and without it the unticked/ticked state has no visible mark. See `memory.md` § The
+    Content list lost its caret for why `boxed` was added.
 
 - **A kind declares what content it loads (2026-08-14, user request).** "Every server type doesn't
   support mods or plugins. Add a field in the server registry for mods/plugins support and render

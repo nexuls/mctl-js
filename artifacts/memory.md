@@ -5,6 +5,29 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## NeoForge's template comments its own table header (2026-08-14, user report)
+
+User: "See the `create-server` server. Some mods are not properly displaying. like JEI and create
+aeronotics." Both listed under their filenames with no version or description.
+
+- **`[[mods]] #mandatory` is what NeoForge's generated `mods.toml` template actually writes** — the
+  comment is on the *table header*, not just on values. `parseModsToml` compared the whitespace-
+  stripped line to `[[mods]]`, never entered the block, and returned `undefined`, so the item fell
+  all the way back to `derivedName`. Create's own jar hand-writes a bare `[[mods]]`, which is exactly
+  why the fixtures and every earlier test passed: **the mods that break are the ones that kept the
+  template's comments**, and they are the majority in the wild.
+- **The old value-comment stripper was guarded `!raw.startsWith('"')`** — intended to protect a `#`
+  inside a quoted string, but it made the common case (`modId="jei" #mandatory`) unstrippable, after
+  which `unquote` saw a string that did not end in its own quote and returned it raw. So even a fixed
+  header would have yielded `"jei" #mandatory` as the id.
+- **The fix is one quote-aware `stripComment(line)`**, used by the header test *and* the value path:
+  scan left to right, track quote state (backslash escapes only inside a `"` basic string — a TOML
+  literal `'…'` cannot contain its delimiter), and cut at the first `#` seen outside quotes. Applied
+  only on the non-fence branch; a `'''…'''` value already ends at its closing fence, which is what
+  drops Aeronautics' `#mandatory Supports multiline text` trailer.
+- **How to apply:** treat every one of these narrow foreign-format readers as facing an *annotated*
+  file, not a minimal one. The generated templates are the norm and they comment every line.
+
 ## A kind declares what content it loads (2026-08-14, user request)
 
 User: "Every server type doesn't support mods or plugins. Add a field in the server registry for
