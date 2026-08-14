@@ -3,11 +3,47 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (annotated mods.toml manifests read again)_
+_Last updated: 2026-08-14 (content rows draw mod icons)_
 
 ---
 
 ## Done
+
+- **Content rows lead with the mod's own icon (2026-08-14, user request).** "Most of the mods or
+  plugins has an icon with it. Use opentui image element… Display the icon on the begining of the
+  row." Followed by: "Make the row hight 3. Let the description span to two row. Make the icons 3x3
+  cell."
+  - `src/lib/zip.ts` — **`readZipEntry(path, choose)`**: the chooser is handed the archive's own
+    entry names and returns the one to read, so an icon whose name is not known in advance costs one
+    open and one inflated entry.
+  - `src/core/server/content-meta.ts` — `ContentMeta.icon`, filled from Forge/NeoForge `logoFile`,
+    `mcmod.info` `logoFile`, Fabric `icon` and Quilt `quilt_loader.metadata.icon` (a sized
+    `{"128": …}` map yields its largest). New pure, exported **`pickIconEntry(names)`** for the
+    convention a jar that declares nothing still follows: a root-level PNG, never `assets/`.
+  - `src/lib/paths.ts` — `contentIconCacheDir()` (`~/.cache/mctl/content-icons/`).
+  - `src/core/server/content.ts` — `ContentItem.icon` is an absolute **path**, not bytes (a poll
+    rebuilds the listing, and fresh arrays would reload every image on screen). Extracted once,
+    cached by jar path + size + mtime, capped at 4 MB, never throwing; an unpacked datapack uses its
+    own `pack.png` uncopied.
+  - `src/app/Server/tabs/Content.tsx` — an `<image source={item.icon} fit="fit" />` in a 3×3 cell box
+    at the head of each row, the column reserved for the whole section when anything in it has one
+    and dropped below `ICON_ROW_WIDTH` (56). Rows are a fixed three tall: name line plus a two-row
+    description that **wraps** into the space instead of being truncated to one line.
+  - Tests (**542 total**, +20): `pickIconEntry` and the four manifest icon fields, `readZipEntry`
+    (3), extraction into the cache including the declared-but-absent logo, the cache actually being
+    reused, and a datapack's own `pack.png` (6), plus rendered frames for the three-row height, the
+    wrap onto the second row, the section-wide indent and the narrow-terminal drop (3). Both content
+    test files now redirect `XDG_CACHE_HOME` — `paths.ts` resolves XDG at call time, so without it
+    the suite wrote into the developer's real `~/.cache/mctl`.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 542 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. Against the user's **real** `create-server` all
+    six mods extracted a valid PNG (128², 256², 1080², and JEI's 32² found only by the root-PNG
+    fallback), and **in tmux at 120×45** every row draws its icon with three-row spacing and
+    two-line descriptions; at 50 cells the column is dropped.
+  - **Known, and not a defect:** under tmux `protocol="auto"` always resolves to Unicode blocks and,
+    with no terminal pixel geometry, a square logo fills about two of the three cells — centred, so
+    it reads as slack. A Kitty- or Sixel-capable terminal outside tmux uses the full 3×3. Not
+    confirmed on the user's own terminal, only under tmux.
 
 - **Mods whose `mods.toml` annotates every line are named again (2026-08-14, user-reported defect).**
   "See the `create-server` server. Some mods are not properly displaying. like JEI and create

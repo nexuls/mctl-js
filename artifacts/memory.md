@@ -5,6 +5,51 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Content rows draw real images (2026-08-14, user request)
+
+User: "Most of the mods or plugins has an icon with it. Use opentui image element… Display the icon
+on the begining of the row." Then: "Make the row hight 3. Let the description span to two row. Make
+the icons 3x3 cell."
+
+- **An icon reaches the front-end as a *path*, never as bytes.** `ContentItem.icon` is an absolute
+  path to a PNG on disk, and that is the load-bearing decision: `useServerContent` rebuilds the
+  listing every 15 s, so a fresh `Uint8Array` per poll would give `<image source>` a new identity
+  each round and **reload every picture on screen** twice a minute. A string path is stable.
+- **Extraction is cached under `~/.cache/mctl/content-icons/`, keyed by the jar's path + size +
+  mtime.** An unchanged jar is read once ever; a jar *replaced* under the same filename (the normal
+  shape of a mod update) re-extracts because its size or mtime moved. Steady-state polls do no zip
+  work for icons at all — which matters, because a megabyte of PNG inflated twice a minute for a
+  picture that has not changed is exactly the cost the cache exists to remove.
+- **Four manifests declare an icon and they do not agree**: Forge/NeoForge `logoFile` (inside
+  `[[mods]]`), `mcmod.info` `logoFile`, Fabric `icon`, Quilt `quilt_loader.metadata.icon`. Fabric and
+  Quilt also allow a **sized map** (`{"32": …, "128": …}`) — take the **largest**, since the terminal
+  downsamples and a 32px source is the one that turns to mush. `plugin.yml` has no icon field at all.
+- **A declared logo that the jar does not actually contain is common**, because the template's
+  `logoFile="examplemod.png"` gets left in. So the declared name is only used when the archive really
+  holds it, and otherwise `pickIconEntry` applies the convention: a **root-level** PNG, preferring
+  `icon.png`/`logo.png`/`pack.png`, then one whose name mentions an icon or logo. That is what finds
+  JEI's `jei-icon.png` — JEI comments its `logoFile` out entirely. **Never reach into `assets/`**:
+  it is hundreds of 16×16 item sprites and picking one would look deliberate.
+- **`lib/zip.ts` gained `readZipEntry(path, choose)`** — the caller is handed every entry name and
+  returns the one to read. One open, one central-directory parse, one entry inflated. The obvious
+  alternative (list, close, reopen, read) parses the directory twice for no gain.
+- **`<image>` needs no library and no decode on our side**: `source` takes the path, `fit="fit"`
+  preserves aspect and centres, and `protocol="auto"` resolves to Kitty, then Sixel, then Unicode
+  blocks. **Under tmux `auto` is always blocks** (the renderer's own rule), and without terminal
+  pixel geometry a square image fills only ~2 of the 3 cells — it is centred in the reserved box, so
+  this reads as slack, not as breakage, and a real Kitty terminal uses the full 3×3.
+- **The icon column is reserved for every row in a section where *anything* has one**, so names stay
+  in a line instead of stepping in and out by three cells depending on what each jar shipped. Dropped
+  entirely below `ICON_ROW_WIDTH` (56).
+- **A row is a fixed three rows tall**: name line + a two-row description box that **wraps** into it.
+  `overflow="hidden"` does not stop OpenTUI wrapping, it only clips what the wrap produced — which is
+  precisely the behaviour wanted, and the same fact `memory.md` already recorded for the player card
+  (there it was the bug; here it is the mechanism). A row sized to its own text stepped between two
+  and three and made the rules between rows ragged.
+- **Tests that write into `cacheDir()` must redirect `XDG_CACHE_HOME` in `beforeEach`.** `paths.ts`
+  resolves XDG *at call time*, so without it the suite writes into the developer's real
+  `~/.cache/mctl` on every run. Both content test files now do.
+
 ## NeoForge's template comments its own table header (2026-08-14, user report)
 
 User: "See the `create-server` server. Some mods are not properly displaying. like JEI and create
