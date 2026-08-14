@@ -34,6 +34,30 @@ _Last updated: 2026-08-14 (content rows draw mod icons)_
     file — `server.properties` holds a **URL**, and drawing its `pack.png` would mean downloading a
     user-configured archive (routinely tens of MB) on the render path. Ask before adding it.
 
+- **An item with no icon draws a fallback (2026-08-14, user request).** "If still no image, then show
+  a fallback image." Plenty of jars ship no logo at all — every `plugin.yml` declares none — so a
+  blank box was the common case, not the exception.
+  - `src/app/Server/tabs/content-placeholder.ts` (**new**) — `PLACEHOLDER_ICON`, a cardboard-box PNG
+    inlined as a `data:` URL. A constant string is the stable `<image source>` identity a 15 s poll
+    needs (the same reason `ContentItem.icon` is a path), and nothing has to be resolved at runtime.
+    The user replaced the agent's first grey-frame asset with this one mid-session.
+  - `src/app/Server/tabs/Content.tsx` — the row's `<image>` falls back to it, and the icon column is
+    now reserved whenever `width >= ICON_ROW_WIDTH` rather than when something in the section has a
+    picture. The box gained an explicit `backgroundColor`, without which transparent corners draw
+    **black** (the block renderer blends alpha into an unpainted, i.e. black, buffer cell). `fit` is
+    `cover` (the user's change), so a non-square logo fills the column instead of letterboxing.
+  - Tests (**551 total**, +1 net): the "an icon indents the whole section" case was replaced — the
+    column no longer depends on any jar having one — by two: names lining up whether or not a jar
+    ships a logo, and a jar with none still drawing block glyphs in the icon cells. The parked-jar
+    assertion stopped matching the whole line, which now leads with the picture.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 551 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. **In tmux at 120×45** against the real
+    `first-paper-server`: Geyser draws its own icon, floodgate and the `bukkit` datapack draw the
+    box, and the escape sequences confirm the corners now take the theme background rather than
+    `#000000`.
+  - **Known:** two dead ends worth not repeating are recorded in `memory.md` — a transparent-ground
+    placeholder, and authoring one at 32×32 for a ~12×6 raster.
+
 - **Content rows lead with the mod's own icon (2026-08-14, user request).** "Most of the mods or
   plugins has an icon with it. Use opentui image element… Display the icon on the begining of the
   row." Followed by: "Make the row hight 3. Let the description span to two row. Make the icons 3x3

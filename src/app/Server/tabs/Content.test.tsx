@@ -140,9 +140,11 @@ test("a parked jar is listed, unticked", async () => {
 	const row = (name: string) => lines.find((line) => line.includes(name)) ?? "";
 	// The `ascii` set's checkbox is `x` when ticked and a blank when not, so the
 	// assertion is about the glyph *before the name*: the loaded mod has one, the
-	// parked one has empty space where it would be.
+	// parked one has empty space where it would be. (Both rows also lead with the
+	// placeholder icon, which is why this reads the cells next to the name rather
+	// than the whole line.)
 	expect(row("Live")).toMatch(/x\s+Live/);
-	expect(row("Parked")).toMatch(/│\s+Parked/);
+	expect(row("Parked")).not.toMatch(/x\s+Parked/);
 	expect(lines.join("\n")).toContain("1 enabled, 1 disabled");
 });
 
@@ -242,30 +244,35 @@ test("every row is three rows tall, however long its description", async () => {
 	expect(lines[beta + 2]).toContain("for it.");
 });
 
-test("an icon indents the whole section, including rows that have none", async () => {
+test("the icon column is the same width whether or not a jar ships one", async () => {
 	await jar("mods/plain.jar", fabricMod("Plain", "1.0"));
-	const withoutIcons = await mount();
-
 	await jar("mods/withicon.jar", [
 		...fabricMod("Withicon", "1.0"),
 		{ name: "icon.png", data: PNG },
 	]);
-	const withIcons = await mount();
+	const lines = (await mount()).split("\n");
 
 	/** The column the given name starts at. */
-	const column = (frame: string, name: string) =>
-		frame
-			.split("\n")
-			.find((line) => line.includes(name))
-			?.indexOf(name);
+	const column = (name: string) =>
+		lines.find((line) => line.includes(name))?.indexOf(name);
 
-	// Both names move right by the icon column, not just the row that fills it —
-	// otherwise the names in a section step in and out depending on what each
-	// jar happened to ship.
-	const before = column(withoutIcons, "Plain") ?? 0;
-	const after = column(withIcons, "Plain") ?? 0;
-	expect(after - before).toBe(7);
-	expect(column(withIcons, "Withicon")).toBe(after);
+	// The names line up because the jar with no logo of its own draws the
+	// placeholder in the same six cells, rather than leaving a hole that would
+	// make the section's names step in and out by what each jar happened to ship.
+	expect(column("Plain")).toBe(column("Withicon"));
+});
+
+test("a jar with no icon of its own still draws the placeholder", async () => {
+	await jar("mods/plain.jar", fabricMod("Plain", "1.0"));
+	const lines = (await mount()).split("\n");
+	const row = lines.findIndex((line) => line.includes("Plain"));
+	// The placeholder is a rounded outline, so its top row is a run of block
+	// glyphs in the cells before the name — an empty column would be spaces.
+	const before = (lines[row] ?? "").slice(
+		0,
+		(lines[row] ?? "").indexOf("Plain"),
+	);
+	expect(before).toMatch(/[▀▄█▌▐▘▝▖▗▛▜▙▟]/);
 });
 
 test("below the icon width the column is dropped again", async () => {

@@ -17,9 +17,9 @@
  * (or the PNG at the root of its archive), extracted by the same core service
  * and arriving here as a *path* — an `<image>` renderable takes it from there and
  * draws it with Kitty graphics, Sixel or Unicode blocks depending on the
- * terminal. The column is reserved for every row in a section where anything has
- * one, so the names stay aligned; below {@link ICON_ROW_WIDTH} it is dropped
- * entirely.
+ * terminal. An item that ships none draws {@link PLACEHOLDER_ICON} instead, so
+ * the column is a column rather than a scatter; below {@link ICON_ROW_WIDTH} it
+ * is dropped entirely.
  *
  * The list is **rows separated by a rule, with no selected row**: the checkbox on
  * each row is the only control, so there is nothing for a caret to point at. That
@@ -51,6 +51,7 @@ import { useServerContent } from "../../../hooks/use-server-content.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
 import { useToast } from "../../../hooks/use-toast.tsx";
 import { formatBytes } from "../../../lib/format.ts";
+import { PLACEHOLDER_ICON } from "./content-placeholder.ts";
 import type {
 	ContentItem,
 	ContentSection,
@@ -241,27 +242,46 @@ function ContentRow({
 			 * names in a section stay in one line rather than stepping in and out by
 			 * seven cells depending on what each jar happened to ship.
 			 *
-			 * `fit` (not `cover`) because a mod logo is authored as a whole picture:
-			 * cropping one to fill a 4×2 box throws away the part that identifies it.
+			 * `cover` fills the box and centre-crops. A mod logo is very nearly
+			 * always square, so there is nothing to crop; what this buys is that a
+			 * logo which is *not* square still fills the column instead of sitting
+			 * letterboxed inside it, which reads as a broken picture at this size.
 			 * The protocol is left at `auto`, which resolves to Kitty or Sixel where
 			 * the terminal has them and Unicode half-blocks everywhere else — under
 			 * tmux that is always blocks.
 			 */}
-			<box width={ICON_WIDTH} height={ICON_HEIGHT} flexShrink={0}>
+			{/*
+			 * The explicit background is what makes a transparent picture work. The
+			 * block renderer blends a sampled alpha into whatever the frame buffer
+			 * already holds for that cell, and an unpainted cell holds *black* — so
+			 * a logo with a transparent ground (most of them) draws its corners as
+			 * black squares. Painting the theme's own background here first gives
+			 * the blend something correct to land on. Found in a rendered frame.
+			 */}
+			<box
+				width={ICON_WIDTH}
+				height={ICON_HEIGHT}
+				flexShrink={0}
+				backgroundColor={colors.background}
+			>
 				{/*
 				 * The size goes on the `<image>` itself, not only on this box. An
 				 * unsized image is laid out `auto` and draws at a fraction of the
 				 * space its parent reserved — the box alone keeps the *names*
 				 * aligned but leaves the picture small and adrift inside it.
+				 *
+				 * An item that ships no icon draws the placeholder rather than
+				 * leaving a hole: plenty of jars have no logo at all (and every
+				 * `plugin.yml` declares none), so an empty box is the common case,
+				 * not the exception, and a column of them reads as a rendering
+				 * failure rather than as "this one shipped no picture".
 				 */}
-				{item.icon ? (
-					<image
-						source={item.icon}
-						fit="fit"
-						width={ICON_WIDTH}
-						height={ICON_HEIGHT}
-					/>
-				) : null}
+				<image
+					source={item.icon ?? PLACEHOLDER_ICON}
+					fit="cover"
+					width={ICON_WIDTH}
+					height={ICON_HEIGHT}
+				/>
 			</box>
 			{body}
 		</box>
@@ -420,13 +440,11 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 					<SectionBody
 						section={section}
 						detailed={detailed}
-						// The column costs its seven cells whether or not a given row
-						// fills them, so it is only reserved where something in this
-						// section actually has a picture to put in it.
-						icons={
-							width >= ICON_ROW_WIDTH &&
-							section.items.some((item) => item.icon !== undefined)
-						}
+						// Every row has a picture now — its own or the placeholder — so
+						// the column is reserved whenever the terminal is wide enough to
+						// pay for it, rather than depending on what the section's jars
+						// happened to ship.
+						icons={width >= ICON_ROW_WIDTH}
 						onToggle={(item) => void run(item)}
 					/>
 				</box>

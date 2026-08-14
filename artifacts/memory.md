@@ -56,9 +56,22 @@ the icons 3x3 cell."
 - **A square picture needs a 2:1 *cell* box.** The user asked for "3x3" icons and meant as they
   look: 6 cells wide by 3 tall, because a terminal cell is about twice as tall as it is wide. Three
   of each draws a logo at half width. Any future cell box for an image is `2 × rows` wide.
-- **The icon column is reserved for every row in a section where *anything* has one**, so names stay
-  in a line instead of stepping in and out by three cells depending on what each jar shipped. Dropped
-  entirely below `ICON_ROW_WIDTH` (56).
+- **Every row has a picture, so the icon column is reserved whenever the terminal is wide enough**
+  (`ICON_ROW_WIDTH`) rather than depending on what a section's jars shipped. An item with no icon of
+  its own draws `app/Server/tabs/content-placeholder.ts` — a cardboard-box PNG inlined as a `data:`
+  URL, which is a *constant string* and therefore the stable `<image source>` identity a 15 s poll
+  needs, exactly like the cached paths beside it. (User asked for it: "If still no image, then show
+  a fallback image.")
+- **A transparent pixel blends against BLACK, not against the cell behind it.** OpenTUI's block
+  renderer composites sampled alpha into whatever the frame buffer already holds, and an unpainted
+  cell holds black — so a logo with a transparent ground (most of them) drew black squares in its
+  corners. The fix is an explicit `backgroundColor` on the icon box, painting the theme background
+  before the image lands on it. **One fact in two files**: `Content.tsx` sets it, and
+  `content-placeholder.ts` relies on it. Found in a rendered frame.
+- **Do not author a placeholder at a size that has to be downscaled.** A 6×3 cell box is ~12×6
+  quadrant subpixels, and a rounded frame drawn at 32×32 lost its left edge outright at that ratio
+  (~2.7 source pixels per subpixel); thickening it then ate the interior instead. One bold shape,
+  and nothing that depends on a line surviving.
 - **A row is a fixed three rows tall**: name line + a two-row description box that **wraps** into it.
   `overflow="hidden"` does not stop OpenTUI wrapping, it only clips what the wrap produced — which is
   precisely the behaviour wanted, and the same fact `memory.md` already recorded for the player card
