@@ -264,7 +264,7 @@ test("an icon indents the whole section, including rows that have none", async (
 	// jar happened to ship.
 	const before = column(withoutIcons, "Plain") ?? 0;
 	const after = column(withIcons, "Plain") ?? 0;
-	expect(after - before).toBe(4);
+	expect(after - before).toBe(7);
 	expect(column(withIcons, "Withicon")).toBe(after);
 });
 
@@ -277,7 +277,7 @@ test("below the icon width the column is dropped again", async () => {
 	const wide = (await mount(100)).split("\n");
 	const columnOf = (lines: string[]) =>
 		lines.find((line) => line.includes("Withicon"))?.indexOf("Withicon");
-	// Four cells are worth more to the name than to the picture on a small
+	// Seven cells are worth more to the name than to the picture on a small
 	// terminal, so the icon column is not reserved at all down there.
-	expect((columnOf(wide) ?? 0) - (columnOf(narrow) ?? 0)).toBe(4);
+	expect((columnOf(wide) ?? 0) - (columnOf(narrow) ?? 0)).toBe(7);
 });

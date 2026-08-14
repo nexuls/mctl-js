@@ -92,18 +92,25 @@ const DETAILED_ROW_WIDTH = 72;
 
 /**
  * Terminal width at or above which rows carry their item's icon. Below it the
- * four cells the column costs are worth more to the name than to the picture.
+ * seven cells the column costs are worth more to the name than to the picture.
  */
-const ICON_ROW_WIDTH = 56;
+const ICON_ROW_WIDTH = 64;
 
 /**
- * The icon's cell box, and with it the height of every row: three cells square,
- * beside a name line and a two-line description. Rows are a fixed three tall so
- * the list reads as a column of even cards — a row that sized itself to its own
- * description would step between two and three and make the rules beneath them
- * uneven.
+ * The icon's cell box, and with it the height of every row.
+ *
+ * **Six cells by three is *square*, not oblong**: a terminal cell is roughly
+ * twice as tall as it is wide, so a picture three rows high needs six columns to
+ * come out with its aspect intact. Giving it three of each draws a logo at half
+ * width.
+ *
+ * Three rows is also exactly a name line plus a two-line description, so the
+ * picture sits beside the text rather than making the list taller. Rows are a
+ * fixed three tall so the list reads as a column of even cards — a row that
+ * sized itself to its own description would step between two and three and make
+ * the rules beneath them uneven.
  */
-const ICON_WIDTH = 3;
+const ICON_WIDTH = 6;
 const ICON_HEIGHT = 3;
 
 /**
@@ -232,7 +239,7 @@ function ContentRow({
 			{/*
 			 * The column is reserved whether or not *this* item has an icon, so the
 			 * names in a section stay in one line rather than stepping in and out by
-			 * four cells depending on what each jar happened to ship.
+			 * seven cells depending on what each jar happened to ship.
 			 *
 			 * `fit` (not `cover`) because a mod logo is authored as a whole picture:
 			 * cropping one to fill a 4×2 box throws away the part that identifies it.
@@ -241,7 +248,20 @@ function ContentRow({
 			 * tmux that is always blocks.
 			 */}
 			<box width={ICON_WIDTH} height={ICON_HEIGHT} flexShrink={0}>
-				{item.icon ? <image source={item.icon} fit="fit" /> : null}
+				{/*
+				 * The size goes on the `<image>` itself, not only on this box. An
+				 * unsized image is laid out `auto` and draws at a fraction of the
+				 * space its parent reserved — the box alone keeps the *names*
+				 * aligned but leaves the picture small and adrift inside it.
+				 */}
+				{item.icon ? (
+					<image
+						source={item.icon}
+						fit="fit"
+						width={ICON_WIDTH}
+						height={ICON_HEIGHT}
+					/>
+				) : null}
 			</box>
 			{body}
 		</box>
@@ -400,7 +420,7 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 					<SectionBody
 						section={section}
 						detailed={detailed}
-						// The column costs its four cells whether or not a given row
+						// The column costs its seven cells whether or not a given row
 						// fills them, so it is only reserved where something in this
 						// section actually has a picture to put in it.
 						icons={
