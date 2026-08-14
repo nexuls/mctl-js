@@ -35,9 +35,15 @@ the icons 3x3 cell."
   alternative (list, close, reopen, read) parses the directory twice for no gain.
 - **`<image>` needs no library and no decode on our side**: `source` takes the path, `fit="fit"`
   preserves aspect and centres, and `protocol="auto"` resolves to Kitty, then Sixel, then Unicode
-  blocks. **Under tmux `auto` is always blocks** (the renderer's own rule), and without terminal
-  pixel geometry a square image fills only ~2 of the 3 cells — it is centred in the reserved box, so
-  this reads as slack, not as breakage, and a real Kitty terminal uses the full 3×3.
+  blocks. **Under tmux `auto` is always blocks** (the renderer's own rule).
+- **An `<image>` must carry its own `width`/`height`. Sizing the box around it is not enough.**
+  An unsized image lays out `auto` and draws at a fraction of the cells its parent reserved — the
+  first cut put the size only on the wrapping box, which kept the *names* aligned while the picture
+  sat small and adrift inside the space the row had already paid for. This looked like a protocol or
+  aspect-ratio problem and was neither; it was a layout one. Found in a rendered frame.
+- **A square picture needs a 2:1 *cell* box.** The user asked for "3x3" icons and meant as they
+  look: 6 cells wide by 3 tall, because a terminal cell is about twice as tall as it is wide. Three
+  of each draws a logo at half width. Any future cell box for an image is `2 × rows` wide.
 - **The icon column is reserved for every row in a section where *anything* has one**, so names stay
   in a line instead of stepping in and out by three cells depending on what each jar shipped. Dropped
   entirely below `ICON_ROW_WIDTH` (56).

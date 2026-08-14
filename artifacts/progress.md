@@ -25,10 +25,15 @@ _Last updated: 2026-08-14 (content rows draw mod icons)_
     rebuilds the listing, and fresh arrays would reload every image on screen). Extracted once,
     cached by jar path + size + mtime, capped at 4 MB, never throwing; an unpacked datapack uses its
     own `pack.png` uncopied.
-  - `src/app/Server/tabs/Content.tsx` — an `<image source={item.icon} fit="fit" />` in a 3×3 cell box
-    at the head of each row, the column reserved for the whole section when anything in it has one
-    and dropped below `ICON_ROW_WIDTH` (56). Rows are a fixed three tall: name line plus a two-row
-    description that **wraps** into the space instead of being truncated to one line.
+  - `src/app/Server/tabs/Content.tsx` — an `<image source={item.icon} fit="fit" />` at the head of
+    each row in a **6×3** cell box (square: a cell is ~2:1, so a three-row picture needs six
+    columns), the column reserved for the whole section when anything in it has one and dropped
+    below `ICON_ROW_WIDTH` (64). Rows are a fixed three tall: name line plus a two-row description
+    that **wraps** into the space instead of being truncated to one line.
+  - **Two sizing corrections after the first cut** (`50fc1f6`): the box was 3×3, which draws every
+    logo at half width; and the size was only on the wrapping box, so the image itself laid out
+    `auto` and drew at a fraction of the cells the row had reserved. An `<image>` needs its own
+    `width`/`height`.
   - Tests (**542 total**, +20): `pickIconEntry` and the four manifest icon fields, `readZipEntry`
     (3), extraction into the cache including the declared-but-absent logo, the cache actually being
     reused, and a datapack's own `pack.png` (6), plus rendered frames for the three-row height, the
@@ -40,10 +45,10 @@ _Last updated: 2026-08-14 (content rows draw mod icons)_
     six mods extracted a valid PNG (128², 256², 1080², and JEI's 32² found only by the root-PNG
     fallback), and **in tmux at 120×45** every row draws its icon with three-row spacing and
     two-line descriptions; at 50 cells the column is dropped.
-  - **Known, and not a defect:** under tmux `protocol="auto"` always resolves to Unicode blocks and,
-    with no terminal pixel geometry, a square logo fills about two of the three cells — centred, so
-    it reads as slack. A Kitty- or Sixel-capable terminal outside tmux uses the full 3×3. Not
-    confirmed on the user's own terminal, only under tmux.
+  - **Known:** under tmux `protocol="auto"` always resolves to Unicode blocks, so the logos are
+    drawn as half-block glyphs — legible and correctly proportioned, but coarse. A Kitty- or
+    Sixel-capable terminal outside tmux renders them as real graphics. Only the tmux path has been
+    seen; the user's own terminal is unconfirmed.
 
 - **Mods whose `mods.toml` annotates every line are named again (2026-08-14, user-reported defect).**
   "See the `create-server` server. Some mods are not properly displaying. like JEI and create
