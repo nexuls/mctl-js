@@ -57,6 +57,8 @@ import type {
 	NetworkConfig,
 } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
+import { VersionField, versionFieldIds } from "../VersionField.tsx";
+import { useServerVersions } from "../../hooks/use-server-versions.ts";
 import { useSettings, type SettingsDraft } from "./use-settings.ts";
 
 // Kinds and runtimes are shared with the setup wizard (`app/choices.ts`): this
@@ -139,7 +141,7 @@ const GROUP_OF_ISSUE: Partial<Record<keyof SettingsDraft, GroupId>> = {
  * Ring ids that host a live text field. Focus on one of these means the user is
  * typing, so the shell's character shortcuts must stand down.
  */
-const TEXT_FIELDS = new Set(["serversDir", "backupsDir", "mc", "memory"]);
+const TEXT_FIELDS = new Set(["serversDir", "backupsDir", "memory"]);
 
 /** Ring id of the tab bar — first in the ring, so Tab from the top reaches it. */
 const TABS_ID = "__tabs";
@@ -150,7 +152,7 @@ const TABS_ID = "__tabs";
  */
 const GROUP_FIELDS: Record<GroupId, string[]> = {
 	locations: ["overrideServers", "overrideBackups"],
-	defaults: ["mc", "memory", "kind", "runtime", "eula"],
+	defaults: ["kind", "mc", "memory", "runtime", "eula"],
 	backups: ["backupEnabled"],
 	network: ["network"],
 	appearance: ["theme", "icons"],
@@ -171,10 +173,13 @@ function ringIds(
 	group: GroupId,
 	draft: SettingsDraft,
 	actions: { canRevert: boolean; canSave: boolean },
+	versionChannelIds: string[],
 ): FocusItem[] {
 	const fields: string[] = [];
 	for (const id of GROUP_FIELDS[group]) {
 		fields.push(id);
+		// One per channel the default kind publishes — data, not a fixed list.
+		if (id === "mc") fields.push(...versionChannelIds);
 		if (id === "overrideServers" && draft.overrideServers)
 			fields.push("serversDir");
 		if (id === "overrideBackups" && draft.overrideBackups)
@@ -273,11 +278,19 @@ export function Settings() {
 	const canSave = dirty && !invalid && !saving;
 	const canRevert = dirty && !saving;
 
+	// The version list for the *default* kind, so the Defaults group can offer a
+	// picker instead of a free-text version. Fetched whatever group is showing —
+	// it is one ETag-cached request and the tab switch is instant as a result.
+	const versions = useServerVersions(draft?.kind);
+	const versionChannelIds = versionFieldIds(versions).slice(1);
+
 	// The ring depends on the visible group, the override toggles and whether the
 	// action buttons are live, so it is rebuilt every render from the draft rather
 	// than tracked separately.
 	const ring = useFocusRing(
-		draft ? ringIds(group, draft, { canRevert, canSave }) : [TABS_ID],
+		draft
+			? ringIds(group, draft, { canRevert, canSave }, versionChannelIds)
+			: [TABS_ID],
 	);
 
 	// Suppress the shell's digit/q/t shortcuts while a text field has the ring.
@@ -438,33 +451,9 @@ export function Settings() {
 
 				{group === "defaults" ? (
 					<Section description="Starting values when a server is created; each is overridable per server.">
-						<box flexDirection="row" gap={2} flexWrap="wrap">
-							<Input
-								label="Minecraft version"
-								hint="blank = latest at create time"
-								placeholder="latest"
-								value={draft.minecraftVersion}
-								width="50%"
-								maxWidth={40}
-								focused={ring.isFocused("mc")}
-								onFocused={() => ring.setFocus("mc")}
-								onChange={(v) => edit({ minecraftVersion: v })}
-								onSubmit={() => ring.next()}
-							/>
-							<Input
-								label="Memory"
-								hint={issues.memory ?? "JVM heap, e.g. 2G"}
-								value={draft.memory}
-								width="50%"
-								maxWidth={22}
-								invalid={issues.memory !== undefined}
-								focused={ring.isFocused("memory")}
-								onFocused={() => ring.setFocus("memory")}
-								onChange={(v) => edit({ memory: v })}
-								onSubmit={() => ring.next()}
-							/>
-						</box>
-
+						{/* Kind leads the group now: the version list below it is that
+						    kind's, so picking the kind second meant picking a version
+						    from the wrong catalogue first. */}
 						<Select
 							label="Server kind"
 							hint="the server implementation"
@@ -474,6 +463,28 @@ export function Settings() {
 							focused={ring.isFocused("kind")}
 							onFocused={() => ring.setFocus("kind")}
 							onChange={(v) => edit({ kind: v })}
+						/>
+
+						<VersionField
+							state={versions}
+							value={draft.minecraftVersion}
+							onChange={(v) => edit({ minecraftVersion: v })}
+							focus={ring}
+							latestHint="resolve the newest release at create time"
+							width="50%"
+						/>
+
+						<Input
+							label="Memory"
+							hint={issues.memory ?? "JVM heap, e.g. 2G"}
+							value={draft.memory}
+							width="50%"
+							maxWidth={22}
+							invalid={issues.memory !== undefined}
+							focused={ring.isFocused("memory")}
+							onFocused={() => ring.setFocus("memory")}
+							onChange={(v) => edit({ memory: v })}
+							onSubmit={() => ring.next()}
 						/>
 
 						<RadioGroup

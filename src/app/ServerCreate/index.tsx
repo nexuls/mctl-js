@@ -7,10 +7,13 @@
  * resolution, Java resolution, staging — belongs to core, so a server made here
  * is byte-identical to one made from the CLI.
  *
- * The Minecraft-version field is a **free text input with a hint**, not a picker.
- * Listing versions means a network round-trip per kind, and blocking a form on
- * it would make the page unusable offline; leaving it empty asks core for the
- * kind's newest release, which is what most users want anyway.
+ * The Minecraft-version field is a **picker over what the selected kind
+ * actually publishes** (`app/VersionField.tsx` over
+ * `hooks/use-server-versions.ts`), with snapshots and the old alpha/beta
+ * versions hidden behind checkboxes. It used to be a free text input, because
+ * listing versions costs a network round trip per kind — the fetch is
+ * non-blocking now, so the form still renders (and still accepts "latest")
+ * while the list is loading or when it cannot be loaded at all.
  */
 
 import { useState } from "react";
@@ -31,13 +34,20 @@ import { EventType } from "../../types/events.ts";
 import { useEventBus } from "../../hooks/use-event-bus.tsx";
 import type { RuntimeKind, ServerKind } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
+import { VersionField, versionFieldIds } from "../VersionField.tsx";
+import { useServerVersions } from "../../hooks/use-server-versions.ts";
 import { ProgressBar } from "../../components/index.ts";
 
-/** Field ids in the focus ring, in tab order. The two buttons close the ring. */
-const FIELDS = ["name", "kind", "mc", "memory", "runtime", "eula"];
+/**
+ * Field ids in the focus ring, in tab order. The version field's own ids are
+ * spliced in after `kind` (it contributes a variable number — one per channel
+ * the selected kind publishes), and the two buttons close the ring.
+ */
+const FIELDS_BEFORE_VERSION = ["name", "kind"];
+const FIELDS_AFTER_VERSION = ["memory", "runtime", "eula"];
 
 /** Ids whose control is a text input — these hold the shell's key capture. */
-const TEXT_FIELDS = new Set<string>(["name", "mc", "memory"]);
+const TEXT_FIELDS = new Set<string>(["name", "memory"]);
 
 export function ServerCreate() {
 	const { colors } = useTheme();
@@ -58,6 +68,14 @@ export function ServerCreate() {
 	const [eula, setEula] = useState(config?.defaults.eula ?? false);
 	const [job, setJob] = useState<Job>();
 
+	// The versions the selected kind publishes, re-fetched when the kind changes.
+	// Never awaited by the render path: the form is fully usable while it loads.
+	const versions = useServerVersions(kind);
+
+	const kindProvider = context?.providers
+		.servers()
+		.find((provider) => provider.id === kind);
+
 	const id = idFromName(name);
 	const busy =
 		job !== undefined && (job.state === "queued" || job.state === "running");
@@ -71,7 +89,12 @@ export function ServerCreate() {
 		{ id: "create", disabled: invalid || busy },
 		"cancel",
 	];
-	const ring = useFocusRing([...FIELDS, ...buttons]);
+	const ring = useFocusRing([
+		...FIELDS_BEFORE_VERSION,
+		...versionFieldIds(versions),
+		...FIELDS_AFTER_VERSION,
+		...buttons,
+	]);
 	// While a text field owns the ring, the shell's digit/q/t shortcuts stand down
 	// so typing "2" edits the field instead of navigating to Jobs.
 	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
@@ -163,9 +186,12 @@ export function ServerCreate() {
 			/>
 			<Select
 				label="Kind"
+				// The provider's own one-liner, so the dropdown layout explains each
+				// choice; the tab layout has no room for it, hence the line below.
 				options={(context?.providers.servers() ?? []).map((provider) => ({
 					value: provider.id,
 					label: provider.displayName,
+					description: provider.description,
 				}))}
 				value={kind}
 				onChange={setKind}
@@ -173,14 +199,17 @@ export function ServerCreate() {
 				onFocused={() => ring.setFocus("kind")}
 				width="100%"
 			/>
-			<Input
-				label="Minecraft version"
-				hint="empty = newest release for this kind"
+			{kindProvider ? (
+				<text fg={colors.muted} paddingX={2} truncate wrapMode="none">
+					{kindProvider.description}
+				</text>
+			) : null}
+			<VersionField
+				state={versions}
 				value={minecraftVersion}
 				onChange={setMinecraftVersion}
-				focused={ring.isFocused("mc")}
-				onFocused={() => ring.setFocus("mc")}
-				width="100%"
+				focus={ring}
+				latestHint="newest release for this kind, resolved at create time"
 			/>
 			<Input
 				label="Memory"

@@ -25,8 +25,15 @@ import { z } from "zod";
 export interface VersionInfo {
 	/** Version id as the upstream API spells it, e.g. `"1.21.4"`. */
 	id: string;
-	/** Release channel. `other` covers upstream values we don't model (old betas). */
-	type: "release" | "snapshot" | "other";
+	/**
+	 * Release channel, and the axis a version picker filters on.
+	 *
+	 * `beta` and `alpha` exist because Mojang still publishes the 2010–2011
+	 * `old_beta` / `old_alpha` versions in its manifest — some 130 entries that
+	 * would otherwise all land in `other` and be filtered as one lump. `other` is
+	 * kept as the honest catch-all for a channel a provider cannot classify.
+	 */
+	type: "release" | "snapshot" | "beta" | "alpha" | "other";
 	/** ISO-8601 publish time, when upstream reports one. */
 	releaseTime?: string;
 }

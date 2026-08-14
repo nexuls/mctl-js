@@ -79,11 +79,20 @@ export class VersionNotFoundError extends Error {
 	}
 }
 
-/** Map Mojang's `type` string onto our three-way channel. */
+/**
+ * Map Mojang's `type` string onto our channel vocabulary.
+ *
+ * The manifest uses exactly four values — `release`, `snapshot`, `old_beta` and
+ * `old_alpha` — and the last two are kept apart rather than merged into `other`
+ * so a version picker can offer them as separate filters. Anything else Mojang
+ * introduces later falls through to `other` rather than being misfiled.
+ */
 function channelOf(type: string): VersionInfo["type"] {
 	if (type === "release") return "release";
 	if (type === "snapshot") return "snapshot";
-	return "other"; // old_alpha / old_beta
+	if (type === "old_beta") return "beta";
+	if (type === "old_alpha") return "alpha";
+	return "other";
 }
 
 /**
