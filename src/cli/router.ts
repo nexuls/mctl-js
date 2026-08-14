@@ -29,6 +29,7 @@ Commands:
   list                 list servers and their probed state
   status <id>          detailed status for one server
   create <name>        create and install a new server
+  versions [kind]      list installable versions for a server kind
   edit <id>            change a server's settings
   delete <id>          remove a server (--files to erase its directory)
   start|stop|restart <id>
@@ -96,6 +97,11 @@ export async function runCli(argv: string[]): Promise<number> {
 	if (command === "create") {
 		const { runCreate } = await import("./commands/create.ts");
 		return runCreate(argv.slice(1));
+	}
+
+	if (command === "versions") {
+		const { runVersions } = await import("./commands/versions.ts");
+		return runVersions(argv.slice(1));
 	}
 
 	if (command === "edit" || command === "delete") {
