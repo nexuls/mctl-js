@@ -26,6 +26,8 @@ import { FillProvider } from "./fill.ts";
 export class VelocityProvider extends FillProvider {
 	readonly id = "velocity";
 	readonly displayName = "Velocity";
+	readonly description =
+		"Proxy, not a server — versioned in its own right, forwards players";
 	protected readonly project = "velocity";
 	protected override readonly jarName = "velocity.jar";
 	protected override readonly programArgs: string[] = [];

@@ -20,7 +20,14 @@
 import type { SelectItem } from "../components/index.ts";
 import { RuntimeKind, ServerKind } from "../types/config.ts";
 
-/** Display name and one-line description for each server kind. */
+/**
+ * Display name and one-line description for each server kind.
+ *
+ * The authoritative description of a kind is `ServerProvider.description`, which
+ * is what the create form renders. These are the same facts written for a screen
+ * that cannot reach a registry; keep them in step, and prefer the provider's
+ * wording when they disagree.
+ */
 const KIND_INFO: Record<ServerKind, { label: string; description: string }> = {
 	vanilla: { label: "Vanilla", description: "Mojang's official server" },
 	paper: { label: "Paper", description: "fast Bukkit fork; plugins" },

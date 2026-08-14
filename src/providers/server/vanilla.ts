@@ -35,6 +35,7 @@ export { VersionNotFoundError } from "./mojang-meta.ts";
 export class VanillaProvider implements ServerProvider {
 	readonly id = "vanilla";
 	readonly displayName = "Vanilla";
+	readonly description = "Mojang's official server — no plugins, no mods";
 
 	/** Every Minecraft version Mojang publishes, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

@@ -105,6 +105,8 @@ export function decodeNeoVersion(version: string): NeoBuild | undefined {
 export class NeoForgeProvider implements ServerProvider {
 	readonly id = "neoforge";
 	readonly displayName = "NeoForge";
+	readonly description =
+		"Community fork of Forge — the active branch since 1.20.2";
 
 	/** Every Minecraft version NeoForge builds for, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

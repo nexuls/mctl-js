@@ -48,6 +48,17 @@ export interface Provider {
  */
 export interface ServerProvider extends Provider {
 	/**
+	 * One line explaining what this kind *is*, for a UI that offers the choice.
+	 *
+	 * Required rather than optional on purpose: the create form asks the user to
+	 * pick between nine names that mean nothing without it ("Purpur"? "Quilt"?),
+	 * and an optional field is one a new provider silently omits. Keep it to a
+	 * short phrase — it is rendered on one terminal row beside the picker, so it
+	 * must survive being truncated at roughly 60 cells.
+	 */
+	readonly description: string;
+
+	/**
 	 * Every installable Minecraft version, newest first.
 	 * @throws {HttpError} when upstream is unreachable and nothing is cached.
 	 */

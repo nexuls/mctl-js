@@ -71,6 +71,7 @@ const BuildResponse = z.looseObject({
 export class PurpurProvider implements ServerProvider {
 	readonly id = "purpur";
 	readonly displayName = "Purpur";
+	readonly description = "Paper fork adding gameplay tuning and config knobs";
 
 	/** Every Minecraft version Purpur builds for, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

@@ -11,5 +11,7 @@ import { FillProvider } from "./fill.ts";
 export class PaperProvider extends FillProvider {
 	readonly id = "paper";
 	readonly displayName = "Paper";
+	readonly description =
+		"Fast Bukkit/Spigot fork — plugins, no client-side mods";
 	protected readonly project = "paper";
 }

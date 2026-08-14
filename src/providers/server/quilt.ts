@@ -121,6 +121,7 @@ async function mavenSha256(url: string): Promise<string | undefined> {
 export class QuiltProvider implements ServerProvider {
 	readonly id = "quilt";
 	readonly displayName = "Quilt";
+	readonly description = "Fabric fork — runs most Fabric mods, own toolchain";
 
 	/** Every Minecraft version Quilt supports, newest first. */
 	async minecraftVersions(): Promise<VersionInfo[]> {

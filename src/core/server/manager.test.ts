@@ -45,6 +45,7 @@ import { idFromName, ServerManager, ServerOperationError } from "./manager.ts";
 class StubProvider implements ServerProvider {
 	readonly id = "stub";
 	readonly displayName = "Stub";
+	readonly description = "test double";
 	/** Set to a nonexistent path to make the install fail mid-job. */
 	jarPath: string;
 

@@ -72,6 +72,8 @@ const ARGFILE_FROM = "1.17";
 export class ForgeProvider implements ServerProvider {
 	readonly id = "forge";
 	readonly displayName = "Forge";
+	readonly description =
+		"The long-standing mod loader — the largest mod library";
 
 	/**
 	 * Every Minecraft version Forge builds for, newest first.

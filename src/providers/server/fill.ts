@@ -102,6 +102,7 @@ function isPrerelease(id: string): boolean {
 export abstract class FillProvider implements ServerProvider {
 	abstract readonly id: string;
 	abstract readonly displayName: string;
+	abstract readonly description: string;
 
 	/** The `fill.papermc.io` project id, e.g. `"paper"`. */
 	protected abstract readonly project: string;

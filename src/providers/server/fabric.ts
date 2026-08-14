@@ -85,6 +85,7 @@ const SERVER_JAR = "fabric-server-launch.jar";
 export class FabricProvider implements ServerProvider {
 	readonly id = "fabric";
 	readonly displayName = "Fabric";
+	readonly description = "Lightweight mod loader — fast to update, needs mods";
 
 	/**
 	 * Every Minecraft version Fabric supports, newest first.
