@@ -9,6 +9,31 @@ _Last updated: 2026-08-17 (network profile management + the Server settings form
 
 ## Done
 
+- **cloudflared profiles pick a mode, and can run a pre-defined tunnel by id (2026-08-17, user
+  request).** "Add option for trycloudflare domain, and also using pre-defined tunnels using tunnel
+  id."
+  - `src/providers/network/cloudflared.ts` — new pure, exported
+    **`planCloudflared(options, port, hasToken)`** turning a profile into argv. Options gained
+    `mode` (`quick` | `named`, inferred when absent so existing profiles are unchanged) and
+    **`tunnelId`** (validated as a UUID; `tunnel` stays as the name alias, and the id wins when both
+    are set). A dashboard-managed tunnel runs on **`CLOUDFLARED_TOKEN`** from `secrets.json`, passed
+    as `TUNNEL_TOKEN` in the child's environment — with a token, `run` takes no argument at all.
+    `preflight` now reports a token the way ngrok's does.
+  - `src/app/Settings/index.tsx` + `src/cli/commands/network.ts` — the Options field's hint names the
+    new keys, and `mctl network profile --help` gained a provider-options section.
+  - Tests (**606 total**, +9): `providers/network/matchers.test.ts` covers both modes, the id/name
+    precedence, the token path, and all four refusals.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 606 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. **Against real cloudflared**: `mode=quick`
+    brought up a live tunnel (`chancellor-requires-automobiles-distribute.trycloudflare.com`),
+    reported `up`, and tore down cleanly; all four bad profiles were refused *before* anything was
+    spawned; and a well-formed but unknown tunnel id failed inside its timeout leaving no descriptor,
+    with `tunnel credentials file not found` in `network/<id>.log`.
+  - **Not verified against a real account:** a named tunnel actually carrying traffic, and the token
+    path end to end — both need a Cloudflare account this machine does not have. The argv and the
+    environment are unit-tested; the `Registered tunnel connection` matcher is unchanged from the
+    last session.
+
 - **Network profiles are manageable, and the Server Settings tab is a form (2026-08-17, user
   request).** "The settings section in the Server is not done yet. There's no way of managing
   network settings." Both landed, with CLI parity; scope agreed with the user up front.

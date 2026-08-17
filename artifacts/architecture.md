@@ -429,7 +429,7 @@ announce an address without owning a process, and a pid-less descriptor is never
 | Provider | Owns a process? | Joinable directly? | Notes |
 |---|---|---|---|
 | `direct` | no | on the LAN | Reports LAN + public address. Cannot fail; the fallback floor. |
-| `cloudflared` | yes | **no** | Quick tunnel or a named tunnel. TCP rides the HTTPS edge, so each *player* must run `cloudflared access tcp`. Stated in the endpoint's `note`. |
+| `cloudflared` | yes | **no** | `mode=quick` (an assigned `trycloudflare.com` hostname) or `mode=named` (a pre-defined tunnel by `tunnelId`/`tunnel`, or by a `CLOUDFLARED_TOKEN` alone). Resolved by the pure `planCloudflared`. TCP rides the HTTPS edge, so each *player* must run `cloudflared access tcp`. Stated in the endpoint's `note`. |
 | `playit` | yes | yes | Address is assigned on playit.gg, not printed reliably — set `options.address` from the dashboard; otherwise scraped, with a live-but-silent agent kept via `AgentSpec.fallback`. |
 | `ngrok` | yes | yes | The one tunnel a vanilla client joins as-is. Authtoken via the child's **environment**. |
 | `tailscale` | no | tailnet only | The daemon is the user's; MCTL discovers the MagicDNS name and reports it. Never reaped. |

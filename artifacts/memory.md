@@ -5,6 +5,33 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## cloudflared: an explicit mode, and pre-defined tunnels by id (2026-08-17, user request)
+
+User: "In the cloudflared, add option for trycloudflare domain, and also using pre-defined tunnels
+using tunnel id."
+
+- **A quick tunnel's hostname is assigned, never chosen.** Cloudflare generates the four-word
+  `*.trycloudflare.com` label; there is nothing to reserve or configure, which is why the option is
+  a *mode* (`mode=quick`) and not a hostname field. Worth stating in the docs, because "add an
+  option for the trycloudflare domain" is a reasonable thing to expect to be settable.
+- **`cloudflared tunnel run <x>` takes the tunnel's UUID or its name in the same position**, so
+  `tunnelId` and `tunnel` are one argument, not two code paths. The **id wins** when both are given:
+  a name is per-account and can be changed in the dashboard, the id is the tunnel's identity.
+  `tunnelId` is validated against the UUID shape — a tunnel *name* typed there is the likely slip,
+  and cloudflared's own failure arrives ~30 s later without naming the option at fault.
+- **A dashboard-created tunnel has no local credentials file and runs on a token instead.** Verified:
+  `tunnel run <a well-formed but unknown uuid>` dies with `tunnel credentials file not found` in the
+  captured log. The token goes in `secrets.json` as `CLOUDFLARED_TOKEN` and reaches the agent as
+  **`TUNNEL_TOKEN` in the environment**, never `--token` on argv (`/proc` is world-readable).
+  With a token the tunnel identifies itself, so `run` correctly takes **no argument**.
+- **`mode` is optional and inferred** (`named` when a tunnel is identified or a token exists, else
+  `quick`), which is exactly the shape of every profile written before it existed. Setting it is what
+  turns a contradiction — `mode=quick` beside a `tunnelId` — into a message instead of one option
+  silently winning.
+- **All of it is in the pure, exported `planCloudflared(options, port, hasToken)`.** The rules are
+  claims about a *user's configuration*, and the only alternative to unit tests is discovering each
+  one as a 30-second timeout with someone else's error message.
+
 ## Network profiles are editable, and so is a server (2026-08-17, user request)
 
 User: "The settings section in the Server is not done yet. There's no way of managing network

@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { planCloudflared } from "./cloudflared.ts";
 import { matchTunnelUrl } from "./ngrok.ts";
 import { matchPlayitHost, parseAddress } from "./playit.ts";
 
@@ -66,5 +67,113 @@ describe("playit", () => {
 		expect(
 			matchPlayitHost("visit https://playit.gg/claim/abc"),
 		).toBeUndefined();
+	});
+});
+
+/**
+ * `planCloudflared` is the other pure half of a tunnel provider: which argv a
+ * profile's options resolve to, and which profiles are refused. Every rule is a
+ * claim about a user's configuration, and none of them can be checked by
+ * starting a real tunnel — a wrong one costs a 30-second timeout and an error
+ * from cloudflared that does not name the option at fault.
+ */
+describe("cloudflared", () => {
+	test("no options is a quick trycloudflare tunnel over the local port", () => {
+		expect(planCloudflared({}, 25565)).toEqual({
+			mode: "quick",
+			args: ["tunnel", "--no-autoupdate", "--url", "tcp://localhost:25565"],
+		});
+		// Explicit and inferred must produce the same thing, or writing the mode
+		// down would change behaviour.
+		expect(planCloudflared({ mode: "quick" }, 25565)).toEqual(
+			planCloudflared({}, 25565),
+		);
+	});
+
+	test("a tunnel id runs that pre-defined tunnel", () => {
+		const plan = planCloudflared(
+			{
+				tunnelId: "6ff42ae2-765d-4adf-8112-31c55c1551ef",
+				hostname: "mc.example.com",
+			},
+			25565,
+		);
+		expect(plan).toEqual({
+			mode: "named",
+			hostname: "mc.example.com",
+			args: [
+				"tunnel",
+				"--no-autoupdate",
+				"run",
+				"6ff42ae2-765d-4adf-8112-31c55c1551ef",
+			],
+		});
+	});
+
+	test("a name still works, and the id wins when both are given", () => {
+		expect(
+			planCloudflared({ tunnel: "mc", hostname: "mc.example.com" }, 25565),
+		).toMatchObject({ args: ["tunnel", "--no-autoupdate", "run", "mc"] });
+		// A name can be changed in the dashboard; the id is the tunnel's identity.
+		expect(
+			planCloudflared(
+				{
+					tunnel: "mc",
+					tunnelId: "6ff42ae2-765d-4adf-8112-31c55c1551ef",
+					hostname: "mc.example.com",
+				},
+				25565,
+			),
+		).toMatchObject({
+			args: [
+				"tunnel",
+				"--no-autoupdate",
+				"run",
+				"6ff42ae2-765d-4adf-8112-31c55c1551ef",
+			],
+		});
+	});
+
+	test("a token identifies the tunnel by itself, so `run` takes no argument", () => {
+		expect(
+			planCloudflared({ hostname: "mc.example.com" }, 25565, true),
+		).toEqual({
+			mode: "named",
+			hostname: "mc.example.com",
+			args: ["tunnel", "--no-autoupdate", "run"],
+		});
+	});
+
+	test("a tunnel *name* typed into tunnelId is caught, not passed on", () => {
+		// cloudflared would accept it and fail later with its own error; the field
+		// it names is the one thing this can say and that one cannot.
+		expect(() =>
+			planCloudflared({ tunnelId: "my-tunnel", hostname: "mc.example.com" }, 1),
+		).toThrow(/not a tunnel id/);
+	});
+
+	test("a pre-defined tunnel must name the hostname its ingress serves", () => {
+		expect(() =>
+			planCloudflared({ tunnelId: "6ff42ae2-765d-4adf-8112-31c55c1551ef" }, 1),
+		).toThrow(/hostname/);
+	});
+
+	test("mode=named with nothing to run on is refused", () => {
+		expect(() =>
+			planCloudflared({ mode: "named", hostname: "mc.example.com" }, 1),
+		).toThrow(/tunnelId/);
+	});
+
+	test("mode=quick beside a tunnel is a contradiction, not a silent winner", () => {
+		expect(() => planCloudflared({ mode: "quick", tunnel: "mc" }, 1)).toThrow(
+			/cannot also name a tunnel/,
+		);
+	});
+
+	test("an unknown mode names the two that exist", () => {
+		expect(() =>
+			// A profile is free-form text, so this is a plain typo, not a type error.
+			planCloudflared({ mode: "tunnel" as "quick" }, 1),
+		).toThrow(/"quick".*"named"/);
 	});
 });

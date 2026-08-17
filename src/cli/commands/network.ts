@@ -63,6 +63,17 @@ Flags:
   --no-dns-srv             skip the _minecraft._tcp SRV record
   --no-dns                 remove DNS automation from the profile
 
+Provider options (\`--options\`), the ones worth knowing:
+  cloudflared  mode=quick            a throwaway trycloudflare.com hostname
+               mode=named            a tunnel you already defined; needs
+                                     tunnelId=<uuid> (or tunnel=<name>) and
+                                     hostname=<the one its ingress serves>.
+                                     A dashboard tunnel runs on CLOUDFLARED_TOKEN
+                                     from secrets.json instead of a tunnelId.
+  playit       address=<from the playit.gg dashboard>
+  ngrok        region, remoteAddr
+  direct       host, publicAddress=false
+
 Tunnel binaries are never downloaded by MCTL. A missing one degrades that
 profile to \`direct\` with an install hint — it never stops a server starting.`;
 

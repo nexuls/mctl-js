@@ -182,7 +182,9 @@ function providerOptions(
  */
 const PROVIDER_OPTION_HINTS: Record<string, string> = {
 	direct: "host, publicAddress",
-	cloudflared: "tunnel, hostname, timeoutSeconds",
+	// `mode` leads because it decides what the rest mean: quick takes none of
+	// them, named needs tunnelId + hostname.
+	cloudflared: "mode=quick|named, tunnelId, tunnel, hostname",
 	playit: "address, args, timeoutSeconds",
 	ngrok: "region, remoteAddr, timeoutSeconds",
 	tailscale: "preferIp",
