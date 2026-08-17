@@ -57,6 +57,18 @@ export class TailscaleNetwork implements NetworkProvider {
 	readonly id = "tailscale";
 	readonly displayName = "Tailscale";
 
+	/** @see NetworkProvider.options */
+	readonly options = [
+		{
+			key: "preferIp",
+			label: "Advertise the 100.x address",
+			kind: "boolean" as const,
+			fallback: false,
+			hint: "instead of the MagicDNS name",
+			wide: true,
+		},
+	];
+
 	requires(): RequiredBinary[] {
 		return [
 			{

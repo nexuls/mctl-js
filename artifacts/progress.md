@@ -9,6 +9,36 @@ _Last updated: 2026-08-17 (network profile management + the Server settings form
 
 ## Done
 
+- **Provider options are fields, not a `key=value` box (2026-08-17, user report).** "All those
+  specific options are in the options field, for all the provider. It's not a good user experience."
+  - `src/types/network.ts` (**new** `NetworkOption`, `NetworkOptionKind`, `NetworkOptionChoice`) +
+    `src/types/provider.ts` — **`NetworkProvider.options`**, required. All five providers declare
+    theirs: direct (host, publicAddress), cloudflared (mode + the three tunnel fields behind
+    `showWhen`, timeout), playit (address, timeout), ngrok (region as a choice, remoteAddr, timeout),
+    tailscale (preferIp).
+  - `src/core/network/profiles.ts` — `visibleOptions` (drops a field whose condition is unmet),
+    `optionValue` (unset ⇒ the provider's fallback), `withOption` (a value equal to the fallback, or
+    empty, is stored as nothing) and `describeOptions` (the same declaration as help text).
+  - `src/app/Settings/index.tsx` — the single Options input is gone; `OptionField` renders each
+    declared option as an `Input`, `Checkbox` or `Select`, values stored **typed**. A fallback shows
+    as the placeholder, a non-numeric number is flagged and holds Save (checked across every
+    profile), and the ring splices in one id per visible option. `PROVIDER_OPTION_HINTS` deleted.
+  - `src/app/Settings/use-settings.ts` — `ProfileDraft.options` is a `Record<string, unknown>`
+    instead of `key=value` text; nothing is parsed on the way to disk, and undeclared keys are
+    carried through untouched.
+  - `src/cli/commands/network.ts` — the hand-written provider-options section of `--help` is now
+    generated from the registry.
+  - `src/components/Form.tsx` — `Select` gained `invalid`, which `Input` already had.
+  - Tests (**618 total**, +12): the three core helpers and the help formatting (6), and an invariant
+    over what the shipped providers declare — unique keys, every `showWhen` resolving to a
+    choice/boolean, every choice having options (6).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 618 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. **In tmux at 140×44**: switching Provider swapped
+    direct's two fields for cloudflared's; choosing *pre-defined* revealed tunnel id / hostname /
+    name; a save wrote only `{"mode":"named"}` (the untouched timeout stayed absent) and
+    `mctl network profile show` read it back; a typed `45` stored as the **number** 45; and `45x`
+    flagged the field, marked the tab `Network !`, printed the reason and made Ctrl+S a no-op.
+
 - **cloudflared profiles pick a mode, and can run a pre-defined tunnel by id (2026-08-17, user
   request).** "Add option for trycloudflare domain, and also using pre-defined tunnels using tunnel
   id."

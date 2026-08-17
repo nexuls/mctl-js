@@ -454,9 +454,13 @@ Settings page needs the "what would the config become" half without touching dis
 wants the whole read-modify-write in one call. Two names are protected — `direct` (the fallback
 floor above) and whatever `defaultProfile` names — and the Settings draft repeats that guard,
 since it deletes from the buffer before core ever sees it. A *server* naming a deleted profile is
-not an error; it degrades, and both front-ends say which servers that affects. `parseOptions` /
-`formatOptions` define the `key=value` option format once for `mctl network profile --options` and
-the Settings field alike.
+not an error; it degrades, and both front-ends say which servers that affects. **What may go in a profile's `options` is declared by the provider**
+(`NetworkProvider.options`, the same rule as `ServerProvider.content`): the Settings form renders one
+control per declared option — typed, with conditional fields hidden until they apply — and
+`mctl network profile --help` prints the same list. It does not narrow the schema, which stays
+`Record<string, unknown>` so a newer MCTL's option still loads. `visibleOptions` / `optionValue` /
+`withOption` hold the rules (a value equal to the provider's fallback is stored as nothing), and
+`parseOptions` / `formatOptions` remain the `key=value` format the CLI's `--options` speaks.
 
 **Secrets are scoped, not shared.** `scopedSecrets(providerId, secrets)` passes a provider only the
 keys prefixed with its own id (`ngrok` → `NGROK_*`). A tunnel agent's environment has no business

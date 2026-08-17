@@ -10,13 +10,18 @@
 
 import { describe, expect, test } from "bun:test";
 import { Config } from "../../types/config.ts";
+import type { NetworkOption } from "../../types/network.ts";
 import {
 	DIRECT_PROFILE,
 	ProfileError,
+	describeOptions,
 	formatOptions,
+	optionValue,
 	parseOptions,
 	profileNameIssue,
+	visibleOptions,
 	withDefaultProfile,
+	withOption,
 	withProfile,
 	withoutProfile,
 } from "./profiles.ts";
@@ -205,5 +210,92 @@ describe("parseOptions / formatOptions", () => {
 
 	test("an absent option map formats as an empty field", () => {
 		expect(formatOptions(undefined)).toBe("");
+	});
+});
+
+/**
+ * The declared option schema — the half that turned a free-text `key=value` box
+ * into a form. These three functions are what the Settings page renders through
+ * and what `--help` prints, so their rules are shared by both front-ends.
+ */
+describe("declared options", () => {
+	const spec: NetworkOption[] = [
+		{
+			key: "mode",
+			label: "Tunnel",
+			kind: "choice",
+			fallback: "quick",
+			choices: [
+				{ value: "quick", label: "quick" },
+				{ value: "named", label: "pre-defined" },
+			],
+		},
+		{
+			key: "tunnelId",
+			label: "Tunnel id",
+			kind: "text",
+			showWhen: { key: "mode", equals: "named" },
+		},
+		{
+			key: "timeoutSeconds",
+			label: "Start timeout",
+			kind: "number",
+			fallback: 30,
+		},
+	];
+
+	test("a conditional field is hidden until its condition is met", () => {
+		// An option the provider will not read is worse than a missing one: it
+		// invites someone to fill it in and wonder why nothing happened.
+		expect(visibleOptions(spec, {}).map((o) => o.key)).toEqual([
+			"mode",
+			"timeoutSeconds",
+		]);
+		expect(visibleOptions(spec, { mode: "named" }).map((o) => o.key)).toEqual([
+			"mode",
+			"tunnelId",
+			"timeoutSeconds",
+		]);
+	});
+
+	test("the condition is met by a fallback, not only by a stored value", () => {
+		const defaultsToNamed: NetworkOption[] = [
+			{ ...spec[0]!, fallback: "named" },
+			spec[1]!,
+		];
+		expect(visibleOptions(defaultsToNamed, {}).map((o) => o.key)).toContain(
+			"tunnelId",
+		);
+	});
+
+	test("an unset option reads as the provider's own fallback", () => {
+		expect(optionValue(spec[2], {})).toBe(30);
+		expect(optionValue(spec[2], { timeoutSeconds: 45 })).toBe(45);
+		expect(optionValue(spec[1], {})).toBeUndefined();
+	});
+
+	test("a value equal to the fallback is stored as nothing at all", () => {
+		// What is written down is what was *chosen*, so config.json does not fill up
+		// with every default the form happened to render — and a profile's meaning
+		// does not change if a provider ever moves a default.
+		expect(withOption({}, spec[2]!, 30)).toEqual({});
+		expect(withOption({ timeoutSeconds: 45 }, spec[2]!, 30)).toEqual({});
+		expect(withOption({}, spec[2]!, 45)).toEqual({ timeoutSeconds: 45 });
+	});
+
+	test("clearing a field removes the key rather than storing an empty string", () => {
+		expect(withOption({ tunnelId: "abc" }, spec[1]!, "")).toEqual({});
+		expect(withOption({ tunnelId: "abc" }, spec[1]!, undefined)).toEqual({});
+	});
+
+	test("help lines name every option and align to the longest", () => {
+		const lines = describeOptions(spec);
+		expect(lines[0]).toContain("mode=quick|named");
+		expect(lines[0]).toContain("Tunnel");
+		expect(lines[2]).toContain("timeoutSeconds=<number>");
+		// One column, so the descriptions line up under each other rather than
+		// running into a 36-character tunnel id.
+		const columns = lines.map((line, at) => line.indexOf(spec[at]!.label));
+		expect(new Set(columns).size).toBe(1);
 	});
 });

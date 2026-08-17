@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { createProviderRegistry } from "../index.ts";
 import { planCloudflared } from "./cloudflared.ts";
 import { matchTunnelUrl } from "./ngrok.ts";
 import { matchPlayitHost, parseAddress } from "./playit.ts";
@@ -176,4 +177,52 @@ describe("cloudflared", () => {
 			planCloudflared({ mode: "tunnel" as "quick" }, 1),
 		).toThrow(/"quick".*"named"/);
 	});
+});
+
+/**
+ * What the real providers declare as their options.
+ *
+ * The declaration is rendered as a form by Settings and printed by
+ * `mctl network profile --help`, so a broken one is a broken *field* — a
+ * `showWhen` naming a key that does not exist silently hides its field forever,
+ * and a duplicate key gives two controls the same slot in the profile.
+ */
+describe("declared provider options", () => {
+	const providers = createProviderRegistry().networks();
+
+	test("every network provider declares its options", () => {
+		// Required on the interface, so this is really checking that the five
+		// shipped providers were each thought about rather than given `[]` by a
+		// compiler error.
+		expect(providers.length).toBeGreaterThan(0);
+		const withOptions = providers.filter((p) => p.options.length > 0);
+		expect(withOptions.map((p) => p.id).sort()).toEqual([
+			"cloudflared",
+			"direct",
+			"ngrok",
+			"playit",
+			"tailscale",
+		]);
+	});
+
+	for (const provider of providers) {
+		test(`${provider.id}: keys are unique and every showWhen resolves`, () => {
+			const keys = provider.options.map((option) => option.key);
+			expect(new Set(keys).size).toBe(keys.length);
+			for (const option of provider.options) {
+				if (!option.showWhen) continue;
+				const target = provider.options.find(
+					(entry) => entry.key === option.showWhen?.key,
+				);
+				expect(target).toBeDefined();
+				// A condition on a free-text field can never be met reliably; the ones
+				// that gate a field are choices (or booleans).
+				expect(["choice", "boolean"]).toContain(target?.kind ?? "missing");
+			}
+			for (const option of provider.options) {
+				if (option.kind !== "choice") continue;
+				expect(option.choices?.length ?? 0).toBeGreaterThan(1);
+			}
+		});
+	}
 });

@@ -22,6 +22,7 @@
  * `direct` with a stated reason, which is the documented behaviour.
  */
 
+import type { NetworkOption } from "../../types/network.ts";
 import { writeConfig } from "../config/index.ts";
 import {
 	CloudflareDnsConfig,
@@ -292,4 +293,94 @@ export function formatOptions(
 			return `${key}=${rendered}`;
 		})
 		.join(", ");
+}
+
+// ---------------------------------------------------------------------------
+// The declared option schema — shared by the form and the CLI's help.
+// ---------------------------------------------------------------------------
+
+/**
+ * The options that apply to the values currently held, in declaration order.
+ *
+ * A `showWhen` field is dropped when its condition is unmet, because an option
+ * the provider will not read is worse than a missing one: cloudflared's tunnel
+ * id does nothing for a quick tunnel, and offering it invites someone to fill it
+ * in and wonder why nothing happened.
+ */
+export function visibleOptions(
+	options: readonly NetworkOption[],
+	values: Readonly<Record<string, unknown>>,
+): NetworkOption[] {
+	return options.filter((option) => {
+		if (!option.showWhen) return true;
+		const on = options.find((entry) => entry.key === option.showWhen?.key);
+		return optionValue(on, values) === option.showWhen.equals;
+	});
+}
+
+/**
+ * An option's effective value: what is stored, or what the provider does when
+ * nothing is (`fallback`). Returns `undefined` for an option with neither, which
+ * is how a text field says "empty".
+ */
+export function optionValue(
+	option: NetworkOption | undefined,
+	values: Readonly<Record<string, unknown>>,
+): unknown {
+	if (!option) return undefined;
+	const stored = values[option.key];
+	return stored === undefined ? option.fallback : stored;
+}
+
+/**
+ * Set one option, returning the next map.
+ *
+ * A value equal to the provider's own fallback — or an empty string — is stored
+ * as **nothing at all**, so `config.json` records the settings that were chosen
+ * rather than every default the form happened to render. That is also what keeps
+ * a profile's meaning stable if a provider ever changes a default.
+ */
+export function withOption(
+	values: Readonly<Record<string, unknown>>,
+	option: NetworkOption,
+	value: unknown,
+): Record<string, unknown> {
+	const next = { ...values };
+	const empty =
+		value === undefined ||
+		value === null ||
+		(typeof value === "string" && value.trim() === "");
+	if (empty || value === option.fallback) delete next[option.key];
+	else next[option.key] = value;
+	return next;
+}
+
+/**
+ * The provider's options as help lines, so `mctl network profile --help` names
+ * exactly what the Settings form renders. One declaration, two front-ends.
+ */
+export function describeOptions(options: readonly NetworkOption[]): string[] {
+	const spelled = options.map((option) => ({
+		option,
+		form: `${option.key}=${sampleValue(option)}`,
+	}));
+	// Padded to this provider's own longest sample rather than to a constant: a
+	// tunnel id is 36 characters and a fixed column either wraps it into the
+	// description or leaves every other provider's column half empty.
+	const width = Math.max(0, ...spelled.map((entry) => entry.form.length)) + 2;
+	return spelled.map(({ option, form }) => {
+		const detail = [option.label, option.hint].filter(Boolean).join(" — ");
+		return form.padEnd(width) + detail;
+	});
+}
+
+/** The value shape shown for an option in help text. */
+function sampleValue(option: NetworkOption): string {
+	if (option.kind === "choice") {
+		return (option.choices ?? [])
+			.map((choice) => choice.value || "(none)")
+			.join("|");
+	}
+	if (option.kind === "boolean") return "true|false";
+	return option.placeholder ?? `<${option.kind}>`;
 }

@@ -25,6 +25,7 @@ import type {
 	Endpoint,
 	ExposeRequest,
 	NetStatus,
+	NetworkOption,
 	Readiness,
 	RequiredBinary,
 } from "./network.ts";
@@ -216,6 +217,18 @@ export interface RuntimeProvider extends Provider {
 export interface NetworkProvider extends Provider {
 	/** External binaries this provider needs, with install hints. `[]` for `direct`. */
 	requires(): RequiredBinary[];
+
+	/**
+	 * The settings this provider reads out of a profile's `options`, in the order
+	 * a form should show them. `[]` for a provider with none.
+	 *
+	 * Required rather than optional, and declared here rather than listed beside
+	 * the Settings form, for the same reason `ServerProvider.content` is: only the
+	 * provider knows what it reads, the UI may not import a provider, and an
+	 * optional field is one a new provider silently omits — leaving the user a
+	 * free-text box and no idea what may go in it.
+	 */
+	readonly options: readonly NetworkOption[];
 
 	/**
 	 * Can this provider be used right now? Checks the binary is on `$PATH` and,

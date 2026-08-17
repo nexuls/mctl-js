@@ -175,7 +175,7 @@ describe("profiles", () => {
 		expect(direct?.name).toBe("direct");
 		expect(direct?.dnsEnabled).toBe(false);
 		expect(tunnel?.provider).toBe("cloudflared");
-		expect(tunnel?.options).toBe("tunnel=mc, timeoutSeconds=45");
+		expect(tunnel?.options).toEqual({ tunnel: "mc", timeoutSeconds: 45 });
 		expect(tunnel?.dnsEnabled).toBe(true);
 		expect(tunnel?.dnsZone).toBe("example.com");
 		expect(tunnel?.dnsTtl).toBe("120");
@@ -231,7 +231,7 @@ describe("profiles", () => {
 		const added = {
 			...emptyProfile("cf"),
 			provider: "cloudflared",
-			options: "tunnel=mc",
+			options: { tunnel: "mc" },
 			dnsEnabled: true,
 			dnsZone: "example.com",
 			dnsHostname: "mc.example.com",
@@ -272,11 +272,12 @@ describe("profileIssues", () => {
 		expect(issues[1]?.name).toBe("already used");
 	});
 
-	test("flags an unusable name and unparseable options", () => {
+	test("flags an unusable name", () => {
 		expect(profileIssues([emptyProfile("Cf Tunnel")])[0]?.name).toBeDefined();
-		expect(
-			profileIssues([{ ...emptyProfile("cf"), options: "tunnel" }])[0]?.options,
-		).toBeDefined();
+		// Options are no longer among the things a user can get wrong here: each is
+		// edited through the control its provider declared, so there is no text to
+		// fail to parse.
+		expect(profileIssues([emptyProfile("cf")])[0]).toEqual({});
 	});
 
 	test("DNS fields are only required once DNS is on", () => {

@@ -5,6 +5,38 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## A provider declares its options; the form renders them (2026-08-17, user report)
+
+User: "All those specific options are in the options field, for all the provider. It's not a good
+user experience." They were right — `key=value` is the *CLI's* format, and putting it in a form
+made the user the parser.
+
+- **The schema is `NetworkProvider.options: readonly NetworkOption[]`, on the provider**, exactly
+  like `ServerProvider.content` and for the same reasons: only the provider knows what it reads, a
+  page may not import a provider, and an *optional* field is one a new provider silently omits —
+  leaving a free-text box and no clue what goes in it. It does **not** narrow
+  `NetworkProfile.options` (still `Record<string, unknown>` at the Zod boundary), so an option a
+  newer MCTL writes still loads; the declaration describes the map for humans, it does not police it.
+- **One declaration, two front-ends.** The Settings form renders a control per option;
+  `mctl network profile --help` prints the same list through `describeOptions`. The hand-kept help
+  text and the hand-kept `PROVIDER_OPTION_HINTS` table that preceded them are both gone — they were
+  two more lists to go stale.
+- **Three rules make the stored map clean, and all three are in `core/network/profiles.ts`:**
+  `visibleOptions` drops a field whose `showWhen` is unmet (an option the provider will not read
+  invites someone to fill it in and wonder why nothing happened); `optionValue` resolves an unset
+  option to the provider's `fallback`; and `withOption` stores **nothing** for a value equal to that
+  fallback or for an empty string — so `config.json` records what was chosen, not every default the
+  form drew.
+- **A fallback belongs in the placeholder, never in the value.** Rendering it as the value means
+  clearing a timeout puts `30` straight back, and typing `45` then yields `3045`. Found in a pty.
+- **A number field keeps what was typed and holds Save.** Discarding a half-typed value is the worse
+  failure, so `"45x"` stays on screen, the field says "must be a number", the group's tab is flagged
+  and Ctrl+S refuses — checked across *every* profile, not just the one on screen, since a bad value
+  on another profile would otherwise be written by a save made from a different one.
+- **`FormGrid` reads `span` off its own direct children.** A `FormGridItem` returned from *inside* a
+  component is invisible to it, so a `wide` option landed in a column. The wrapper has to be at the
+  call site (`spanOf` inspects `child.props`).
+
 ## cloudflared: an explicit mode, and pre-defined tunnels by id (2026-08-17, user request)
 
 User: "In the cloudflared, add option for trycloudflare domain, and also using pre-defined tunnels

@@ -51,7 +51,11 @@ import {
 } from "../../components/index.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
-import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
+import {
+	useFocusRing,
+	type FocusItem,
+	type FocusRing,
+} from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
 import { useMctl } from "../../hooks/use-mctl.tsx";
@@ -59,7 +63,12 @@ import { useServers } from "../../hooks/use-servers.ts";
 import { useToast } from "../../hooks/use-toast.tsx";
 import { useRouter } from "../../hooks/use-router.tsx";
 import { resolveRootPaths } from "../../core/config/index.ts";
-import { DIRECT_PROFILE } from "../../core/network/profiles.ts";
+import {
+	DIRECT_PROFILE,
+	optionValue,
+	visibleOptions,
+	withOption,
+} from "../../core/network/profiles.ts";
 import type { ProviderRegistry } from "../../core/registry/provider-registry.ts";
 import { alpha } from "../../lib/colors.ts";
 import { configFile } from "../../lib/paths.ts";
@@ -68,6 +77,7 @@ import type {
 	CompressionKind,
 	IconMode,
 } from "../../types/config.ts";
+import type { NetworkOption } from "../../types/network.ts";
 import { PageHeader } from "../shared.tsx";
 import { VersionField, versionFieldIds } from "../VersionField.tsx";
 import { useServerVersions } from "../../hooks/use-server-versions.ts";
@@ -172,28 +182,160 @@ function providerOptions(
 }
 
 /**
- * The options each provider reads, named in the field's hint.
- *
- * `options` is a free-form map by design — each provider validates its own shape
- * at the point of use rather than forcing every provider's schema into MCTL's
- * config schema (`types/config.ts`) — which leaves the user with an empty box and
- * no idea what may go in it. These are the keys each provider actually reads
- * today; a provider missing from the table simply gets the generic hint.
+ * The options a provider declares, or `[]` while the registry is still loading
+ * (or for a provider this build does not have — a profile from a newer MCTL).
+ * Its stored options are still carried through the save untouched; they just
+ * cannot be rendered as fields, which is the honest outcome.
  */
-const PROVIDER_OPTION_HINTS: Record<string, string> = {
-	direct: "host, publicAddress",
-	// `mode` leads because it decides what the rest mean: quick takes none of
-	// them, named needs tunnelId + hostname.
-	cloudflared: "mode=quick|named, tunnelId, tunnel, hostname",
-	playit: "address, args, timeoutSeconds",
-	ngrok: "region, remoteAddr, timeoutSeconds",
-	tailscale: "preferIp",
-};
+function providerOptionSpec(
+	registry: ProviderRegistry | undefined,
+	provider: string,
+): readonly NetworkOption[] {
+	try {
+		return registry?.network(provider).options ?? [];
+	} catch {
+		return [];
+	}
+}
 
-/** Hint for the options field: the provider's own keys, or the format. */
-function optionsHint(provider: string): string {
-	const keys = PROVIDER_OPTION_HINTS[provider];
-	return keys ? `${provider}: ${keys}` : "key=value pairs";
+/**
+ * What a text field's contents mean for this option.
+ *
+ * A `number` field stores a number, so the provider reads one rather than
+ * `"45" * 1000`. Text that is not a number is kept **as typed** rather than
+ * dropped — the field flags it, and silently discarding what someone is halfway
+ * through typing is the worse failure.
+ */
+function coerceOption(option: NetworkOption, text: string): unknown {
+	if (option.kind !== "number") return text;
+	const trimmed = text.trim();
+	if (trimmed === "") return undefined;
+	const value = Number(trimmed);
+	return Number.isFinite(value) ? value : text;
+}
+
+/**
+ * Whether a number option holds something that is not a number.
+ *
+ * It can only happen by typing, and what was typed is kept rather than discarded
+ * — throwing away what someone is halfway through writing is the worse failure —
+ * so Save is held instead. The provider would otherwise read `"soon" * 1000`.
+ */
+function isBadNumber(
+	option: NetworkOption,
+	values: Readonly<Record<string, unknown>>,
+): boolean {
+	if (option.kind !== "number") return false;
+	const stored = values[option.key];
+	return stored !== undefined && typeof stored !== "number";
+}
+
+/**
+ * The first option problem across *every* profile, or `undefined`.
+ *
+ * Every profile, not just the one on screen: the draft holds them all, and a bad
+ * value left on another profile would otherwise be written by a Save made from a
+ * different one — invisibly, since its fields are not drawn.
+ */
+function optionIssue(
+	profiles: ProfileDraft[],
+	registry: ProviderRegistry | undefined,
+): string | undefined {
+	for (const profile of profiles) {
+		for (const option of providerOptionSpec(registry, profile.provider)) {
+			if (isBadNumber(option, profile.options)) {
+				return `${profile.name || "a profile"}: ${option.label} must be a number`;
+			}
+		}
+	}
+	return undefined;
+}
+
+/** Ring id of the control for one declared provider option. */
+function optionFieldId(key: string): string {
+	return `popt:${key}`;
+}
+
+/**
+ * One provider option, rendered as the control its `kind` calls for.
+ *
+ * The value is stored typed — a number as a number, a switch as a boolean — so
+ * nothing is parsed on the way to `config.json`, and an option left at the
+ * provider's own default is stored as nothing at all (see `withOption`).
+ */
+function OptionField({
+	option,
+	values,
+	ring,
+	onChange,
+}: {
+	option: NetworkOption;
+	values: Record<string, unknown>;
+	ring: FocusRing;
+	onChange: (values: Record<string, unknown>) => void;
+}) {
+	const id = optionFieldId(option.key);
+	const value = optionValue(option, values);
+	const set = (next: unknown) => onChange(withOption(values, option, next));
+	const common = {
+		label: option.label,
+		focused: ring.isFocused(id),
+		onFocused: () => ring.setFocus(id),
+	};
+
+	if (option.kind === "boolean") {
+		return (
+			<Checkbox
+				{...common}
+				caption={option.hint ?? option.label}
+				checked={value === true}
+				onChange={(next) => set(next)}
+			/>
+		);
+	}
+
+	if (option.kind === "choice") {
+		return (
+			<Select
+				{...common}
+				hint={option.hint}
+				options={(option.choices ?? []).map((choice) => ({
+					label: choice.label,
+					value: choice.value,
+					description: choice.description,
+				}))}
+				value={typeof value === "string" ? value : ""}
+				width="100%"
+				maxVisible={5}
+				onChange={(next) => set(next)}
+			/>
+		);
+	}
+
+	// `text` and `number` are the same control; only what is stored differs.
+	//
+	// The field shows what is **stored**, never the fallback — a fallback rendered
+	// as the value means clearing the field puts it straight back, so typing 45
+	// into a cleared timeout yields "3045". It belongs in the placeholder, which
+	// is what a placeholder is for.
+	const stored = values[option.key];
+	const text = stored === undefined ? "" : String(stored);
+	const badNumber = isBadNumber(option, values);
+	return (
+		<Input
+			{...common}
+			hint={badNumber ? "must be a number" : option.hint}
+			placeholder={
+				option.placeholder ??
+				(option.fallback !== undefined ? String(option.fallback) : undefined)
+			}
+			value={text}
+			width="100%"
+			invalid={badNumber}
+			onChange={(next) => set(coerceOption(option, next))}
+			onSubmit={() => ring.next()}
+		/>
+	);
 }
 
 /** The settings groups, in tab order. */
@@ -230,11 +372,29 @@ const TEXT_FIELDS = new Set([
 	"backupsDir",
 	"memory",
 	"pName",
-	"pOptions",
 	"pDnsZone",
 	"pDnsHostname",
 	"pDnsTtl",
 ]);
+
+/**
+ * Whether a ring id holds a live text field. A provider option's id is not in
+ * {@link TEXT_FIELDS} because the set of options is data — the prefix is what
+ * identifies them, and a `text`/`number` option is typed into exactly like any
+ * other field, so the shell's single-key shortcuts must stand down.
+ */
+function isTextField(
+	id: string | undefined,
+	options: NetworkOption[],
+): boolean {
+	if (id === undefined) return false;
+	if (TEXT_FIELDS.has(id)) return true;
+	return options.some(
+		(option) =>
+			optionFieldId(option.key) === id &&
+			(option.kind === "text" || option.kind === "number"),
+	);
+}
 
 /** Ring id of the tab bar — first in the ring, so Tab from the top reaches it. */
 const TABS_ID = "__tabs";
@@ -257,7 +417,6 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 		"profileDelete",
 		"pName",
 		"pProvider",
-		"pOptions",
 		"pDns",
 	],
 	appearance: ["theme", "icons"],
@@ -268,7 +427,7 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
  * skipped entirely when there is no profile to edit — unlike the list actions,
  * which keep their place in the ring and go disabled.
  */
-const PROFILE_FIELDS = new Set(["pName", "pProvider", "pOptions", "pDns"]);
+const PROFILE_FIELDS = new Set(["pName", "pProvider", "pDns"]);
 
 /**
  * The focus ring for a group: the tab bar, then the group's visible fields, then
@@ -292,6 +451,7 @@ function ringIds(
 	},
 	versionChannelIds: string[],
 	profile: ProfileDraft | undefined,
+	profileOptionIds: string[],
 ): FocusItem[] {
 	const fields: FocusItem[] = [];
 	for (const id of GROUP_FIELDS[group]) {
@@ -313,6 +473,11 @@ function ringIds(
 		fields.push(id);
 		// One per channel the default kind publishes — data, not a fixed list.
 		if (id === "mc") fields.push(...versionChannelIds);
+		// One per option the selected provider declares, in its own order — also
+		// data, and it changes the moment the Provider field does.
+		if (id === "pProvider") {
+			fields.push(...profileOptionIds.map((key) => optionFieldId(key)));
+		}
 		if (id === "overrideServers" && draft.overrideServers)
 			fields.push("serversDir");
 		if (id === "overrideBackups" && draft.overrideBackups)
@@ -457,7 +622,10 @@ export function Settings() {
 	// another profile mark the form dirty.
 	const [profileIndex, setProfileIndex] = useState(0);
 
-	const invalid = Object.keys(issues).length > 0;
+	// Validated against the *registry*, which `useSettings` cannot see, so it is
+	// computed here and folded into the same gate as the schema's own issues.
+	const badOption = optionIssue(draft?.profiles ?? [], context?.providers);
+	const invalid = Object.keys(issues).length > 0 || badOption !== undefined;
 	const canSave = dirty && !invalid && !saving;
 	const canRevert = dirty && !saving;
 
@@ -474,6 +642,15 @@ export function Settings() {
 	const shownProfile = Math.min(profileIndex, Math.max(profiles.length - 1, 0));
 	const profile = profiles[shownProfile];
 	const perProfileIssues = profileIssues(profiles)[shownProfile] ?? {};
+	// The options the selected provider declares, minus any whose condition is
+	// unmet. Read from the registry, so the form follows the provider rather than a
+	// list kept beside it.
+	const shownOptions = profile
+		? visibleOptions(
+				providerOptionSpec(context?.providers, profile.provider),
+				profile.options,
+			)
+		: [];
 	const deleteBlock = draft ? profileDeleteBlock(draft, profile) : undefined;
 	// Promoting is only meaningful for a *named* profile that is not already the
 	// default — an unnamed new row would write a default naming nothing.
@@ -498,12 +675,13 @@ export function Settings() {
 					},
 					versionChannelIds,
 					profile,
+					shownOptions.map((option) => option.key),
 				)
 			: [TABS_ID],
 	);
 
 	// Suppress the shell's digit/q/t shortcuts while a text field has the ring.
-	useCaptureKeys(ring.focus !== undefined && TEXT_FIELDS.has(ring.focus));
+	useCaptureKeys(isTextField(ring.focus, shownOptions));
 
 	// ←/→ only reach the tab bar while the ring is on it; anywhere else they are
 	// the text cursor, so the hint follows the ring rather than the page. Ctrl+S is
@@ -639,6 +817,7 @@ export function Settings() {
 		const owner = GROUP_OF_ISSUE[key];
 		if (owner) flagged.add(owner);
 	}
+	if (badOption) flagged.add("network");
 	const tabs: TabItem[] = GROUPS.map((g) => ({
 		id: g.id,
 		label: flagged.has(g.id) ? `${g.label} !` : g.label,
@@ -917,11 +1096,13 @@ export function Settings() {
 						    protected profiles are not guessable. This line is the only place
 						    they are explained. */}
 						<text fg={colors.muted} truncate wrapMode="none">
-							{deleteBlock
-								? `Cannot delete: ${deleteBlock}.`
-								: profile
-									? `Editing ${profile.name || "the new profile"} — nothing is written until you save.`
-									: "No profile selected."}
+							{badOption
+								? badOption
+								: deleteBlock
+									? `Cannot delete: ${deleteBlock}.`
+									: profile
+										? `Editing ${profile.name || "the new profile"} — nothing is written until you save.`
+										: "No profile selected."}
 						</text>
 
 						{profile ? (
@@ -963,22 +1144,28 @@ export function Settings() {
 									onChange={(v) => editProfile({ provider: v })}
 								/>
 
-								<FormGridItem span="full">
-									<Input
-										label="Options"
-										hint={
-											perProfileIssues.options ?? optionsHint(profile.provider)
-										}
-										value={profile.options}
-										placeholder="key=value, key=value"
-										width="100%"
-										invalid={perProfileIssues.options !== undefined}
-										focused={ring.isFocused("pOptions")}
-										onFocused={() => ring.setFocus("pOptions")}
-										onChange={(v) => editProfile({ options: v })}
-										onSubmit={() => ring.next()}
-									/>
-								</FormGridItem>
+								{/* One control per option the *provider* declares, rather than
+								    one text box holding `key=value` pairs. A field knows its own
+								    type, so a timeout is a number and a switch is a switch, and a
+								    field that does not apply (cloudflared's tunnel id, for a quick
+								    tunnel) is not on screen at all. */}
+								{/* The wrapper is the caller's, not the field's: `FormGrid`
+								    reads `span` off its own direct children, so a
+								    `FormGridItem` returned from inside a component is
+								    invisible to it and a `wide` option lands in a column. */}
+								{shownOptions.map((option) => (
+									<FormGridItem
+										key={option.key}
+										span={option.wide ? "full" : undefined}
+									>
+										<OptionField
+											option={option}
+											values={profile.options}
+											ring={ring}
+											onChange={(next) => editProfile({ options: next })}
+										/>
+									</FormGridItem>
+								))}
 
 								{/* DNS is a block, not a field: turning it on adds five inputs,
 								    so it spans the row and they appear beneath it rather than

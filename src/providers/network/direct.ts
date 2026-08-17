@@ -51,6 +51,25 @@ export class DirectNetwork implements NetworkProvider {
 	readonly displayName = "Direct";
 
 	/** No external binary — that is the whole point of this provider. */
+	/** @see NetworkProvider.options */
+	readonly options = [
+		{
+			key: "host",
+			label: "Advertise host",
+			kind: "text" as const,
+			hint: "a name you already own",
+			placeholder: "detected LAN address",
+		},
+		{
+			key: "publicAddress",
+			label: "Look up public address",
+			kind: "boolean" as const,
+			fallback: true,
+			hint: "asks an external echo service",
+			wide: true,
+		},
+	];
+
 	requires(): RequiredBinary[] {
 		return [];
 	}

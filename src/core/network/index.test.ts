@@ -43,6 +43,10 @@ let originalConfig: string | undefined;
 class StubNetwork implements NetworkProvider {
 	exposeCalls: ExposeRequest[] = [];
 	teardownCalls: string[] = [];
+	// The manager never reads a provider's option schema — it is the form's — so
+	// the stub declares none. Required rather than optional on the interface so a
+	// real provider cannot forget it.
+	readonly options = [];
 
 	constructor(
 		readonly id: string,

@@ -25,8 +25,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ensureDirTree, writeConfig } from "../../core/config/index.ts";
 import {
 	DIRECT_PROFILE,
-	formatOptions,
-	parseOptions,
 	profileNameIssue,
 } from "../../core/network/profiles.ts";
 import { rootPaths } from "../../lib/paths.ts";
@@ -103,8 +101,17 @@ export interface ProfileDraft {
 	name: string;
 	/** Network provider id this profile selects. */
 	provider: string;
-	/** Provider options as `key=value` pairs — the shared CLI/TUI format. */
-	options: string;
+	/**
+	 * Provider options, as the values themselves rather than as `key=value` text.
+	 *
+	 * The form renders one control per option the provider *declares*
+	 * (`NetworkProvider.options`), so a number is a number and a switch is a
+	 * boolean by the time it reaches here — there is nothing left to parse, and no
+	 * format for a user to get wrong. Keys the provider does not declare (a
+	 * hand-edited config, one written by a newer MCTL) are carried through
+	 * untouched.
+	 */
+	options: Record<string, unknown>;
 	/** Whether Cloudflare DNS records are published for this profile. */
 	dnsEnabled: boolean;
 	/** Cloudflare zone name or id. */
@@ -127,7 +134,7 @@ export function emptyProfile(name: string): ProfileDraft {
 	return {
 		name,
 		provider: DIRECT_PROFILE,
-		options: "",
+		options: {},
 		dnsEnabled: false,
 		dnsZone: "",
 		dnsHostname: "",
@@ -142,7 +149,7 @@ function profileToDraft(name: string, profile: NetworkProfile): ProfileDraft {
 	return {
 		name,
 		provider: profile.provider,
-		options: formatOptions(profile.options),
+		options: { ...(profile.options ?? {}) },
 		dnsEnabled: profile.dns !== undefined,
 		dnsZone: profile.dns?.zone ?? "",
 		dnsHostname: profile.dns?.hostname ?? "",
@@ -154,12 +161,12 @@ function profileToDraft(name: string, profile: NetworkProfile): ProfileDraft {
 
 /** Map one editable row back to the stored shape. */
 function draftToProfile(draft: ProfileDraft): NetworkProfile {
-	const options = parseOptions(draft.options);
 	return {
 		provider: draft.provider.trim(),
 		// An empty map is written as an absent key, so a profile that needs no
 		// options keeps a clean file.
-		options: Object.keys(options).length > 0 ? options : undefined,
+		options:
+			Object.keys(draft.options).length > 0 ? { ...draft.options } : undefined,
 		dns: draft.dnsEnabled
 			? {
 					zone: draft.dnsZone.trim(),
@@ -189,11 +196,10 @@ export function profileIssues(
 		else if (seen.has(profile.name)) issues.name = "already used";
 		else seen.set(profile.name, index);
 
-		try {
-			parseOptions(profile.options);
-		} catch (err) {
-			issues.options = err instanceof Error ? err.message : String(err);
-		}
+		// Options need no parse check any more: each is edited through the control
+		// its provider declared, so a number field cannot hold prose. A value that
+		// is still text where a number belongs (typed, then not finished) is caught
+		// by the form, which owns the provider schema this module cannot see.
 
 		if (profile.dnsEnabled) {
 			if (profile.dnsZone.trim() === "") issues.dnsZone = "required";

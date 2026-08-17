@@ -66,6 +66,41 @@ export class NgrokNetwork implements NetworkProvider {
 	readonly id = "ngrok";
 	readonly displayName = "ngrok";
 
+	/** @see NetworkProvider.options */
+	readonly options = [
+		{
+			key: "region",
+			label: "Region",
+			kind: "choice" as const,
+			hint: "edge location",
+			choices: [
+				{ value: "", label: "automatic", description: "ngrok's own choice" },
+				{ value: "us", label: "us" },
+				{ value: "eu", label: "eu" },
+				{ value: "ap", label: "ap" },
+				{ value: "au", label: "au" },
+				{ value: "sa", label: "sa" },
+				{ value: "jp", label: "jp" },
+				{ value: "in", label: "in" },
+			],
+			fallback: "",
+		},
+		{
+			key: "remoteAddr",
+			label: "Reserved address",
+			kind: "text" as const,
+			hint: "a paid plan's fixed address",
+			placeholder: "1.tcp.eu.ngrok.io:12345",
+		},
+		{
+			key: "timeoutSeconds",
+			label: "Start timeout",
+			kind: "number" as const,
+			hint: "seconds to wait (default 30)",
+			fallback: 30,
+		},
+	];
+
 	requires(): RequiredBinary[] {
 		return [
 			{

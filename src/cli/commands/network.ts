@@ -17,11 +17,13 @@
 
 import {
 	deleteProfile,
+	describeOptions,
 	formatOptions,
 	parseOptions,
 	saveProfile,
 	setDefaultProfile,
 } from "../../core/network/profiles.ts";
+import { createProviderRegistry } from "../../providers/index.ts";
 import { getServer, listServers } from "../../core/server/discover.ts";
 import { readinessLabel } from "../../types/network.ts";
 import {
@@ -63,17 +65,6 @@ Flags:
   --no-dns-srv             skip the _minecraft._tcp SRV record
   --no-dns                 remove DNS automation from the profile
 
-Provider options (\`--options\`), the ones worth knowing:
-  cloudflared  mode=quick            a throwaway trycloudflare.com hostname
-               mode=named            a tunnel you already defined; needs
-                                     tunnelId=<uuid> (or tunnel=<name>) and
-                                     hostname=<the one its ingress serves>.
-                                     A dashboard tunnel runs on CLOUDFLARED_TOKEN
-                                     from secrets.json instead of a tunnelId.
-  playit       address=<from the playit.gg dashboard>
-  ngrok        region, remoteAddr
-  direct       host, publicAddress=false
-
 Tunnel binaries are never downloaded by MCTL. A missing one degrades that
 profile to \`direct\` with an install hint — it never stops a server starting.`;
 
@@ -84,6 +75,7 @@ profile to \`direct\` with an install hint — it never stops a server starting.
 export async function runNetwork(argv: string[]): Promise<number> {
 	if (argv.includes("-h") || argv.includes("--help")) {
 		console.log(HELP);
+		console.log(providerOptionsHelp());
 		return 0;
 	}
 
@@ -100,6 +92,30 @@ export async function runNetwork(argv: string[]): Promise<number> {
 	} catch (err) {
 		return reportError(err);
 	}
+}
+
+/**
+ * What each provider reads out of `--options`, built from the providers
+ * themselves (`NetworkProvider.options`) rather than typed out here.
+ *
+ * It is the same declaration the Settings form renders as fields, which is the
+ * point: a provider that gains an option gains it in both front-ends at once and
+ * neither can go a phase stale. The registry is built directly because it needs
+ * no config — `--help` still works before `mctl init`.
+ */
+function providerOptionsHelp(): string {
+	const sections = createProviderRegistry()
+		.networks()
+		.map((provider) => {
+			const lines = describeOptions(provider.options);
+			return [
+				`  ${provider.id}`,
+				...(lines.length > 0
+					? lines.map((line) => `    ${line}`)
+					: ["    (no options)"]),
+			].join("\n");
+		});
+	return `Provider options, for \`profile set --options\`:\n\n${sections.join("\n\n")}`;
 }
 
 /** Providers and their readiness, plus the configured profiles. */

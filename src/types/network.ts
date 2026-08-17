@@ -38,6 +38,60 @@ export interface RequiredBinary {
 }
 
 /**
+ * One setting a network provider reads out of its profile's `options`, declared
+ * so a **form can render it** instead of asking the user to type
+ * `timeoutSeconds=45` into a free-text box.
+ *
+ * The field lives on the provider (like `ServerProvider.content`) for the reason
+ * that rule exists: only the provider knows what it reads, a UI may not import a
+ * provider, and a list kept beside the form is a list that goes a phase stale.
+ * `NetworkProfile.options` stays a loose `Record<string, unknown>` at the config
+ * boundary — this describes it for humans, it does not narrow the schema, so an
+ * option a newer MCTL writes still loads.
+ */
+export interface NetworkOption {
+	/** Key inside `profile.options`, e.g. `"tunnelId"`. */
+	key: string;
+	/** Field label, e.g. `"Tunnel id"`. */
+	label: string;
+	/** Which control renders it, and what type the value is stored as. */
+	kind: NetworkOptionKind;
+	/** Short help for the field's bottom border. Keep it under ~40 cells. */
+	hint?: string;
+	/** Placeholder for a `text` field. */
+	placeholder?: string;
+	/** The options of a `choice` field. */
+	choices?: NetworkOptionChoice[];
+	/**
+	 * What the provider does when the option is absent. A value equal to this is
+	 * stored as *nothing*, which is what keeps `config.json` down to the settings
+	 * that were actually chosen.
+	 */
+	fallback?: string | number | boolean;
+	/**
+	 * Show this field only while another option holds a given value — how
+	 * cloudflared's tunnel fields stay hidden for a quick tunnel, which does not
+	 * have them.
+	 */
+	showWhen?: { key: string; equals: string | number | boolean };
+	/** Give the field a row to itself in a two-column form. */
+	wide?: boolean;
+}
+
+/** How a {@link NetworkOption} is rendered and stored. */
+export type NetworkOptionKind = "text" | "number" | "boolean" | "choice";
+
+/** One option of a `choice` {@link NetworkOption}. */
+export interface NetworkOptionChoice {
+	/** Stored value. */
+	value: string;
+	/** Visible label. */
+	label: string;
+	/** Optional one-line explanation, shown beside the label. */
+	description?: string;
+}
+
+/**
  * Whether a provider can actually be used right now.
  *
  * A tagged union rather than a boolean because the three failure modes need

@@ -74,6 +74,25 @@ export class PlayitNetwork implements NetworkProvider {
 	readonly id = "playit";
 	readonly displayName = "playit.gg";
 
+	/** @see NetworkProvider.options */
+	readonly options = [
+		{
+			key: "address",
+			label: "Tunnel address",
+			kind: "text" as const,
+			hint: "from your playit.gg dashboard",
+			placeholder: "alpha-beta.craft.ply.gg",
+			wide: true,
+		},
+		{
+			key: "timeoutSeconds",
+			label: "Start timeout",
+			kind: "number" as const,
+			hint: "seconds to wait (default 20)",
+			fallback: 20,
+		},
+	];
+
 	requires(): RequiredBinary[] {
 		return [
 			{

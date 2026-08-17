@@ -193,6 +193,67 @@ export class CloudflaredNetwork implements NetworkProvider {
 	readonly id = "cloudflared";
 	readonly displayName = "Cloudflare Tunnel";
 
+	/**
+	 * @see NetworkProvider.options
+	 *
+	 * `mode` comes first because it decides whether the rest apply at all, and the
+	 * three tunnel fields are hidden behind it — a quick tunnel has no id, no name
+	 * and no hostname to give, so offering them would be offering settings that do
+	 * nothing.
+	 */
+	readonly options = [
+		{
+			key: "mode",
+			label: "Tunnel",
+			kind: "choice" as const,
+			hint: "which Cloudflare product to run",
+			choices: [
+				{
+					value: "quick",
+					label: "quick",
+					description: "a trycloudflare.com hostname, no account",
+				},
+				{
+					value: "named",
+					label: "pre-defined",
+					description: "a tunnel you already created",
+				},
+			],
+			fallback: "quick",
+			wide: true,
+		},
+		{
+			key: "tunnelId",
+			label: "Tunnel id",
+			kind: "text" as const,
+			hint: "the UUID the dashboard shows",
+			placeholder: "6ff42ae2-765d-4adf-8112-31c55c1551ef",
+			showWhen: { key: "mode", equals: "named" },
+		},
+		{
+			key: "hostname",
+			label: "Hostname",
+			kind: "text" as const,
+			hint: "what its ingress serves",
+			placeholder: "mc.example.com",
+			showWhen: { key: "mode", equals: "named" },
+		},
+		{
+			key: "tunnel",
+			label: "Tunnel name",
+			kind: "text" as const,
+			hint: "only if you have no id",
+			showWhen: { key: "mode", equals: "named" },
+		},
+		{
+			key: "timeoutSeconds",
+			label: "Start timeout",
+			kind: "number" as const,
+			hint: "seconds to wait (default 30)",
+			fallback: 30,
+		},
+	];
+
 	requires(): RequiredBinary[] {
 		return [
 			{
