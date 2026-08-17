@@ -21,9 +21,13 @@ _Last updated: 2026-08-17 (network profile management + the Server settings form
     with `--provider`, `--options`, the five `--dns-*` flags and `--no-dns`. A partial `set` merges
     over the profile it edits; an unknown provider id is refused with the list this build has; `rm`
     names the servers it just stranded.
-  - `src/app/Settings/` — the Network group is now an editor: default-profile picker, a profile
-    picker, then Name / Provider / Options / Cloudflare DNS (zone, hostname, TTL, SRV, proxied) and
-    Add/Delete. `SettingsDraft` gained `profiles: ProfileDraft[]` (an array, not a record — a record
+  - `src/app/Settings/` — the Network group is now an editor: a profile picker and the three list
+    actions (New profile / Make default / Delete <name>) above, then that profile's Name / Provider
+    / Options / Cloudflare DNS (zone, hostname, TTL, SRV, proxied). The list actions were moved up
+    out of the field stack after the user reported "Add profile" reading as part of the profile
+    being edited; a new row starts **unnamed** with the cursor in its Name field; and the separate
+    "Default profile" radio group was dropped for a `· default` marker on the profile itself.
+    `Select` gained the `invalid` prop `Input` already had. `SettingsDraft` gained `profiles: ProfileDraft[]` (an array, not a record — a record
     cannot express a rename), `profileIssues` for per-field marks, and `validateDraft` rolls them up
     so the Network tab is flagged from any group. A save that strands a server raises a warning toast.
   - `src/app/Network/index.tsx` — a *Manage profiles* button and `p`, both navigating to

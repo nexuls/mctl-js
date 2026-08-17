@@ -123,13 +123,22 @@ const ICON_MODES: RadioItem<IconMode>[] = [
  * saves. Each option is described by the provider it selects, since a profile
  * name alone says nothing.
  */
-function profileOptions(profiles: ProfileDraft[]): RadioItem<string>[] {
+export function profileOptions(
+	profiles: ProfileDraft[],
+	defaultProfile: string,
+): SelectItem<string>[] {
 	return profiles.map((profile) => ({
 		label: profile.name || "(unnamed)",
 		value: profile.name,
-		description: profile.dnsEnabled
-			? `${profile.provider} + dns ${profile.dnsHostname}`
-			: profile.provider,
+		description: [
+			profile.provider,
+			profile.dnsEnabled ? `dns ${profile.dnsHostname}` : undefined,
+			// Which profile new servers get is a property *of* a profile, so it is
+			// shown on the profile rather than in a second list beside this one.
+			profile.name === defaultProfile ? "default" : undefined,
+		]
+			.filter(Boolean)
+			.join(" · "),
 	}));
 }
 
@@ -236,12 +245,14 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 	locations: ["overrideServers", "overrideBackups"],
 	defaults: ["kind", "mc", "memory", "runtime", "eula"],
 	backups: ["backupEnabled"],
-	// The default-profile picker, then the profile editor: "which profile do new
-	// servers get" is the question a user arrives with, and the editor below
-	// answers "and what is in one".
+	// Choosing a profile and acting on the *list* come first — New / Make default
+	// / Delete are things done to profiles, not fields of the one being edited —
+	// and only then the selected profile's own fields.
 	network: [
-		"network",
 		"profileSelect",
+		"profileNew",
+		"profileDefault",
+		"profileDelete",
 		"pName",
 		"pProvider",
 		"pOptions",
@@ -249,6 +260,13 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 	],
 	appearance: ["theme", "icons"],
 };
+
+/**
+ * Ring ids belonging to the *selected* profile rather than to the list. They are
+ * skipped entirely when there is no profile to edit — unlike the list actions,
+ * which keep their place in the ring and go disabled.
+ */
+const PROFILE_FIELDS = new Set(["pName", "pProvider", "pOptions", "pDns"]);
 
 /**
  * The focus ring for a group: the tab bar, then the group's visible fields, then
@@ -264,16 +282,32 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 function ringIds(
 	group: GroupId,
 	draft: SettingsDraft,
-	actions: { canRevert: boolean; canSave: boolean; canDeleteProfile: boolean },
+	actions: {
+		canRevert: boolean;
+		canSave: boolean;
+		canDeleteProfile: boolean;
+		canMakeDefault: boolean;
+	},
 	versionChannelIds: string[],
 	profile: ProfileDraft | undefined,
 ): FocusItem[] {
 	const fields: FocusItem[] = [];
 	for (const id of GROUP_FIELDS[group]) {
-		// The profile editor's fields only exist while there *is* a profile to
-		// edit — a config with none is impossible in practice (`direct` cannot be
-		// removed) but the ring must not name fields that are not on screen.
-		if (id.startsWith("p") && id !== "profileSelect" && !profile) continue;
+		// The selected profile's own fields only exist while there *is* one to edit —
+		// a config with none is impossible in practice (`direct` cannot be removed)
+		// but the ring must not name fields that are not on screen.
+		if (PROFILE_FIELDS.has(id) && !profile) continue;
+		// The two list actions that need a selection carry the same disabled
+		// condition as their buttons rather than being dropped: they hold their place
+		// in the ring while the reason is printed beside them.
+		if (id === "profileDelete") {
+			fields.push({ id, disabled: !actions.canDeleteProfile });
+			continue;
+		}
+		if (id === "profileDefault") {
+			fields.push({ id, disabled: !actions.canMakeDefault });
+			continue;
+		}
 		fields.push(id);
 		// One per channel the default kind publishes — data, not a fixed list.
 		if (id === "mc") fields.push(...versionChannelIds);
@@ -296,14 +330,6 @@ function ringIds(
 				"pDnsProxied",
 			);
 		}
-	}
-	// The profile actions sit at the end of the group, before the page's own
-	// action bar: they act on the profile above them, not on the whole form.
-	if (group === "network") {
-		fields.push("profileAdd", {
-			id: "profileDelete",
-			disabled: !actions.canDeleteProfile,
-		});
 	}
 	return [
 		TABS_ID,
@@ -447,6 +473,12 @@ export function Settings() {
 	const profile = profiles[shownProfile];
 	const perProfileIssues = profileIssues(profiles)[shownProfile] ?? {};
 	const deleteBlock = draft ? profileDeleteBlock(draft, profile) : undefined;
+	// Promoting is only meaningful for a *named* profile that is not already the
+	// default — an unnamed new row would write a default naming nothing.
+	const canMakeDefault =
+		profile !== undefined &&
+		profile.name.trim() !== "" &&
+		profile.name !== draft?.network;
 
 	// The ring depends on the visible group, the override toggles and whether the
 	// action buttons are live, so it is rebuilt every render from the draft rather
@@ -460,6 +492,7 @@ export function Settings() {
 						canRevert,
 						canSave,
 						canDeleteProfile: deleteBlock === undefined && !saving,
+						canMakeDefault,
 					},
 					versionChannelIds,
 					profile,
@@ -570,15 +603,21 @@ export function Settings() {
 		edit({ profiles: next, ...renamed });
 	};
 
-	/** Append a new profile and move the editor onto it. */
+	/**
+	 * Append a new profile, move the editor onto it and put the cursor in its Name
+	 * field.
+	 *
+	 * The row starts **unnamed** rather than as `profile-4`: a generated name is
+	 * one the user has to notice, select and delete, and it would also be
+	 * immediately savable — a profile nobody meant to keep. An empty name is
+	 * flagged `required` and holds Save until it is given one, which is the
+	 * form saying what it needs. Focus moves there so the next keystroke is the
+	 * name.
+	 */
 	const addProfile = () => {
-		// Named `profile-N` for the first N that is free, so adding two in a row
-		// does not produce a duplicate name the form immediately flags.
-		let n = draft.profiles.length + 1;
-		const taken = new Set(draft.profiles.map((entry) => entry.name));
-		while (taken.has(`profile-${n}`)) n += 1;
-		edit({ profiles: [...draft.profiles, emptyProfile(`profile-${n}`)] });
+		edit({ profiles: [...draft.profiles, emptyProfile("")] });
 		setProfileIndex(draft.profiles.length);
+		ring.setFocus("pName");
 	};
 
 	/** Remove the shown profile from the draft; it disappears from disk on Save. */
@@ -810,44 +849,78 @@ export function Settings() {
 				) : null}
 
 				{group === "network" ? (
-					<Section description="A profile is a way of exposing a server. The Network page shows which providers this machine can actually use.">
-						<FormGrid>
-							<RadioGroup
-								label="Default profile"
-								hint="given to newly created servers"
-								options={profileOptions(draft.profiles)}
-								value={draft.network}
-								focused={ring.isFocused("network")}
-								onFocused={() => ring.setFocus("network")}
-								onChange={(v) => edit({ network: v })}
-							/>
+					<Section description="A profile is a way of exposing a server; a new server is given the default one. The Network page shows which providers this machine can actually use.">
+						{/* The list and the actions that act on it, above the editor and
+						    visually separate from it. They used to sit under the fields, where
+						    "Add profile" read as part of the profile being edited (user
+						    report). Choosing, creating, promoting and deleting are all things
+						    done to the *list*; the fields below belong to one member of it. */}
+						<Select
+							label="Profile"
+							hint={
+								issues.network ??
+								`${draft.profiles.length} defined · default is ${draft.network}`
+							}
+							options={profileOptions(draft.profiles, draft.network)}
+							value={profile?.name ?? ""}
+							width="100%"
+							maxVisible={6}
+							invalid={issues.network !== undefined}
+							focused={ring.isFocused("profileSelect")}
+							onFocused={() => ring.setFocus("profileSelect")}
+							onChange={(name) => {
+								const at = draft.profiles.findIndex((p) => p.name === name);
+								if (at >= 0) setProfileIndex(at);
+							}}
+						/>
 
-							{/* Which profile the fields below edit. A picker rather than a
-							    list of expanded profiles: every profile carries up to nine
-							    fields, and stacking them would put the Save button several
-							    screens down. */}
-							<Select
-								label="Editing"
-								hint={
-									issues.network ??
-									`${draft.profiles.length} profile${draft.profiles.length === 1 ? "" : "s"} defined`
-								}
-								options={profileOptions(draft.profiles).map((option) => ({
-									label: option.label,
-									value: option.value,
-									description: option.description,
-								}))}
-								value={profile?.name ?? ""}
-								width="100%"
-								maxVisible={6}
-								focused={ring.isFocused("profileSelect")}
-								onFocused={() => ring.setFocus("profileSelect")}
-								onChange={(name) => {
-									const at = draft.profiles.findIndex((p) => p.name === name);
-									if (at >= 0) setProfileIndex(at);
-								}}
-							/>
-						</FormGrid>
+						<box flexDirection="row" gap={2} alignItems="center">
+							<Button
+								size="small"
+								kind="ghost"
+								variant="primary"
+								focused={ring.isFocused("profileNew")}
+								onFocused={() => ring.setFocus("profileNew")}
+								onClick={addProfile}
+							>
+								New profile
+							</Button>
+							<Button
+								size="small"
+								kind="ghost"
+								variant="neutral"
+								disabled={!canMakeDefault}
+								focused={ring.isFocused("profileDefault")}
+								onFocused={() => ring.setFocus("profileDefault")}
+								onClick={() => profile && edit({ network: profile.name })}
+							>
+								Make default
+							</Button>
+							{/* Named, so the button cannot be read as "delete profiles" or as
+							    an action on the whole form. */}
+							<Button
+								size="small"
+								kind="ghost"
+								variant="error"
+								disabled={deleteBlock !== undefined || saving}
+								focused={ring.isFocused("profileDelete")}
+								onFocused={() => ring.setFocus("profileDelete")}
+								onClick={removeProfile}
+							>
+								{profile ? `Delete ${profile.name || "profile"}` : "Delete"}
+							</Button>
+						</box>
+
+						{/* A disabled button with no stated reason reads as a bug, and the two
+						    protected profiles are not guessable. This line is the only place
+						    they are explained. */}
+						<text fg={colors.muted} truncate wrapMode="none">
+							{deleteBlock
+								? `Cannot delete: ${deleteBlock}.`
+								: profile
+									? `Editing ${profile.name || "the new profile"} — nothing is written until you save.`
+									: "No profile selected."}
+						</text>
 
 						{profile ? (
 							// Keyed by row, so switching profiles **remounts** these fields.
@@ -989,35 +1062,6 @@ export function Settings() {
 								) : null}
 							</FormGrid>
 						) : null}
-
-						<box flexDirection="row" gap={2} alignItems="center">
-							<Button
-								size="small"
-								kind="ghost"
-								variant="primary"
-								focused={ring.isFocused("profileAdd")}
-								onFocused={() => ring.setFocus("profileAdd")}
-								onClick={addProfile}
-							>
-								Add profile
-							</Button>
-							<Button
-								size="small"
-								kind="ghost"
-								variant="error"
-								disabled={deleteBlock !== undefined || saving}
-								focused={ring.isFocused("profileDelete")}
-								onFocused={() => ring.setFocus("profileDelete")}
-								onClick={removeProfile}
-							>
-								Delete profile
-							</Button>
-							{/* A disabled button with no stated reason reads as a bug; this is
-							    the one place the two protected profiles are explained. */}
-							<text fg={colors.muted} truncate wrapMode="none">
-								{deleteBlock ?? "Changes apply when you save."}
-							</text>
-						</box>
 					</Section>
 				) : null}
 

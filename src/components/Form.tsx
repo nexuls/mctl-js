@@ -415,6 +415,8 @@ export interface SelectProps<T = string> {
 	forceDropdown?: boolean;
 	/** Mark the field required. */
 	required?: boolean;
+	/** Mark the field invalid (error border), as {@link Input} does. */
+	invalid?: boolean;
 	/**
 	 * Fixed outer field width in cells. Also decides the tabs-vs-dropdown cutoff:
 	 * options that fit within it render as side-by-side tabs, otherwise as a
@@ -464,6 +466,7 @@ export function Select<T = string>({
 	onFocused,
 	forceDropdown = false,
 	required = false,
+	invalid = false,
 	width = 40,
 	maxVisible = 5,
 	prefix,
@@ -588,6 +591,7 @@ export function Select<T = string>({
 			hint={hint}
 			required={required}
 			focused={focused}
+			invalid={invalid}
 			onFocused={onFocused}
 			width={width}
 			prefix={prefix}

@@ -32,6 +32,19 @@ shortcut from the Network page; the server form limited to what `editServer` sup
   deletes from the draft, so a save would otherwise carry a config whose invariants are broken.
   A *server* naming a deleted profile is **not** an error: it degrades to direct, which both
   front-ends now say out loud (the CLI prints the affected ids, the TUI raises a warning toast).
+- **List actions must sit with the list, not under the fields** (2026-08-17, user report: "editing
+  profile shows 'add profile' button, and clicking it creates a new profile"). Choosing, creating,
+  promoting and deleting act on the *collection*; the fields below act on one member. With
+  New/Delete under the fields they read as part of the profile being edited. The picker, the three
+  buttons and one status line now come first, Delete names its target (`Delete cf-tunnel`), and the
+  status line explains a disabled Delete — the two protected profiles are not guessable.
+  - **A new row starts unnamed and takes the focus**, rather than being created as `profile-4`. A
+    generated name has to be noticed, selected and deleted, and it is immediately savable — a
+    profile nobody meant to keep. An empty name is `required`, which holds Save until the user
+    answers, and `ring.setFocus("pName")` means the next keystroke is the answer.
+  - **The "Default profile" radio group is gone.** It listed the same names as the picker beside
+    it; being the default is a property *of* a profile, so it is a `· default` marker in the
+    option's own description plus a *Make default* button acting on the selection.
 - **`key=value` is one format shared by both front-ends** (`parseOptions`/`formatOptions`), values
   read as JSON when they parse as one. A numeric *string* must therefore be written quoted so it
   round-trips — pinned by a test. `--option` could not be repeatable because `parseArgs` stores
