@@ -39,6 +39,7 @@ Commands:
                        (content enable|disable <id> <file>)
   java list|install    inspect or install Java runtimes
   network [up|down]    join addresses, tunnels, and DNS
+                       (network profile set|rm|default to manage profiles)
 
 Planned:
   backup|restore <id>  (Phase 4)
