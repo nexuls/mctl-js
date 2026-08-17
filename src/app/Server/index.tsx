@@ -52,7 +52,7 @@ import { WorldTab } from "./tabs/World.tsx";
 import { ContentTab } from "./tabs/Content.tsx";
 import { BackupsTab } from "./tabs/Backups.tsx";
 import { PerformanceTab } from "./tabs/Performance.tsx";
-import { NetworkTab } from "./tabs/Network.tsx";
+import { NETWORK_APPLY_ID, NetworkTab } from "./tabs/Network.tsx";
 import { SettingsTab, serverSettingsRingIds } from "./tabs/Settings.tsx";
 
 /** Which lifecycle action is currently in flight, for the button labels. */
@@ -138,6 +138,11 @@ export function ServerDetail() {
 			// The Settings tab is a form: its fields join *this* ring rather than
 			// opening one of their own, because only one ring may listen at a time.
 			...(tab === "settings" ? serverSettingsRingIds(settingsForm) : []),
+			// The Network tab's one action. Disabled exactly as its button is —
+			// re-applying a profile needs a running server.
+			...(tab === "network"
+				? [{ id: NETWORK_APPLY_ID, disabled: !running }]
+				: []),
 		],
 		// A modal takes the keyboard while it is up: with both rings listening, one
 		// Tab would move the page's focus *behind* the dialog.
@@ -270,7 +275,7 @@ export function ServerDetail() {
 			case "performance":
 				return <PerformanceTab {...tabProps} />;
 			case "network":
-				return <NetworkTab {...tabProps} />;
+				return <NetworkTab {...tabProps} focus={ring} />;
 			case "settings":
 				return (
 					<SettingsTab

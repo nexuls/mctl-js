@@ -20,13 +20,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { Config } from "../../types/config.ts";
-import type {
-	Endpoint,
-	ExposeRequest,
-	NetStatus,
-	Readiness,
-	RequiredBinary,
+import { secretsFile } from "../../lib/paths.ts";
+import {
+	TunnelStartError,
+	type Endpoint,
+	type ExposeRequest,
+	type NetStatus,
+	type Readiness,
+	type RequiredBinary,
 } from "../../types/network.ts";
 import type { NetworkProvider } from "../../types/provider.ts";
 import type { Server } from "../../types/server.ts";
@@ -55,6 +59,8 @@ class StubNetwork implements NetworkProvider {
 			readiness?: Readiness;
 			endpoint?: Endpoint;
 			throwOnExpose?: string;
+			/** Thrown instead, to exercise the agent-output enrichment. */
+			throwTunnelError?: { message: string; output: string };
 			status?: NetStatus;
 		} = {},
 	) {}
@@ -69,6 +75,14 @@ class StubNetwork implements NetworkProvider {
 
 	async expose(request: ExposeRequest): Promise<Endpoint> {
 		this.exposeCalls.push(request);
+		if (this.behaviour.throwTunnelError) {
+			throw new TunnelStartError(
+				this.id,
+				request.serverId,
+				this.behaviour.throwTunnelError.message,
+				this.behaviour.throwTunnelError.output,
+			);
+		}
 		if (this.behaviour.throwOnExpose) {
 			throw new Error(this.behaviour.throwOnExpose);
 		}
@@ -417,5 +431,113 @@ describe("scopedSecrets", () => {
 
 	test("a provider with no secrets gets an empty object, not everything", () => {
 		expect(scopedSecrets("direct", { NGROK_TOKEN: "a" })).toEqual({});
+	});
+});
+
+/**
+ * DNS is reported, not silently skipped.
+ *
+ * Both of these were live defects: a profile with a DNS block and no API token
+ * published nothing and said nothing anywhere (the start path dropped the error
+ * on the floor), and a pre-defined Cloudflare tunnel would have had MCTL write a
+ * CNAME from its hostname to itself — over the record that actually makes the
+ * tunnel reachable.
+ */
+describe("dns", () => {
+	/** Put a Cloudflare token in the temp config home this test's paths resolve to. */
+	async function withToken(): Promise<void> {
+		// The config dir is a fresh temp for each test and nothing has created it.
+		await mkdir(dirname(secretsFile()), { recursive: true });
+		await writeFile(
+			secretsFile(),
+			JSON.stringify({ CLOUDFLARE_TOKEN: "test-token" }),
+			{ mode: 0o600 },
+		);
+	}
+
+	const dnsProfile = (hostname: string) => ({
+		direct: { provider: "direct" },
+		cf: {
+			provider: "cf",
+			dns: { zone: "example.com", hostname },
+		},
+	});
+
+	test("a hostname the tunnel already serves is skipped, not published", async () => {
+		// The endpoint's host *is* the hostname: `cloudflared tunnel route dns`
+		// owns that record, and writing our own would point the name at itself.
+		const tunnel = new StubNetwork("cf", "Cloudflare Tunnel", {
+			endpoint: {
+				host: "mc.example.com",
+				port: 443,
+				joinAddress: "mc.example.com",
+				kind: "tunnel",
+				provider: "cf",
+			},
+		});
+		const net = manager(dnsProfile("mc.example.com"), [direct(), tunnel]);
+		const result = await net.expose(server({ network: "cf" }), 25565);
+
+		expect(result.dnsSkipped).toMatch(/already serves that hostname/);
+		expect(result.dnsError).toBeUndefined();
+		expect(result.dnsHostname).toBeUndefined();
+		// And the endpoint is untouched — nothing to swap in, no "origin" alternate.
+		expect(result.endpoint.joinAddress).toBe("mc.example.com");
+	});
+
+	test("a configured hostname with no token reports why nothing was published", async () => {
+		const tunnel = new StubNetwork("cf", "Cloudflare Tunnel");
+		const net = manager(dnsProfile("mc.example.com"), [direct(), tunnel]);
+		const result = await net.expose(server({ network: "cf" }), 25565);
+		expect(result.dnsError).toMatch(/CLOUDFLARE_TOKEN/);
+	});
+
+	test("status reports the standing DNS state, token or not", async () => {
+		const net = manager(dnsProfile("mc.example.com"), [
+			direct(),
+			new StubNetwork("cf", "Cloudflare Tunnel"),
+		]);
+		const stopped = server({ network: "cf", state: "stopped" });
+
+		const without = await net.status(stopped);
+		expect(without.dns?.state).toBe("no-token");
+		expect(without.dns?.hostname).toBe("mc.example.com");
+		expect(without.dns?.detail).toMatch(/mctl secret set/);
+
+		await withToken();
+		const withIt = await net.status(stopped);
+		expect(withIt.dns?.state).toBe("ready");
+		expect(withIt.dns?.detail).toBeUndefined();
+	});
+
+	test("a profile without DNS reports none", async () => {
+		const net = manager({ direct: { provider: "direct" } }, [direct()]);
+		expect((await net.status(server())).dns).toBeUndefined();
+	});
+});
+
+describe("degradation detail", () => {
+	test("carries the agent's own last line, not just the timeout", async () => {
+		// "cloudflared did not announce an address within 30s" is the symptom;
+		// "tunnel credentials file not found" is the cause and the thing a user can
+		// act on. Reporting only the first is what makes a tunnel look mysterious.
+		const tunnel = new StubNetwork("cf", "Cloudflare Tunnel", {
+			throwTunnelError: {
+				message: "cf did not announce an address within 30s",
+				output:
+					"2026-08-17T09:00:00Z INF Starting tunnel\ntunnel credentials file not found",
+			},
+		});
+		const net = manager(
+			{ direct: { provider: "direct" }, cf: { provider: "cf" } },
+			[direct(), tunnel],
+		);
+		const result = await net.expose(server({ network: "cf" }), 25565);
+
+		expect(result.provider).toBe("direct");
+		expect(result.degradedReason).toContain("did not announce an address");
+		expect(result.degradedReason).toContain(
+			"tunnel credentials file not found",
+		);
 	});
 });

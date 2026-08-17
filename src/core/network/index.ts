@@ -24,12 +24,14 @@
 import { log } from "../../lib/logger.ts";
 import type { Config, NetworkProfile } from "../../types/config.ts";
 import { EventType } from "../../types/events.ts";
-import type {
-	Endpoint,
-	ExposeRequest,
-	NetStatus,
-	Readiness,
-	RequiredBinary,
+import {
+	TunnelStartError,
+	type DnsStatus,
+	type Endpoint,
+	type ExposeRequest,
+	type NetStatus,
+	type Readiness,
+	type RequiredBinary,
 } from "../../types/network.ts";
 import type { NetworkProvider } from "../../types/provider.ts";
 import type { Server } from "../../types/server.ts";
@@ -92,6 +94,12 @@ export interface ExposeResult {
 	dnsHostname?: string;
 	/** Set when DNS was configured but failed; the server is up regardless. */
 	dnsError?: string;
+	/**
+	 * Set when DNS was configured and deliberately **not** written — today only
+	 * for a hostname the tunnel already serves. Distinct from `dnsError` because
+	 * nothing is wrong: there is simply nothing for MCTL to publish.
+	 */
+	dnsSkipped?: string;
 }
 
 export class NetworkManager {
@@ -232,6 +240,7 @@ export class NetworkManager {
 			degradedReason,
 			dnsHostname: dns?.hostname,
 			dnsError: dns?.error,
+			dnsSkipped: dns?.skipped,
 		};
 	}
 
@@ -317,6 +326,8 @@ export class NetworkManager {
 			};
 		}
 
+		const dns = await this.#dnsStatus(profile);
+
 		// Asked of *every* provider, not just the profile's: the live tunnel may
 		// have been started under a different profile, and reporting "down" while
 		// an ngrok agent is running would be a lie the user cannot act on.
@@ -346,7 +357,29 @@ export class NetworkManager {
 				server.state === "running"
 					? "no endpoint is recorded for this server"
 					: undefined,
+			dns,
 		};
+	}
+
+	/**
+	 * What this profile's DNS automation can do right now, or `undefined` when it
+	 * configures none.
+	 *
+	 * Re-derived like everything else: whether a token exists is a fact about the
+	 * filesystem this second, and it is the single most common reason records are
+	 * not published — silently, since nothing publishes anything without one.
+	 */
+	async #dnsStatus(profile: NetworkProfile): Promise<DnsStatus | undefined> {
+		if (!profile.dns) return undefined;
+		const secrets = await loadSecrets();
+		if (!secrets[CLOUDFLARE_TOKEN_KEY]) {
+			return {
+				hostname: profile.dns.hostname,
+				state: "no-token",
+				detail: `no ${CLOUDFLARE_TOKEN_KEY} in secrets.json — records are not published (set one with \`mctl secret set ${CLOUDFLARE_TOKEN_KEY}\`)`,
+			};
+		}
+		return { hostname: profile.dns.hostname, state: "ready" };
 	}
 
 	/** Assemble a provider's request, handing it only its own secrets. */
@@ -422,8 +455,19 @@ export class NetworkManager {
 		profile: NetworkProfile,
 		endpoint: Endpoint,
 		secrets: Readonly<Record<string, string>>,
-	): Promise<{ hostname?: string; error?: string } | undefined> {
+	): Promise<
+		{ hostname?: string; error?: string; skipped?: string } | undefined
+	> {
 		if (!profile.dns) return undefined;
+		// Nothing to publish when the address already *is* the hostname: that is a
+		// pre-defined Cloudflare tunnel, whose record was created by
+		// `cloudflared tunnel route dns` and points at `<uuid>.cfargotunnel.com`.
+		// Writing our own would be a CNAME from the name to itself, which either
+		// the API rejects or resolution breaks on — and which would replace the
+		// record that actually makes the tunnel reachable.
+		if (isSelfReferential(profile.dns.hostname, endpoint)) {
+			return { skipped: SELF_DNS_DETAIL };
+		}
 		const token = secrets[CLOUDFLARE_TOKEN_KEY];
 		if (!token) {
 			return {
@@ -450,6 +494,29 @@ export class NetworkManager {
 			return { error: detail };
 		}
 	}
+}
+
+/** What the UI says about a profile publishing a name the tunnel already serves. */
+const SELF_DNS_DETAIL =
+	"this tunnel already serves that hostname — `cloudflared tunnel route dns` owns the record, so MCTL publishes nothing";
+
+/**
+ * Whether publishing `hostname` for this endpoint would point the name at
+ * itself.
+ *
+ * True for a pre-defined Cloudflare tunnel, whose announced host *is* the
+ * hostname its ingress serves. Compared case-insensitively and without a
+ * trailing dot, because DNS names are, and a mismatch here would write the very
+ * record this exists to prevent.
+ */
+function isSelfReferential(
+	hostname: string,
+	endpoint: Endpoint | undefined,
+): boolean {
+	if (!endpoint) return false;
+	const normal = (value: string) =>
+		value.trim().replace(/\.$/, "").toLowerCase();
+	return normal(hostname) === normal(endpoint.host);
 }
 
 /**
@@ -489,7 +556,37 @@ function describeReadiness(name: string, readiness: Readiness): string {
 	}
 }
 
-/** An error's message without the stack, for a user-facing string. */
+/**
+ * An error's message without the stack, for a user-facing string.
+ *
+ * A {@link TunnelStartError} carries the tail of the agent's **own** output, and
+ * that is the only real diagnosis there is: "cloudflared did not announce an
+ * address within 30s" describes the symptom, while the line the agent printed
+ * ("tunnel credentials file not found") names the cause and what to do about it.
+ * Reporting only the timeout is what makes a broken tunnel look like a mystery.
+ */
 function errorText(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
+	if (!(err instanceof Error)) return String(err);
+	const output =
+		err instanceof TunnelStartError
+			? lastMeaningfulLine(err.output)
+			: undefined;
+	return output ? `${err.message} — the agent said: ${output}` : err.message;
+}
+
+/**
+ * The last line of an agent's output that says something.
+ *
+ * Blank lines and the progress/banner noise agents print while starting are
+ * dropped, and only one line is kept: this ends up in a table cell and a toast
+ * description, and the full capture is in `network/<id>.log` for anyone who
+ * wants it.
+ */
+function lastMeaningfulLine(output: string | undefined): string | undefined {
+	const line = (output ?? "")
+		.split("\n")
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0)
+		.at(-1);
+	return line && line.length > 200 ? `${line.slice(0, 200)}…` : line;
 }

@@ -9,6 +9,42 @@ _Last updated: 2026-08-17 (network profile management + the Server settings form
 
 ## Done
 
+- **The reported tunnel/DNS failures, fixed at the cause (2026-08-17, user report).** "The
+  cloudflared DNS doesn't seem to work, neither the cloudflare tunnels." Diagnosed from the user's
+  real `~/.local/state/mctl`: `secrets.json` was empty (so DNS could never publish, silently) and the
+  tunnel agent's log said `tunnel credentials file not found` while the user was shown only a 30s
+  timeout.
+  - `src/core/config/secrets.ts` (**new**) — `listSecrets` / `setSecret` / `unsetSecret` /
+    `secretKeyIssue` / `KNOWN_SECRETS`. No value is ever returned, logged or printed; the file stays
+    `0600` and an `MCTL_*` environment override is never persisted into it.
+  - `src/cli/commands/secret.ts` (**new**) + router — `mctl secret list|set|unset`, reading the value
+    from **stdin** by default.
+  - `src/hooks/use-secrets.ts` (**new**) + a **Secrets group** in Settings: pick a key, paste a
+    value, Store/Remove, and a list of what is set (key, length, source, consumer). Stored
+    immediately, never part of the settings draft, field cleared on success.
+  - `src/types/network.ts` — `TunnelStartError` moved here from `providers/network/agent.ts` (core
+    must not import a provider) and gained `NetStatus.dns` + `DnsStatus`.
+  - `src/core/network/index.ts` — `errorText` now appends the agent's own last line to
+    `degradedReason`; `#syncDns` skips a **self-referential** hostname (a pre-defined tunnel already
+    serves it) and reports `dnsSkipped`; `status()` reports the standing DNS state, including the
+    missing token, with the command that fixes it.
+  - `src/core/runtime/index.ts` — a DNS failure at start is no longer dropped; it is logged.
+  - `src/app/Server/tabs/Network.tsx` — a **DNS panel** (hostname, state, reason) and a **Re-apply**
+    button, the TUI peer of `mctl network up`, joined to the container's ring and disabled unless the
+    server runs. `useNetworkStatus` gained `refresh()`.
+  - Tests (**633 total**, +15): `core/config/secrets.test.ts` (10, against a real 0600 file) and five
+    in `core/network/index.test.ts` (the self-referential skip, the no-token error, the two status
+    states, and the agent-output enrichment).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 633 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. CLI: set/list/unset round-tripped with mode 600
+    and a rejected lower-case key. **In tmux at 140×44**: the Secrets group stored a token (field
+    cleared, list showing `24 chars · secrets.json · used by cloudflare`, no value on screen), and
+    the Server page's Network tab showed DNS `published on start` with a token and
+    `not published — no CLOUDFLARE_TOKEN …` without one.
+  - **Not verified against a real account:** an actual record write. The user's own next step is
+    `mctl secret set CLOUDFLARE_TOKEN` (for DNS) and `CLOUDFLARED_TOKEN` (for their dashboard
+    tunnel).
+
 - **Provider options are fields, not a `key=value` box (2026-08-17, user report).** "All those
   specific options are in the options field, for all the provider. It's not a good user experience."
   - `src/types/network.ts` (**new** `NetworkOption`, `NetworkOptionKind`, `NetworkOptionChoice`) +

@@ -20,13 +20,12 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { networkFile, networkLogFile } from "../../lib/paths.ts";
-import type { TunnelSession } from "../../types/network.ts";
+import { TunnelStartError, type TunnelSession } from "../../types/network.ts";
 import {
 	readTunnel,
 	startAgent,
 	stopAgent,
 	tailLog,
-	TunnelStartError,
 	writeTunnel,
 	type AnnouncedAddress,
 } from "./agent.ts";

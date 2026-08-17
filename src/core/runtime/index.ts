@@ -284,6 +284,17 @@ export class RuntimeManager {
 					"network profile degraded to direct",
 				);
 			}
+			// A DNS failure used to be dropped on the floor here: the server started,
+			// nothing was published, and nothing anywhere said so — which is exactly
+			// what "the DNS doesn't work" looks like from outside. The standing
+			// condition is also reported live by `NetworkManager.status`, but this is
+			// the line that names *this* attempt's failure.
+			if (result.dnsError) {
+				logger.warn(
+					{ id: server.id, err: result.dnsError },
+					"dns records were not published",
+				);
+			}
 		} catch (err) {
 			logger.warn(
 				{ id: server.id, err: String(err) },

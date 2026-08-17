@@ -86,10 +86,20 @@ export function useNetworkOverview(): NetworkOverview {
 export function useNetworkStatus(server: Server | undefined): {
 	status?: NetStatus;
 	loading: boolean;
+	/**
+	 * Re-read now rather than on the next tick. For an action the user just took
+	 * (re-applying a profile): a five-second wait to see one's own change is the
+	 * difference between an app that responds and one that seems not to have
+	 * heard.
+	 */
+	refresh: () => void;
 } {
 	const { context } = useMctl();
 	const [status, setStatus] = useState<NetStatus | undefined>();
 	const [loading, setLoading] = useState(true);
+	// Bumping this re-runs the effect, which restarts the poll with an immediate
+	// round — the same invalidation-counter shape the other hooks use.
+	const [nonce, setNonce] = useState(0);
 
 	// Keyed on the facts that change what the answer is, not on the object: the
 	// server list rebuilds its view models on every refresh, so keying on identity
@@ -127,7 +137,7 @@ export function useNetworkStatus(server: Server | undefined): {
 			mounted = false;
 			if (timer !== undefined) clearTimeout(timer);
 		};
-	}, [context, key]);
+	}, [context, key, nonce]);
 
-	return { status, loading };
+	return { status, loading, refresh: () => setNonce((n) => n + 1) };
 }

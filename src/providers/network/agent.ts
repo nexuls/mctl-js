@@ -26,10 +26,11 @@ import { ensureDir } from "../../lib/fs.ts";
 import { log } from "../../lib/logger.ts";
 import { networkFile, networkLogFile, networkDir } from "../../lib/paths.ts";
 import { spawnDetached } from "../../lib/shell.ts";
-import type {
-	Endpoint,
-	NetStatus,
-	TunnelSession,
+import {
+	TunnelStartError,
+	type Endpoint,
+	type NetStatus,
+	type TunnelSession,
 } from "../../types/network.ts";
 import { TunnelSession as TunnelSessionSchema } from "../../types/network.ts";
 
@@ -92,20 +93,6 @@ export interface AgentSpec {
 	fallback?: AnnouncedAddress;
 	/** Carried onto the endpoint — how a player is actually meant to connect. */
 	note?: string;
-}
-
-/** Thrown when an agent started but never announced an address. */
-export class TunnelStartError extends Error {
-	constructor(
-		readonly provider: string,
-		readonly serverId: string,
-		message: string,
-		/** The tail of the agent's own output, which is the only real diagnosis. */
-		readonly output?: string,
-	) {
-		super(message);
-		this.name = "TunnelStartError";
-	}
 }
 
 /**

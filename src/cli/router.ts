@@ -38,6 +38,7 @@ Commands:
   content <id>         list installed mods/plugins/datapacks
                        (content enable|disable <id> <file>)
   java list|install    inspect or install Java runtimes
+  secret set|list      credentials for tunnels and DNS
   network [up|down]    join addresses, tunnels, and DNS
                        (network profile set|rm|default to manage profiles)
 
@@ -131,6 +132,11 @@ export async function runCli(argv: string[]): Promise<number> {
 	if (command === "content") {
 		const { runContent } = await import("./commands/content.ts");
 		return runContent(argv.slice(1));
+	}
+
+	if (command === "secret") {
+		const { runSecret } = await import("./commands/secret.ts");
+		return runSecret(argv.slice(1));
 	}
 
 	if (command === "network") {

@@ -462,6 +462,12 @@ control per declared option — typed, with conditional fields hidden until they
 `withOption` hold the rules (a value equal to the provider's fallback is stored as nothing), and
 `parseOptions` / `formatOptions` remain the `key=value` format the CLI's `--options` speaks.
 
+**Secrets are settable, and never shown.** `core/config/secrets.ts` is the write side of
+`secrets.json` (`mctl secret`, Settings → Secrets); it returns only summaries — key, length, source,
+consumer — because a value that has never been rendered cannot be shoulder-surfed out of a terminal.
+Until it existed the tokens could only be added by hand-editing the file, which is why a configured
+DNS block silently published nothing.
+
 **Secrets are scoped, not shared.** `scopedSecrets(providerId, secrets)` passes a provider only the
 keys prefixed with its own id (`ngrok` → `NGROK_*`). A tunnel agent's environment has no business
 holding an S3 key, and the cheapest way to keep a credential out of a process is never to put it there.

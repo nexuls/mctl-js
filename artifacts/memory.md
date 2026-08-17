@@ -5,6 +5,43 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Why the tunnel and the DNS "didn't work" (2026-08-17, user report)
+
+User: "the cloudflared DNS doesn't seem to work, neither the cloudflare tunnels." Diagnosed from
+their real state directory, and both causes were **invisible from the UI** rather than subtle.
+
+- **There was no way to set a secret.** `secrets.json` could only be written by hand, so
+  `CLOUDFLARE_TOKEN` was absent (the file was `{}`) and every DNS sync returned "no token" — a
+  string `RuntimeManager.#expose` then **dropped on the floor**. A configured DNS block published
+  nothing and said so nowhere. `core/config/secrets.ts` + `mctl secret` + the Settings → Secrets
+  group close it; the start path now logs the DNS failure, and `NetworkManager.status` reports the
+  standing condition live (`NetStatus.dns`), which is the better answer — a poll shows it whether or
+  not anyone was watching when the server started.
+- **The tunnel's real error was in a file nobody reads.** `network/<id>.log` held
+  `tunnel credentials file not found`; what reached the user was
+  `cloudflared did not announce an address within 30s` — the symptom, not the cause.
+  `TunnelStartError` already carried the log tail; `errorText` was throwing it away. The last
+  non-blank line now rides on `degradedReason`.
+  - Their profile is a **dashboard-created** tunnel (`mode=named`, a tunnelId, no local
+    `~/.cloudflared/<uuid>.json`), which is exactly the case `CLOUDFLARED_TOKEN` exists for.
+- **`TunnelStartError` moved to `types/network.ts`.** Core has to inspect it to enrich the message,
+  and core may not import anything under `providers/` — an error class is shared vocabulary, so it
+  belongs with the types. Same reasoning as `LaunchSpec` living in `types/install.ts`.
+- **A DNS block on a pre-defined-tunnel profile must not be published.** The endpoint's host *is*
+  the hostname its ingress serves, so a sync would write `mc.example.com → mc.example.com`, on top of
+  the record `cloudflared tunnel route dns` created. `isSelfReferential` (case- and trailing-dot
+  insensitive) skips it and reports `dnsSkipped` — distinct from `dnsError`, because nothing is wrong.
+- **A secret never enters the settings draft.** The draft is JSON-serialized for dirty-checking and
+  written into `config.json`; a token has no business in either. The Secrets group stores
+  immediately (like the theme picker) and **clears the field on success**, and the stored value is
+  never rendered — not masked, not truncated. The list shows key, length, source and consumer, which
+  is enough to spot a truncated paste.
+  - `mctl secret set` reads the value from **stdin** by default: argv is world-readable in `/proc`
+    and lands in shell history.
+- **`listSecrets` takes the *consumers*, not the providers.** `CLOUDFLARE_TOKEN` is read by core's
+  DNS client, which is not a provider, so the caller passes `[...networkIds(), "cloudflare"]` and
+  `core/config` needs to know about neither.
+
 ## A provider declares its options; the form renders them (2026-08-17, user report)
 
 User: "All those specific options are in the options field, for all the provider. It's not a good

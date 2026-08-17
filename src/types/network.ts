@@ -91,6 +91,20 @@ export interface NetworkOptionChoice {
 	description?: string;
 }
 
+/** Thrown when an agent started but never announced an address. */
+export class TunnelStartError extends Error {
+	constructor(
+		readonly provider: string,
+		readonly serverId: string,
+		message: string,
+		/** The tail of the agent's own output, which is the only real diagnosis. */
+		readonly output?: string,
+	) {
+		super(message);
+		this.name = "TunnelStartError";
+	}
+}
+
 /**
  * Whether a provider can actually be used right now.
  *
@@ -214,6 +228,31 @@ export interface NetStatus {
 	/** ISO-8601 time the tunnel came up. */
 	since?: string;
 	/** Why the state is what it is — always set for `degraded` and `down`. */
+	detail?: string;
+	/**
+	 * What the profile's Cloudflare DNS automation is doing, when it configures
+	 * any.
+	 *
+	 * Reported alongside the tunnel rather than folded into `detail` because they
+	 * fail independently and for different reasons: a tunnel can be perfectly up
+	 * while its records were never published (no API token), which is exactly the
+	 * state that reads as "DNS doesn't work" with nothing on screen to say so.
+	 */
+	dns?: DnsStatus;
+}
+
+/** The standing state of a profile's DNS automation, re-derived on every read. */
+export interface DnsStatus {
+	/** Hostname the profile publishes. */
+	hostname: string;
+	/**
+	 * `ready` — configured and able to publish; `no-token` — configured but there
+	 * is no API token to publish with; `self` — the address *is* this hostname, so
+	 * there is nothing for MCTL to publish (a pre-defined Cloudflare tunnel, whose
+	 * record `cloudflared tunnel route dns` already owns).
+	 */
+	state: "ready" | "no-token" | "self";
+	/** One line for the UI, always set when `state` is not `ready`. */
 	detail?: string;
 }
 

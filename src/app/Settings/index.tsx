@@ -59,10 +59,12 @@ import {
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
 import { useMctl } from "../../hooks/use-mctl.tsx";
+import { useSecrets } from "../../hooks/use-secrets.ts";
 import { useServers } from "../../hooks/use-servers.ts";
 import { useToast } from "../../hooks/use-toast.tsx";
 import { useRouter } from "../../hooks/use-router.tsx";
 import { resolveRootPaths } from "../../core/config/index.ts";
+import { KNOWN_SECRETS } from "../../core/config/secrets.ts";
 import {
 	DIRECT_PROFILE,
 	optionValue,
@@ -339,7 +341,13 @@ function OptionField({
 }
 
 /** The settings groups, in tab order. */
-type GroupId = "locations" | "defaults" | "backups" | "network" | "appearance";
+type GroupId =
+	| "locations"
+	| "defaults"
+	| "backups"
+	| "network"
+	| "secrets"
+	| "appearance";
 
 /** Tab bar model — one entry per {@link GroupId}. */
 const GROUPS: (TabItem & { id: GroupId })[] = [
@@ -347,6 +355,7 @@ const GROUPS: (TabItem & { id: GroupId })[] = [
 	{ id: "defaults", label: "Defaults" },
 	{ id: "backups", label: "Backups" },
 	{ id: "network", label: "Network" },
+	{ id: "secrets", label: "Secrets" },
 	{ id: "appearance", label: "Appearance" },
 ];
 
@@ -375,6 +384,7 @@ const TEXT_FIELDS = new Set([
 	"pDnsZone",
 	"pDnsHostname",
 	"pDnsTtl",
+	"secretValue",
 ]);
 
 /**
@@ -419,6 +429,9 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 		"pProvider",
 		"pDns",
 	],
+	// The value field, then the two things that can be done with it. Which key is
+	// being set leads, exactly as the profile picker leads the Network group.
+	secrets: ["secretKey", "secretValue", "secretStore", "secretRemove"],
 	appearance: ["theme", "icons"],
 };
 
@@ -448,6 +461,8 @@ function ringIds(
 		canSave: boolean;
 		canDeleteProfile: boolean;
 		canMakeDefault: boolean;
+		canStoreSecret: boolean;
+		canRemoveSecret: boolean;
 	},
 	versionChannelIds: string[],
 	profile: ProfileDraft | undefined,
@@ -468,6 +483,14 @@ function ringIds(
 		}
 		if (id === "profileDefault") {
 			fields.push({ id, disabled: !actions.canMakeDefault });
+			continue;
+		}
+		if (id === "secretStore") {
+			fields.push({ id, disabled: !actions.canStoreSecret });
+			continue;
+		}
+		if (id === "secretRemove") {
+			fields.push({ id, disabled: !actions.canRemoveSecret });
 			continue;
 		}
 		fields.push(id);
@@ -622,6 +645,15 @@ export function Settings() {
 	// another profile mark the form dirty.
 	const [profileIndex, setProfileIndex] = useState(0);
 
+	// The Secrets group. The value being typed is page state and is handed
+	// straight to `store` — it is deliberately **not** in the settings draft,
+	// which is serialized for dirty-checking and written into `config.json`.
+	const { secrets, store, remove } = useSecrets();
+	const [secretKey, setSecretKey] = useState(KNOWN_SECRETS[0]?.key ?? "");
+	const [secretValue, setSecretValue] = useState("");
+	const [storingSecret, setStoringSecret] = useState(false);
+	const secretIsSet = secrets.some((entry) => entry.key === secretKey);
+
 	// Validated against the *registry*, which `useSettings` cannot see, so it is
 	// computed here and folded into the same gate as the schema's own issues.
 	const badOption = optionIssue(draft?.profiles ?? [], context?.providers);
@@ -672,6 +704,8 @@ export function Settings() {
 						canSave,
 						canDeleteProfile: deleteBlock === undefined && !saving,
 						canMakeDefault,
+						canStoreSecret: secretValue.trim() !== "" && !storingSecret,
+						canRemoveSecret: secretIsSet && !storingSecret,
 					},
 					versionChannelIds,
 					profile,
@@ -798,6 +832,43 @@ export function Settings() {
 		edit({ profiles: [...draft.profiles, emptyProfile("")] });
 		setProfileIndex(draft.profiles.length);
 		ring.setFocus("pName");
+	};
+
+	/**
+	 * Store the typed secret, then clear the field.
+	 *
+	 * Written immediately rather than on Save — like the theme and icon pickers,
+	 * and for a stronger reason: a token must not enter the settings draft, which
+	 * is serialized for dirty-checking and written into `config.json`.
+	 */
+	const storeSecret = async (): Promise<void> => {
+		if (secretValue.trim() === "" || storingSecret) return;
+		setStoringSecret(true);
+		const error = await store(secretKey, secretValue.trim());
+		setStoringSecret(false);
+		if (error === null) {
+			// Cleared on success so the value does not sit on screen behind whatever
+			// the user does next.
+			setSecretValue("");
+			toast.success(`${secretKey} stored`, {
+				description: "Written to secrets.json (0600).",
+			});
+			return;
+		}
+		toast.error(`Could not store ${secretKey}`, { description: error });
+	};
+
+	/** Remove the selected secret. */
+	const removeSecret = async (): Promise<void> => {
+		if (!secretIsSet || storingSecret) return;
+		setStoringSecret(true);
+		const error = await remove(secretKey);
+		setStoringSecret(false);
+		if (error === null) {
+			toast.success(`${secretKey} removed`);
+			return;
+		}
+		toast.error(`Could not remove ${secretKey}`, { description: error });
 	};
 
 	/** Remove the shown profile from the draft; it disappears from disk on Save. */
@@ -1251,6 +1322,106 @@ export function Settings() {
 								) : null}
 							</FormGrid>
 						) : null}
+					</Section>
+				) : null}
+
+				{group === "secrets" ? (
+					<Section description="Tokens for tunnels and DNS. Written to secrets.json with mode 0600, never shown again, and never logged or put in an event.">
+						<FormGrid>
+							<Select
+								label="Secret"
+								hint="what it is for"
+								options={KNOWN_SECRETS.map((known) => ({
+									label: known.key,
+									value: known.key,
+									description: known.label,
+								}))}
+								value={secretKey}
+								width="100%"
+								maxVisible={4}
+								forceDropdown
+								focused={ring.isFocused("secretKey")}
+								onFocused={() => ring.setFocus("secretKey")}
+								onChange={(key) => {
+									// The field is cleared on a switch: a value typed for one
+									// token must never be stored under another key.
+									setSecretValue("");
+									setSecretKey(key);
+								}}
+							/>
+
+							{/* The stored value is never rendered — not masked, not truncated,
+							    not at all. The field is always empty and typing into it means
+							    "replace", which the hint says so nobody wonders whether an
+							    empty box means the secret was lost. */}
+							<Input
+								label="Value"
+								hint={
+									secretIsSet
+										? "set — type a new one to replace it"
+										: "paste the token; it is not shown again"
+								}
+								value={secretValue}
+								placeholder={secretIsSet ? "•".repeat(12) : "not set"}
+								width="100%"
+								focused={ring.isFocused("secretValue")}
+								onFocused={() => ring.setFocus("secretValue")}
+								onChange={setSecretValue}
+								onSubmit={() => void storeSecret()}
+							/>
+						</FormGrid>
+
+						<box flexDirection="row" gap={2} alignItems="center">
+							<Button
+								size="small"
+								kind="ghost"
+								variant="primary"
+								disabled={secretValue.trim() === "" || storingSecret}
+								focused={ring.isFocused("secretStore")}
+								onFocused={() => ring.setFocus("secretStore")}
+								onClick={() => void storeSecret()}
+							>
+								{storingSecret ? "Storing…" : "Store"}
+							</Button>
+							<Button
+								size="small"
+								kind="ghost"
+								variant="error"
+								disabled={!secretIsSet || storingSecret}
+								focused={ring.isFocused("secretRemove")}
+								onFocused={() => ring.setFocus("secretRemove")}
+								onClick={() => void removeSecret()}
+							>
+								Remove
+							</Button>
+							<text fg={colors.muted} truncate wrapMode="none">
+								{KNOWN_SECRETS.find((known) => known.key === secretKey)
+									?.purpose ?? "stored as-is"}
+							</text>
+						</box>
+
+						<box flexDirection="column" marginTop={1}>
+							<text fg={colors.secondary}>Currently set</text>
+							{secrets.length === 0 ? (
+								<text fg={colors.muted}>
+									none — a profile's DNS records are not published without
+									CLOUDFLARE_TOKEN
+								</text>
+							) : (
+								secrets.map((secret) => (
+									<box key={secret.key} flexDirection="row" gap={1}>
+										<text fg={colors.foreground}>{secret.key.padEnd(20)}</text>
+										{/* Length, not the value: a truncated paste is the common
+										    failure and this is enough to see it. */}
+										<text fg={colors.muted}>
+											{secret.length} chars ·{" "}
+											{secret.fromEnv ? "environment" : "secrets.json"}
+											{secret.provider ? ` · used by ${secret.provider}` : ""}
+										</text>
+									</box>
+								))
+							)}
+						</box>
 					</Section>
 				) : null}
 

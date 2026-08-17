@@ -252,6 +252,7 @@ async function up(argv: string[]): Promise<number> {
 	}
 	if (result.dnsHostname) console.log(`DNS: ${result.dnsHostname}`);
 	if (result.dnsError) console.log(`\nDNS not published: ${result.dnsError}`);
+	if (result.dnsSkipped) console.log(`\nDNS not needed: ${result.dnsSkipped}`);
 	if (result.endpoint.note) console.log(`\n${result.endpoint.note}`);
 	return 0;
 }

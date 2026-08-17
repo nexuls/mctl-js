@@ -46,7 +46,9 @@ export { DirectNetwork } from "./network/direct.ts";
 export { NgrokNetwork } from "./network/ngrok.ts";
 export { PlayitNetwork } from "./network/playit.ts";
 export { TailscaleNetwork } from "./network/tailscale.ts";
-export { TunnelStartError } from "./network/agent.ts";
+// `TunnelStartError` moved to `types/network.ts`: core reports it, and core
+// may not import anything under `providers/`.
+export { TunnelStartError } from "../types/network.ts";
 
 /**
  * Build the registry of providers this build ships.

@@ -14,10 +14,14 @@
  * both halves unreadable.
  */
 
+import { useState } from "react";
 import { useTerminalDimensions } from "@opentui/react";
+import { Button } from "../../../components/index.ts";
 import { useIcons } from "../../../hooks/use-icons.tsx";
+import { useMctl } from "../../../hooks/use-mctl.tsx";
 import { useNetworkStatus } from "../../../hooks/use-network.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
+import { useToast } from "../../../hooks/use-toast.tsx";
 import type { NetState } from "../../../types/network.ts";
 import { readinessLabel } from "../../../types/network.ts";
 import type { ThemeColors } from "../../../types/theme.ts";
@@ -29,6 +33,13 @@ import {
 	TWO_COLUMN_WIDTH,
 	type ServerTabProps,
 } from "../panels.tsx";
+
+/**
+ * Ring id of this tab's Re-apply button. Exported so the container can splice it
+ * into its own ring while the tab is showing — a tab may not open a ring of its
+ * own (only one may listen at a time).
+ */
+export const NETWORK_APPLY_ID = "net-apply";
 
 /** Colour for a network state, in the app's success/warning/error vocabulary. */
 function stateColor(colors: ThemeColors, state: NetState): string {
@@ -44,17 +55,63 @@ function stateColor(colors: ThemeColors, state: NetState): string {
 	}
 }
 
-export function NetworkTab({ server, insight }: ServerTabProps) {
+export function NetworkTab({ server, insight, focus }: ServerTabProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { width } = useTerminalDimensions();
+	const { context } = useMctl();
+	const toast = useToast();
 	const empty = icons.emptyValue;
 	const address = insight?.address;
 	const properties = insight?.properties;
 	const status = insight?.status;
-	const { status: net, loading } = useNetworkStatus(server);
+	const { status: net, loading, refresh } = useNetworkStatus(server);
+	const [applying, setApplying] = useState(false);
 
 	const netColor = stateColor(colors, net?.state ?? "inactive");
+	const running = server.state === "running";
+
+	/**
+	 * Re-apply the server's profile without restarting it — the TUI peer of
+	 * `mctl network up`, which until now was the *only* way to do it.
+	 *
+	 * The two cases it exists for are a tunnel that dropped and a profile that was
+	 * just edited; neither should cost a Minecraft restart. Tearing down first is
+	 * what makes it a re-apply rather than a second agent.
+	 */
+	const reapply = async (): Promise<void> => {
+		if (!context || !running || applying) return;
+		const port = server.session?.port;
+		if (port === undefined) {
+			toast.error("No port recorded", {
+				description:
+					"Restart the server so MCTL can see which port it bound, then try again.",
+			});
+			return;
+		}
+		setApplying(true);
+		try {
+			await context.network.teardown(server);
+			const result = await context.network.expose(server, port);
+			toast.success(
+				`${server.id} is reachable at ${result.endpoint.joinAddress}`,
+				{
+					description:
+						result.degradedReason ??
+						result.dnsError ??
+						result.dnsSkipped ??
+						`Through ${result.provider}.`,
+				},
+			);
+		} catch (err) {
+			toast.error(`Could not re-apply networking for ${server.id}`, {
+				description: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setApplying(false);
+			refresh();
+		}
+	};
 
 	const left = (
 		<>
@@ -105,6 +162,47 @@ export function NetworkTab({ server, insight }: ServerTabProps) {
 				))}
 			</Panel>
 
+			<Panel
+				title="DNS"
+				accent={net?.dns?.state === "ready" ? colors.success : undefined}
+			>
+				{net?.dns ? (
+					<>
+						<Detail
+							label="hostname"
+							value={net.dns.hostname}
+							color={colors.primary}
+						/>
+						<Detail
+							label="state"
+							value={
+								net.dns.state === "ready"
+									? "published on start"
+									: net.dns.state === "no-token"
+										? "not published"
+										: "handled by the tunnel"
+							}
+							color={
+								net.dns.state === "ready" ? colors.success : colors.warning
+							}
+						/>
+						{net.dns.detail ? (
+							<box marginTop={1}>
+								{/* The reason records are missing. Without this the profile
+								    looks configured and simply does nothing. */}
+								<EmptyNote>{net.dns.detail}</EmptyNote>
+							</box>
+						) : null}
+					</>
+				) : (
+					<EmptyNote>
+						This profile publishes no DNS records. Add a hostname to it in
+						Settings → Network to have MCTL keep an A/CNAME and an SRV record
+						pointing at this server.
+					</EmptyNote>
+				)}
+			</Panel>
+
 			<Panel title="Provider readiness">
 				<Detail
 					label="readiness"
@@ -123,12 +221,23 @@ export function NetworkTab({ server, insight }: ServerTabProps) {
 						<EmptyNote>{net.readiness.hint}</EmptyNote>
 					</box>
 				) : null}
-				<box marginTop={1}>
-					<EmptyNote>
-						Change this server's profile with `mctl edit {server.id} --network
-						&lt;profile&gt;`, or re-apply it without a restart with `mctl
-						network up {server.id}`.
-					</EmptyNote>
+				<box marginTop={1} flexDirection="row" gap={2} alignItems="center">
+					<Button
+						size="small"
+						kind="ghost"
+						variant="primary"
+						disabled={!running || applying}
+						focused={focus?.isFocused(NETWORK_APPLY_ID) ?? false}
+						onFocused={() => focus?.setFocus(NETWORK_APPLY_ID)}
+						onClick={() => void reapply()}
+					>
+						{applying ? "Applying…" : "Re-apply"}
+					</Button>
+					<text fg={colors.muted} truncate wrapMode="none">
+						{running
+							? "Brings the profile up again — for a dropped tunnel or one you just edited."
+							: "Start the server to apply its profile."}
+					</text>
 				</box>
 			</Panel>
 		</>
