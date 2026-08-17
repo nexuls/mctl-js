@@ -3,11 +3,56 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-14 (content rows draw mod icons)_
+_Last updated: 2026-08-17 (network profile management + the Server settings form)_
 
 ---
 
 ## Done
+
+- **Network profiles are manageable, and the Server Settings tab is a form (2026-08-17, user
+  request).** "The settings section in the Server is not done yet. There's no way of managing
+  network settings." Both landed, with CLI parity; scope agreed with the user up front.
+  - `src/core/network/profiles.ts` (**new**) — the write side of `config.network.profiles`, whose
+    read side was already `NetworkManager.profiles()`. Pure `Config → Config` transforms
+    (`withProfile` / `withoutProfile` / `withDefaultProfile`) plus one-line `writeConfig` wrappers,
+    and the shared `parseOptions` / `formatOptions` `key=value` format both front-ends use.
+    `direct` and the configured default may not be deleted.
+  - `src/cli/commands/network.ts` — **`mctl network profile [list] | show | set | rm | default`**,
+    with `--provider`, `--options`, the five `--dns-*` flags and `--no-dns`. A partial `set` merges
+    over the profile it edits; an unknown provider id is refused with the list this build has; `rm`
+    names the servers it just stranded.
+  - `src/app/Settings/` — the Network group is now an editor: default-profile picker, a profile
+    picker, then Name / Provider / Options / Cloudflare DNS (zone, hostname, TTL, SRV, proxied) and
+    Add/Delete. `SettingsDraft` gained `profiles: ProfileDraft[]` (an array, not a record — a record
+    cannot express a rename), `profileIssues` for per-field marks, and `validateDraft` rolls them up
+    so the Network tab is flagged from any group. A save that strands a server raises a warning toast.
+  - `src/app/Network/index.tsx` — a *Manage profiles* button and `p`, both navigating to
+    `settings` with the new `RouteParams.group`. The page stays read-only; the editor has one home.
+  - `src/app/Server/tabs/Settings.tsx` — rewritten from a read-only panel to a form over
+    `ServerManager.editServer`: Name, Memory, Runtime, Network profile and the Java pin, with
+    Revert/Save and Ctrl+S. Identity, kind, version and path stay read-only — changing kind or
+    version is an *update*, which core does not have. `src/hooks/use-server-settings.ts` (**new**)
+    is its bridge, buffering like `use-settings.ts` (a dirty buffer is never clobbered by a poll).
+  - `src/app/Server/panels.tsx` + `index.tsx` — `ServerTabProps` gained `focus`, `onFormState` and
+    `onRefresh`; the container splices `serverSettingsRingIds(state)` into its own ring while the
+    tab is active, because only one ring may listen at a time.
+  - Tests (**594 total**, +43): `core/network/profiles.test.ts` (19), the profile half of
+    `app/Settings/use-settings.test.ts` (+11), `hooks/use-server-settings.test.ts` (8) and
+    `app/Server/tabs/Settings.test.tsx` (5, real frames).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 594 pass / 0 fail, `bun run format` clean, biome
+    clean bar the pre-existing `Table.tsx` warning. **Driven for real in a sandbox `$HOME`**: the CLI
+    created/edited/showed/removed profiles, refused an unknown provider (exit 2), a bad name,
+    `rm direct` and `rm` of the default, and reported the stranded `survival`. **In tmux at 140×44**:
+    `p` on the Network page landed on the Settings → Network group; switching profiles loaded each
+    one's fields; Add wrote `profile-4` to `config.json` and Delete removed `cf-tunnel` from disk
+    with the orphan warning toast; and on the Server page the form wrote `memory 2G → 6G`, a network
+    profile change and a `{"pinned": 21}` Java pin to `mctl.json`, then cleared the pin on untick.
+  - **One real defect found in the pty**, recorded in `memory.md`: switching the profile picker
+    *renamed* the profile, because OpenTUI emits `onInput` when an `<input>`'s value prop is
+    assigned and the same renderable was reused across rows. Fixed by keying the field grid.
+  - **Not done, deliberately:** changing a server's kind or Minecraft version (an update operation
+    core does not have), and per-provider typed option fields — the Options field is one `key=value`
+    line with the provider's own keys named in its hint.
 
 - **Plugins and zipped packs draw their icons too (2026-08-14, user request).** "The plugins /
   Datapack / Resource packs have icons too. Try to render them." Nothing in the UI or the extraction

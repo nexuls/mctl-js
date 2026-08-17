@@ -5,6 +5,54 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## Network profiles are editable, and so is a server (2026-08-17, user request)
+
+User: "The settings section in the Server is not done yet. There's no way of managing network
+settings." Scope confirmed with them: both, TUI + CLI parity; edit profiles in Settings with a
+shortcut from the Network page; the server form limited to what `editServer` supports today.
+
+- **A `<input>` emits `onInput` when its `value` prop is assigned**, so a controlled input reused
+  across rows of a collection feeds the *outgoing* row's text into the incoming one. Switching the
+  profile picker silently **renamed** the profile being switched to. The fix is the codebase's
+  existing remount idiom — `key={shownProfile}` on the fields' grid, the same trick `Router.tsx`
+  uses for `key={group}` and the Server page for `key={tab}`. **Any form that edits one member of a
+  list must key its fields by the member**, or edits cross rows. Found in a pty; invisible to types
+  and to a single-render frame test.
+- **The profiles are the one section of `SettingsDraft` that is a list, and that is why they are
+  the one section `draftToConfig` replaces wholesale.** A record cannot express a rename (the key
+  *is* the name, so a keystroke would delete one profile and create another), so the draft holds an
+  ordered array and the record is rebuilt once, at save. The merge-preserving rule still holds for
+  every scalar section.
+- **Renaming the default profile carries the default with it.** `defaultProfile` stores a *name*,
+  so without that sync a rename leaves the config naming a profile that no longer exists — and the
+  form then refuses to save for a reason the user did not cause.
+- **Two profiles are protected and the guard has to exist twice**: `direct` (the floor
+  `NetworkManager.#fallback` lands on) and whatever `defaultProfile` names. `core/network/profiles.ts`
+  enforces it for the CLI, and the Settings draft enforces it again in the buffer — the editor
+  deletes from the draft, so a save would otherwise carry a config whose invariants are broken.
+  A *server* naming a deleted profile is **not** an error: it degrades to direct, which both
+  front-ends now say out loud (the CLI prints the affected ids, the TUI raises a warning toast).
+- **`key=value` is one format shared by both front-ends** (`parseOptions`/`formatOptions`), values
+  read as JSON when they parse as one. A numeric *string* must therefore be written quoted so it
+  round-trips — pinned by a test. `--option` could not be repeatable because `parseArgs` stores
+  flags in a `Map`; one `--options "a=1, b=2"` string is also exactly what the TUI field holds.
+- **An unknown provider id is refused on write** even though the schema allows any string. The
+  forward-compatibility rule is about *reading* a file a newer MCTL wrote; writing an id nothing can
+  resolve just produces a profile that silently degrades at the next start.
+- **A tab whose body is a form cannot open a focus ring of its own** — only one ring may listen at a
+  time. The Settings tab exports `serverSettingsRingIds(state)` and the container splices it into
+  *its* ring, with the tab reporting `{dirty, javaPinned}` upward through
+  `ServerTabProps.onFormState`. Both facts are needed for the ring's rules: `disabled` must match
+  the control's own, and a **conditional field is omitted rather than disabled** (a disabled member
+  holds a place for a control the user can see; `set-javaMajor` is not drawn at all).
+- **Java has three states and a checkbox has two.** `mctl.json` holds a resolved major (a number),
+  an explicit `{pinned}`, or nothing. A resolved `21` pre-fills the field but must **not** tick the
+  box — ticking it would pin the server to whatever it happens to resolve to today. Unticking a real
+  pin passes `javaPin: null` (clear and re-derive); never having touched it passes `undefined`.
+- Ring order must match the *grid* order, not the order the fields were typed: `packRows` is
+  order-preserving precisely so a ring can be read off the markup. The DNS block's ring listed
+  Proxied before SRV while the grid drew SRV first.
+
 ## Content rows draw real images (2026-08-14, user request)
 
 User: "Most of the mods or plugins has an icon with it. Use opentui image element… Display the icon

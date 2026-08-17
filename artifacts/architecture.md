@@ -447,6 +447,17 @@ port so players type a bare name). **Every record is tagged `mctl:<server id>` i
 deletion only ever touches records carrying that tag** — the user's own records are never at risk.
 This is the module's most important property and is pinned by a test.
 
+**Profiles are edited through `core/network/profiles.ts`**, the write side of the read-only
+`NetworkManager.profiles()`. Its transforms are pure `Config → Config` (`withProfile`,
+`withoutProfile`, `withDefaultProfile`) with thin `writeConfig` wrappers on top, because the
+Settings page needs the "what would the config become" half without touching disk while the CLI
+wants the whole read-modify-write in one call. Two names are protected — `direct` (the fallback
+floor above) and whatever `defaultProfile` names — and the Settings draft repeats that guard,
+since it deletes from the buffer before core ever sees it. A *server* naming a deleted profile is
+not an error; it degrades, and both front-ends say which servers that affects. `parseOptions` /
+`formatOptions` define the `key=value` option format once for `mctl network profile --options` and
+the Settings field alike.
+
 **Secrets are scoped, not shared.** `scopedSecrets(providerId, secrets)` passes a provider only the
 keys prefixed with its own id (`ngrok` → `NGROK_*`). A tunnel agent's environment has no business
 holding an S3 key, and the cheapest way to keep a credential out of a process is never to put it there.
@@ -779,6 +790,16 @@ through `hooks/use-server-content.ts` (over `core/server/content.ts`) rather tha
 `insight`, lists one section per directory with a Phase-5 *Browse marketplace* placeholder, and joins
 the container's ring so ↑/↓ select and Space parks or restores a jar. Its CLI peer is `mctl content`.
 
+The **Settings** tab is the third screen with its own write, and the first that is a *form*: it
+edits `mctl.json` through `hooks/use-server-settings.ts` over `ServerManager.editServer` — exactly
+`EditServerOptions` (name, memory, runtime, network profile, Java pin) and nothing more, because
+changing kind or Minecraft version is an *update* (a new jar, a re-run installer, a staged download)
+that core does not have. Identity, version and path stay read-only rows beside the form. A tab whose
+body is a form **cannot open a ring of its own** — only one ring may listen at a time — so it exports
+`serverSettingsRingIds(state)` and reports `{dirty, javaPinned}` up through
+`ServerTabProps.onFormState`; the container splices the members into its ring while the tab is
+active, disabled where the controls are and omitted where a conditional field is not drawn.
+
 What is not measurable is named rather than omitted — TPS/MSPT, heap occupancy and per-process
 network I/O on Performance; Phase-4 tunnels on Network; Phase-4 archives on Backups. The Settings tab
 is read-only and prints the `mctl edit` commands that change those values (TODO(phase-3): make it a
@@ -791,7 +812,14 @@ the validated config to a flat `SettingsDraft` (everything but `root`, which is 
 it, and commits with `writeConfig` → `ensureDirTree`. `draftToConfig` **merges over the loaded
 config**, so keys the form does not render (backup schedule/retention, named network profiles, keys
 written by a newer MCTL) survive an edit. Edits are buffered and written on Save / Ctrl+S; the
-config-dir watcher's `ConfigChanged` refreshes this and every other instance. The **Appearance group
+config-dir watcher's `ConfigChanged` refreshes this and every other instance. The **Network group is
+the profile editor** (`core/network/profiles.ts`; the Network *page* is a live status view and links
+here with `p`), and the network profiles are the one section `draftToConfig` replaces wholesale
+rather than merging: the draft holds them as an ordered **array**, because a record cannot express a
+rename — the key is the name, so an edit would delete one profile and create another on every
+keystroke. A form that edits one member of a list must also **key its fields by the member**: OpenTUI
+emits `onInput` when an `<input>`'s value prop is assigned, so a reused renderable otherwise carries
+the outgoing row's text into the incoming one (see `memory.md`). The **Appearance group
 is the exception**: its theme and icon pickers are owned by their providers, which persist on change,
 so both apply immediately rather than on Save. `save(themeId, iconMode)` takes both live values as
 arguments, so a Save fired in the window between a pick and its `ConfigChanged` refresh cannot write
