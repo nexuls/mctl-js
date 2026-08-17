@@ -23,12 +23,19 @@
 import { isAbsolute } from "node:path";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ensureDirTree, writeConfig } from "../../core/config/index.ts";
+import {
+	DIRECT_PROFILE,
+	formatOptions,
+	parseOptions,
+	profileNameIssue,
+} from "../../core/network/profiles.ts";
 import { rootPaths } from "../../lib/paths.ts";
 import type {
 	BackupProvider,
 	CompressionKind,
 	Config,
 	IconMode,
+	NetworkProfile,
 	RuntimeKind,
 	ServerKind,
 } from "../../types/config.ts";
@@ -77,6 +84,127 @@ export interface SettingsDraft {
 	 * stock profile is called `direct`.
 	 */
 	network: string;
+	/**
+	 * The named profiles themselves, as an **ordered array** rather than the
+	 * config's record. A record cannot express "this profile is being renamed" —
+	 * the key *is* the name, so an edit would delete one profile and create
+	 * another on every keystroke. The array keeps a stable row the form binds to,
+	 * and the record is rebuilt once, at save.
+	 */
+	profiles: ProfileDraft[];
+}
+
+/**
+ * One network profile as the form edits it: flat, all-strings, with the DNS
+ * block behind an explicit switch (the config expresses that as an absent key).
+ */
+export interface ProfileDraft {
+	/** Profile name — also the value a server's `mctl.json` stores. */
+	name: string;
+	/** Network provider id this profile selects. */
+	provider: string;
+	/** Provider options as `key=value` pairs — the shared CLI/TUI format. */
+	options: string;
+	/** Whether Cloudflare DNS records are published for this profile. */
+	dnsEnabled: boolean;
+	/** Cloudflare zone name or id. */
+	dnsZone: string;
+	/** Hostname players join. */
+	dnsHostname: string;
+	/** Record TTL in seconds, as typed. */
+	dnsTtl: string;
+	/** Route through Cloudflare's proxy — off, and it should stay off. */
+	dnsProxied: boolean;
+	/** Publish the `_minecraft._tcp` SRV record too. */
+	dnsSrv: boolean;
+}
+
+/** Default TTL for a freshly-enabled DNS block, matching the schema's. */
+const DEFAULT_DNS_TTL = "60";
+
+/** The profile a freshly-added row starts as: direct, no options, no DNS. */
+export function emptyProfile(name: string): ProfileDraft {
+	return {
+		name,
+		provider: DIRECT_PROFILE,
+		options: "",
+		dnsEnabled: false,
+		dnsZone: "",
+		dnsHostname: "",
+		dnsTtl: DEFAULT_DNS_TTL,
+		dnsProxied: false,
+		dnsSrv: true,
+	};
+}
+
+/** Map one stored profile into its editable row. */
+function profileToDraft(name: string, profile: NetworkProfile): ProfileDraft {
+	return {
+		name,
+		provider: profile.provider,
+		options: formatOptions(profile.options),
+		dnsEnabled: profile.dns !== undefined,
+		dnsZone: profile.dns?.zone ?? "",
+		dnsHostname: profile.dns?.hostname ?? "",
+		dnsTtl: String(profile.dns?.ttl ?? DEFAULT_DNS_TTL),
+		dnsProxied: profile.dns?.proxied ?? false,
+		dnsSrv: profile.dns?.srv ?? true,
+	};
+}
+
+/** Map one editable row back to the stored shape. */
+function draftToProfile(draft: ProfileDraft): NetworkProfile {
+	const options = parseOptions(draft.options);
+	return {
+		provider: draft.provider.trim(),
+		// An empty map is written as an absent key, so a profile that needs no
+		// options keeps a clean file.
+		options: Object.keys(options).length > 0 ? options : undefined,
+		dns: draft.dnsEnabled
+			? {
+					zone: draft.dnsZone.trim(),
+					hostname: draft.dnsHostname.trim(),
+					ttl: Number.parseInt(draft.dnsTtl, 10),
+					proxied: draft.dnsProxied,
+					srv: draft.dnsSrv,
+				}
+			: undefined,
+	};
+}
+
+/**
+ * Per-row validation for the profile editor: one message map per profile, by
+ * index. Exported so the page can mark the offending *field* rather than only
+ * disabling Save, which on a form with a profile picker would leave the user
+ * hunting through profiles for the problem.
+ */
+export function profileIssues(
+	profiles: ProfileDraft[],
+): Partial<Record<keyof ProfileDraft, string>>[] {
+	const seen = new Map<string, number>();
+	return profiles.map((profile, index) => {
+		const issues: Partial<Record<keyof ProfileDraft, string>> = {};
+		const nameIssue = profileNameIssue(profile.name);
+		if (nameIssue) issues.name = nameIssue;
+		else if (seen.has(profile.name)) issues.name = "already used";
+		else seen.set(profile.name, index);
+
+		try {
+			parseOptions(profile.options);
+		} catch (err) {
+			issues.options = err instanceof Error ? err.message : String(err);
+		}
+
+		if (profile.dnsEnabled) {
+			if (profile.dnsZone.trim() === "") issues.dnsZone = "required";
+			if (profile.dnsHostname.trim() === "") issues.dnsHostname = "required";
+			const ttl = Number.parseInt(profile.dnsTtl, 10);
+			if (!Number.isInteger(ttl) || ttl <= 0) {
+				issues.dnsTtl = "a positive number of seconds";
+			}
+		}
+		return issues;
+	});
 }
 
 /**
@@ -102,15 +230,26 @@ export function configToDraft(config: Config): SettingsDraft {
 		backupProvider: config.backup.provider,
 		compression: config.backup.compression,
 		network: config.network.defaultProfile,
+		profiles: Object.entries(config.network.profiles).map(([name, profile]) =>
+			profileToDraft(name, profile),
+		),
 	};
 }
 
 /**
  * Fold the edit buffer back into a full config object. Pure, and deliberately
- * **merge-not-replace**: `root`, `configVersion`, the named network profiles,
- * and the backup schedule/retention are carried over untouched, so
- * editing a field the form shows never drops one it doesn't. An override toggled
- * off removes the key entirely, restoring the `root/...` default.
+ * **merge-not-replace**: `root`, `configVersion` and the backup
+ * schedule/retention are carried over untouched, so editing a field the form
+ * shows never drops one it doesn't. An override toggled off removes the key
+ * entirely, restoring the `root/...` default.
+ *
+ * The network **profiles are the one wholesale replacement**, because the form
+ * now edits them: the draft's array *is* the set of profiles, so one deleted in
+ * the editor has to disappear here rather than survive a merge.
+ *
+ * @throws when a profile's options are not `key=value` pairs. `validateDraft`
+ *   reports that first and Save is disabled until it is fixed, so this is the
+ *   boundary being honest rather than a reachable path.
  *
  * @param themeId The theme id to persist — the *currently active* one, since the
  *   theme provider (not this draft) owns that choice.
@@ -146,7 +285,16 @@ export function draftToConfig(
 			provider: draft.backupProvider,
 			compression: draft.compression,
 		},
-		network: { ...config.network, defaultProfile: draft.network },
+		network: {
+			...config.network,
+			defaultProfile: draft.network,
+			profiles: Object.fromEntries(
+				draft.profiles.map((profile) => [
+					profile.name.trim(),
+					draftToProfile(profile),
+				]),
+			),
+		},
 	};
 }
 
@@ -168,6 +316,26 @@ export function validateDraft(
 		issues.backupsDir = "must be an absolute path";
 	}
 	if (draft.memory.trim() === "") issues.memory = "required";
+
+	// The profile editor reports per-field messages of its own (`profileIssues`);
+	// this rolls them up to one draft-level message so the Network tab is flagged
+	// and Save is disabled while a profile is half-typed, even from another group.
+	const perProfile = profileIssues(draft.profiles);
+	const bad = perProfile.findIndex((entry) => Object.keys(entry).length > 0);
+	if (bad >= 0) {
+		const name = draft.profiles[bad]?.name || `profile ${bad + 1}`;
+		const first = Object.values(perProfile[bad] ?? {})[0];
+		issues.profiles = `${name}: ${first}`;
+	}
+	// Both are invariants of the config rather than of a field: `direct` is the
+	// fallback every profile degrades to, and a default naming nothing would leave
+	// new servers pointing at a profile that does not exist.
+	if (!draft.profiles.some((profile) => profile.name === DIRECT_PROFILE)) {
+		issues.profiles = "the `direct` profile cannot be removed";
+	}
+	if (!draft.profiles.some((profile) => profile.name === draft.network)) {
+		issues.network = "the default profile must be one of the profiles below";
+	}
 	return issues;
 }
 

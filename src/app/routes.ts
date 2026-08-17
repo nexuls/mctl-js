@@ -25,6 +25,12 @@ export type RouteId =
 export interface RouteParams {
 	/** The server to show, for the `server` route. */
 	serverId?: string;
+	/**
+	 * Which settings group to land on, for the `settings` route — how the Network
+	 * page hands a user straight to the profile editor rather than telling them
+	 * where to find it.
+	 */
+	group?: string;
 }
 
 /** One entry in the navigation rail. */

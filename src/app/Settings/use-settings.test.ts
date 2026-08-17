@@ -13,6 +13,8 @@ import { Config } from "../../types/config.ts";
 import {
 	configToDraft,
 	draftToConfig,
+	emptyProfile,
+	profileIssues,
 	validateDraft,
 	type SettingsDraft,
 } from "./use-settings.ts";
@@ -143,5 +145,169 @@ describe("draftToConfig — icon mode", () => {
 			draftToConfig(config, configToDraft(config), config.theme, "ascii"),
 		);
 		expect(written.icons).toBe("ascii");
+	});
+});
+
+/**
+ * The network-profile editor, which is the one part of the form that edits a
+ * *collection* rather than a field — so the mapping has two extra jobs: a stable
+ * row identity while a name is being retyped, and a deletion that actually
+ * reaches the file (the profiles are the one section written wholesale).
+ */
+describe("profiles", () => {
+	const tunnelled = () =>
+		baseConfig({
+			network: {
+				defaultProfile: "direct",
+				profiles: {
+					direct: { provider: "direct" },
+					"cf-tunnel": {
+						provider: "cloudflared",
+						options: { tunnel: "mc", timeoutSeconds: 45 },
+						dns: { zone: "example.com", hostname: "mc.example.com", ttl: 120 },
+					},
+				},
+			},
+		});
+
+	test("configToDraft flattens each profile into an editable row", () => {
+		const [direct, tunnel] = configToDraft(tunnelled()).profiles;
+		expect(direct?.name).toBe("direct");
+		expect(direct?.dnsEnabled).toBe(false);
+		expect(tunnel?.provider).toBe("cloudflared");
+		expect(tunnel?.options).toBe("tunnel=mc, timeoutSeconds=45");
+		expect(tunnel?.dnsEnabled).toBe(true);
+		expect(tunnel?.dnsZone).toBe("example.com");
+		expect(tunnel?.dnsTtl).toBe("120");
+	});
+
+	test("an untouched profile round-trips byte-for-byte", () => {
+		const config = tunnelled();
+		const written = Config.parse(
+			draftToConfig(config, configToDraft(config), config.theme, config.icons),
+		);
+		expect(written.network.profiles).toEqual(config.network.profiles);
+	});
+
+	test("a profile removed from the draft is removed from the config", () => {
+		const config = tunnelled();
+		const draft = configToDraft(config);
+		const written = Config.parse(
+			draftToConfig(
+				config,
+				{
+					...draft,
+					profiles: draft.profiles.filter((p) => p.name !== "cf-tunnel"),
+				},
+				config.theme,
+				config.icons,
+			),
+		);
+		expect(Object.keys(written.network.profiles)).toEqual(["direct"]);
+	});
+
+	test("a renamed profile moves rather than duplicating", () => {
+		const config = tunnelled();
+		const draft = configToDraft(config);
+		const written = Config.parse(
+			draftToConfig(
+				config,
+				{
+					...draft,
+					profiles: draft.profiles.map((p) =>
+						p.name === "cf-tunnel" ? { ...p, name: "cf" } : p,
+					),
+				},
+				config.theme,
+				config.icons,
+			),
+		);
+		expect(Object.keys(written.network.profiles)).toEqual(["direct", "cf"]);
+	});
+
+	test("a new profile is written with its DNS block", () => {
+		const config = baseConfig();
+		const draft = configToDraft(config);
+		const added = {
+			...emptyProfile("cf"),
+			provider: "cloudflared",
+			options: "tunnel=mc",
+			dnsEnabled: true,
+			dnsZone: "example.com",
+			dnsHostname: "mc.example.com",
+		};
+		const written = Config.parse(
+			draftToConfig(
+				config,
+				{ ...draft, profiles: [...draft.profiles, added] },
+				config.theme,
+				config.icons,
+			),
+		);
+		expect(written.network.profiles.cf).toEqual({
+			provider: "cloudflared",
+			options: { tunnel: "mc" },
+			dns: {
+				zone: "example.com",
+				hostname: "mc.example.com",
+				ttl: 60,
+				proxied: false,
+				srv: true,
+			},
+		});
+	});
+});
+
+describe("profileIssues", () => {
+	test("a stock config has none", () => {
+		expect(profileIssues(configToDraft(baseConfig()).profiles)).toEqual([{}]);
+	});
+
+	test("flags a duplicate name on the second row, not the first", () => {
+		const issues = profileIssues([
+			emptyProfile("direct"),
+			emptyProfile("direct"),
+		]);
+		expect(issues[0]?.name).toBeUndefined();
+		expect(issues[1]?.name).toBe("already used");
+	});
+
+	test("flags an unusable name and unparseable options", () => {
+		expect(profileIssues([emptyProfile("Cf Tunnel")])[0]?.name).toBeDefined();
+		expect(
+			profileIssues([{ ...emptyProfile("cf"), options: "tunnel" }])[0]?.options,
+		).toBeDefined();
+	});
+
+	test("DNS fields are only required once DNS is on", () => {
+		const off = { ...emptyProfile("cf"), dnsZone: "", dnsHostname: "" };
+		expect(profileIssues([off])[0]).toEqual({});
+		const on = { ...off, dnsEnabled: true, dnsTtl: "soon" };
+		const issues = profileIssues([on])[0];
+		expect(issues?.dnsZone).toBe("required");
+		expect(issues?.dnsHostname).toBe("required");
+		expect(issues?.dnsTtl).toBeDefined();
+	});
+});
+
+describe("validateDraft — network invariants", () => {
+	const draft = (patch: Partial<SettingsDraft>): SettingsDraft => ({
+		...configToDraft(baseConfig()),
+		...patch,
+	});
+
+	test("rolls a profile problem up so its tab can be flagged", () => {
+		const issues = validateDraft(
+			draft({ profiles: [emptyProfile("direct"), emptyProfile("Bad Name")] }),
+		);
+		expect(issues.profiles).toContain("Bad Name");
+	});
+
+	test("`direct` may not be deleted, and the default must exist", () => {
+		expect(
+			validateDraft(draft({ profiles: [emptyProfile("lan")], network: "lan" }))
+				.profiles,
+		).toContain("direct");
+		expect(validateDraft(draft({ network: "gone" })).network).toBeDefined();
 	});
 });

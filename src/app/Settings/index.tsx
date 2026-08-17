@@ -54,20 +54,30 @@ import { useIcons } from "../../hooks/use-icons.tsx";
 import { useFocusRing, type FocusItem } from "../../hooks/use-focus-ring.ts";
 import { useCaptureKeys } from "../../hooks/use-input-capture.tsx";
 import { useHints } from "../../hooks/use-hints.tsx";
+import { useMctl } from "../../hooks/use-mctl.tsx";
+import { useServers } from "../../hooks/use-servers.ts";
 import { useToast } from "../../hooks/use-toast.tsx";
+import { useRouter } from "../../hooks/use-router.tsx";
 import { resolveRootPaths } from "../../core/config/index.ts";
+import { DIRECT_PROFILE } from "../../core/network/profiles.ts";
+import type { ProviderRegistry } from "../../core/registry/provider-registry.ts";
 import { alpha } from "../../lib/colors.ts";
 import { configFile } from "../../lib/paths.ts";
 import type {
 	BackupProvider,
 	CompressionKind,
 	IconMode,
-	NetworkConfig,
 } from "../../types/config.ts";
 import { PageHeader } from "../shared.tsx";
 import { VersionField, versionFieldIds } from "../VersionField.tsx";
 import { useServerVersions } from "../../hooks/use-server-versions.ts";
-import { useSettings, type SettingsDraft } from "./use-settings.ts";
+import {
+	emptyProfile,
+	profileIssues,
+	useSettings,
+	type ProfileDraft,
+	type SettingsDraft,
+} from "./use-settings.ts";
 
 // Kinds and runtimes are shared with the setup wizard (`app/choices.ts`): this
 // page and the Defaults step set the same two config fields, and two hand-kept
@@ -105,21 +115,74 @@ const ICON_MODES: RadioItem<IconMode>[] = [
 ];
 
 /**
- * The profiles this config actually defines, for the default-profile picker.
+ * The profiles the *draft* defines, for the default-profile picker.
  *
- * Built from config rather than typed out, because profiles are **user-defined**
- * — a hand-kept list here could not name a `cf-tunnel` profile the user added,
- * which is exactly the case the picker exists for. Each option is described by
- * the provider it selects, since a profile name alone says nothing.
+ * Built from the edit buffer rather than from `config.json`, because a profile
+ * added a moment ago has not been written yet and must still be selectable as
+ * the default — otherwise creating a profile and making it the default takes two
+ * saves. Each option is described by the provider it selects, since a profile
+ * name alone says nothing.
  */
-function profileOptions(network: NetworkConfig): RadioItem<string>[] {
-	return Object.entries(network.profiles).map(([name, profile]) => ({
-		label: name,
-		value: name,
-		description: profile.dns
-			? `${profile.provider} + dns ${profile.dns.hostname}`
+function profileOptions(profiles: ProfileDraft[]): RadioItem<string>[] {
+	return profiles.map((profile) => ({
+		label: profile.name || "(unnamed)",
+		value: profile.name,
+		description: profile.dnsEnabled
+			? `${profile.provider} + dns ${profile.dnsHostname}`
 			: profile.provider,
 	}));
+}
+
+/**
+ * Network provider options for the profile editor, from the **registry** — the
+ * same rule the create form's Kind picker follows, since a hand-kept list here
+ * would be a phase behind the providers that actually exist.
+ *
+ * A profile naming a provider this build does not have (a config written by a
+ * newer MCTL) is re-added as an option marked unknown. Without that, `Select`
+ * falls back to index 0 and a Save would silently rewrite the profile to
+ * whatever happens to be first.
+ */
+function providerOptions(
+	registry: ProviderRegistry | undefined,
+	current: string,
+): SelectItem<string>[] {
+	const options = (registry?.networks() ?? []).map((provider) => ({
+		label: provider.id,
+		value: provider.id,
+		description: provider.displayName,
+	}));
+	if (current !== "" && !options.some((option) => option.value === current)) {
+		options.push({
+			label: current,
+			value: current,
+			description: "not available in this build",
+		});
+	}
+	return options;
+}
+
+/**
+ * The options each provider reads, named in the field's hint.
+ *
+ * `options` is a free-form map by design — each provider validates its own shape
+ * at the point of use rather than forcing every provider's schema into MCTL's
+ * config schema (`types/config.ts`) — which leaves the user with an empty box and
+ * no idea what may go in it. These are the keys each provider actually reads
+ * today; a provider missing from the table simply gets the generic hint.
+ */
+const PROVIDER_OPTION_HINTS: Record<string, string> = {
+	direct: "host, publicAddress",
+	cloudflared: "tunnel, hostname, timeoutSeconds",
+	playit: "address, args, timeoutSeconds",
+	ngrok: "region, remoteAddr, timeoutSeconds",
+	tailscale: "preferIp",
+};
+
+/** Hint for the options field: the provider's own keys, or the format. */
+function optionsHint(provider: string): string {
+	const keys = PROVIDER_OPTION_HINTS[provider];
+	return keys ? `${provider}: ${keys}` : "key=value pairs";
 }
 
 /** The settings groups, in tab order. */
@@ -143,13 +206,24 @@ const GROUP_OF_ISSUE: Partial<Record<keyof SettingsDraft, GroupId>> = {
 	serversDir: "locations",
 	backupsDir: "locations",
 	memory: "defaults",
+	profiles: "network",
+	network: "network",
 };
 
 /**
  * Ring ids that host a live text field. Focus on one of these means the user is
  * typing, so the shell's character shortcuts must stand down.
  */
-const TEXT_FIELDS = new Set(["serversDir", "backupsDir", "memory"]);
+const TEXT_FIELDS = new Set([
+	"serversDir",
+	"backupsDir",
+	"memory",
+	"pName",
+	"pOptions",
+	"pDnsZone",
+	"pDnsHostname",
+	"pDnsTtl",
+]);
 
 /** Ring id of the tab bar — first in the ring, so Tab from the top reaches it. */
 const TABS_ID = "__tabs";
@@ -162,7 +236,17 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 	locations: ["overrideServers", "overrideBackups"],
 	defaults: ["kind", "mc", "memory", "runtime", "eula"],
 	backups: ["backupEnabled"],
-	network: ["network"],
+	// The default-profile picker, then the profile editor: "which profile do new
+	// servers get" is the question a user arrives with, and the editor below
+	// answers "and what is in one".
+	network: [
+		"network",
+		"profileSelect",
+		"pName",
+		"pProvider",
+		"pOptions",
+		"pDns",
+	],
 	appearance: ["theme", "icons"],
 };
 
@@ -180,11 +264,16 @@ const GROUP_FIELDS: Record<GroupId, string[]> = {
 function ringIds(
 	group: GroupId,
 	draft: SettingsDraft,
-	actions: { canRevert: boolean; canSave: boolean },
+	actions: { canRevert: boolean; canSave: boolean; canDeleteProfile: boolean },
 	versionChannelIds: string[],
+	profile: ProfileDraft | undefined,
 ): FocusItem[] {
-	const fields: string[] = [];
+	const fields: FocusItem[] = [];
 	for (const id of GROUP_FIELDS[group]) {
+		// The profile editor's fields only exist while there *is* a profile to
+		// edit — a config with none is impossible in practice (`direct` cannot be
+		// removed) but the ring must not name fields that are not on screen.
+		if (id.startsWith("p") && id !== "profileSelect" && !profile) continue;
 		fields.push(id);
 		// One per channel the default kind publishes — data, not a fixed list.
 		if (id === "mc") fields.push(...versionChannelIds);
@@ -195,6 +284,26 @@ function ringIds(
 		if (id === "backupEnabled" && draft.backupEnabled) {
 			fields.push("backupProvider", "compression");
 		}
+		if (id === "pDns" && profile?.dnsEnabled) {
+			// In the order the grid draws them (Zone|Hostname, TTL|SRV, then the
+			// full-width Proxied), so Tab and the eye agree — `packRows` is
+			// order-preserving precisely so a ring can be read off the markup.
+			fields.push(
+				"pDnsZone",
+				"pDnsHostname",
+				"pDnsTtl",
+				"pDnsSrv",
+				"pDnsProxied",
+			);
+		}
+	}
+	// The profile actions sit at the end of the group, before the page's own
+	// action bar: they act on the profile above them, not on the whole form.
+	if (group === "network") {
+		fields.push("profileAdd", {
+			id: "profileDelete",
+			disabled: !actions.canDeleteProfile,
+		});
 	}
 	return [
 		TABS_ID,
@@ -202,6 +311,28 @@ function ringIds(
 		{ id: "__revert", disabled: !actions.canRevert },
 		{ id: "__save", disabled: !actions.canSave },
 	];
+}
+
+/**
+ * Why this profile may not be deleted, or `undefined` when it may.
+ *
+ * The two rules are `core/network/profiles.ts`'s, restated here because the
+ * draft is deleted from *before* that function ever sees it — the editor is
+ * buffered, so the guard has to hold in the buffer too, or a Save would carry a
+ * config whose own invariants are broken.
+ */
+function profileDeleteBlock(
+	draft: SettingsDraft,
+	profile: ProfileDraft | undefined,
+): string | undefined {
+	if (!profile) return "there is no profile to remove";
+	if (profile.name === DIRECT_PROFILE) {
+		return "`direct` is the fallback every profile degrades to";
+	}
+	if (profile.name === draft.network) {
+		return "this is the default for new servers — pick another default first";
+	}
+	return undefined;
 }
 
 /** A read-only `label  value` row, for values that cannot be edited. */
@@ -280,7 +411,23 @@ export function Settings() {
 	} = useSettings();
 
 	const toast = useToast();
-	const [group, setGroup] = useState<GroupId>("locations");
+	const { context } = useMctl();
+	const { params } = useRouter();
+	// Only to warn about servers a profile edit would strand — the page renders
+	// nothing per-server. Cheap: the same cached read path the Dashboard uses.
+	const { data: servers } = useServers();
+	// The Network page links here (`navigate("settings", { group: "network" })`),
+	// so the landing group is the route's if it named one. Read once as the
+	// initial state rather than in an effect: a later navigate remounts the page.
+	const [group, setGroup] = useState<GroupId>(() =>
+		params.group && GROUPS.some((entry) => entry.id === params.group)
+			? (params.group as GroupId)
+			: "locations",
+	);
+	// Which profile the editor is showing. Page state, not draft state — it is a
+	// view choice, and putting it in the draft would make merely *looking* at
+	// another profile mark the form dirty.
+	const [profileIndex, setProfileIndex] = useState(0);
 
 	const invalid = Object.keys(issues).length > 0;
 	const canSave = dirty && !invalid && !saving;
@@ -292,12 +439,31 @@ export function Settings() {
 	const versions = useServerVersions(draft?.kind);
 	const versionChannelIds = versionFieldIds(versions).slice(1);
 
+	// The profile under the editor, clamped: deleting the last profile in the list
+	// leaves the index past the end for one render, and a row that used to exist
+	// must not take the ring with it.
+	const profiles = draft?.profiles ?? [];
+	const shownProfile = Math.min(profileIndex, Math.max(profiles.length - 1, 0));
+	const profile = profiles[shownProfile];
+	const perProfileIssues = profileIssues(profiles)[shownProfile] ?? {};
+	const deleteBlock = draft ? profileDeleteBlock(draft, profile) : undefined;
+
 	// The ring depends on the visible group, the override toggles and whether the
 	// action buttons are live, so it is rebuilt every render from the draft rather
 	// than tracked separately.
 	const ring = useFocusRing(
 		draft
-			? ringIds(group, draft, { canRevert, canSave }, versionChannelIds)
+			? ringIds(
+					group,
+					draft,
+					{
+						canRevert,
+						canSave,
+						canDeleteProfile: deleteBlock === undefined && !saving,
+					},
+					versionChannelIds,
+					profile,
+				)
 			: [TABS_ID],
 	);
 
@@ -317,17 +483,45 @@ export function Settings() {
 	]);
 
 	/**
+	 * Servers whose profile the pending save would delete or rename.
+	 *
+	 * Compared against the *draft*'s names rather than the config's: the profile
+	 * about to vanish is the one the user removed in the buffer, and after the
+	 * write there is nothing left to compare against. Declared above `commit`
+	 * because `commit` closes over it and the page returns early before the draft
+	 * exists.
+	 */
+	const orphanedServers = (): string[] => {
+		if (!draft) return [];
+		const names = new Set(draft.profiles.map((entry) => entry.name.trim()));
+		return servers
+			.filter((server) => !names.has(server.network))
+			.map((server) => server.id);
+	};
+
+	/**
 	 * Save and report the outcome as a toast. The page header still carries the
 	 * state (dirty / saved / the failure), but a save triggered by Ctrl+S from a
 	 * scrolled-down group happens off screen — the toast is what makes it visible
 	 * from anywhere on the page. A failed save offers `r` to try again.
 	 */
 	const commit = async (): Promise<void> => {
+		// Taken *before* the write, because a save re-baselines the draft: which
+		// profiles are about to disappear is only knowable from the pre-save config.
+		const orphaned = orphanedServers();
 		const error = await save(themeId, iconMode);
 		if (error === null) {
 			toast.success("Settings saved", {
 				description: `Written to ${configFile()}`,
 			});
+			// A server naming a profile that no longer exists still starts — it falls
+			// back to direct networking — so this is a warning, not an error. Saying
+			// nothing would leave that fallback to be discovered as a broken tunnel.
+			if (orphaned.length > 0) {
+				toast.warning("Some servers lost their profile", {
+					description: `${orphaned.join(", ")} — each will use direct networking until repointed with \`mctl edit <id> --network <profile>\`.`,
+				});
+			}
 			return;
 		}
 		toast.error("Settings not saved", {
@@ -355,6 +549,46 @@ export function Settings() {
 
 	const paths = resolveRootPaths(config);
 	const edit = (patch: Partial<SettingsDraft>) => set(patch);
+
+	/**
+	 * Edit the profile the editor is showing.
+	 *
+	 * A rename carries the **default** with it: the default is stored as a name,
+	 * so renaming the default profile without this would leave `defaultProfile`
+	 * pointing at a profile that no longer exists — which the form would then
+	 * refuse to save, for a reason the user did not cause.
+	 */
+	const editProfile = (patch: Partial<ProfileDraft>) => {
+		if (!profile) return;
+		const next = draft.profiles.map((entry, at) =>
+			at === shownProfile ? { ...entry, ...patch } : entry,
+		);
+		const renamed =
+			patch.name !== undefined && draft.network === profile.name
+				? { network: patch.name }
+				: {};
+		edit({ profiles: next, ...renamed });
+	};
+
+	/** Append a new profile and move the editor onto it. */
+	const addProfile = () => {
+		// Named `profile-N` for the first N that is free, so adding two in a row
+		// does not produce a duplicate name the form immediately flags.
+		let n = draft.profiles.length + 1;
+		const taken = new Set(draft.profiles.map((entry) => entry.name));
+		while (taken.has(`profile-${n}`)) n += 1;
+		edit({ profiles: [...draft.profiles, emptyProfile(`profile-${n}`)] });
+		setProfileIndex(draft.profiles.length);
+	};
+
+	/** Remove the shown profile from the draft; it disappears from disk on Save. */
+	const removeProfile = () => {
+		if (!profile || deleteBlock) return;
+		edit({
+			profiles: draft.profiles.filter((_, at) => at !== shownProfile),
+		});
+		setProfileIndex(Math.max(shownProfile - 1, 0));
+	};
 
 	// Groups holding a bad field are marked, since their fields are off screen
 	// while another tab is showing and Save would otherwise be disabled for no
@@ -576,16 +810,214 @@ export function Settings() {
 				) : null}
 
 				{group === "network" ? (
-					<Section description="Profiles are defined in config.json; the Network page shows which providers this machine can use.">
-						<RadioGroup
-							label="Default profile"
-							hint="applied to new servers"
-							options={profileOptions(config.network)}
-							value={draft.network}
-							focused={ring.isFocused("network")}
-							onFocused={() => ring.setFocus("network")}
-							onChange={(v) => edit({ network: v })}
-						/>
+					<Section description="A profile is a way of exposing a server. The Network page shows which providers this machine can actually use.">
+						<FormGrid>
+							<RadioGroup
+								label="Default profile"
+								hint="given to newly created servers"
+								options={profileOptions(draft.profiles)}
+								value={draft.network}
+								focused={ring.isFocused("network")}
+								onFocused={() => ring.setFocus("network")}
+								onChange={(v) => edit({ network: v })}
+							/>
+
+							{/* Which profile the fields below edit. A picker rather than a
+							    list of expanded profiles: every profile carries up to nine
+							    fields, and stacking them would put the Save button several
+							    screens down. */}
+							<Select
+								label="Editing"
+								hint={
+									issues.network ??
+									`${draft.profiles.length} profile${draft.profiles.length === 1 ? "" : "s"} defined`
+								}
+								options={profileOptions(draft.profiles).map((option) => ({
+									label: option.label,
+									value: option.value,
+									description: option.description,
+								}))}
+								value={profile?.name ?? ""}
+								width="100%"
+								maxVisible={6}
+								focused={ring.isFocused("profileSelect")}
+								onFocused={() => ring.setFocus("profileSelect")}
+								onChange={(name) => {
+									const at = draft.profiles.findIndex((p) => p.name === name);
+									if (at >= 0) setProfileIndex(at);
+								}}
+							/>
+						</FormGrid>
+
+						{profile ? (
+							// Keyed by row, so switching profiles **remounts** these fields.
+							// Without it the same `<input>` renderable is reused across rows, and
+							// OpenTUI emits `onInput` when a value prop is assigned — so a switch
+							// fed the outgoing profile's text back into the incoming row and
+							// silently renamed it. Seen in a pty, not in the types.
+							<FormGrid key={shownProfile}>
+								<Input
+									label="Name"
+									hint={
+										perProfileIssues.name ??
+										(profile.name === DIRECT_PROFILE
+											? "the built-in fallback profile"
+											: "what a server names in its mctl.json")
+									}
+									value={profile.name}
+									width="100%"
+									invalid={perProfileIssues.name !== undefined}
+									focused={ring.isFocused("pName")}
+									onFocused={() => ring.setFocus("pName")}
+									onChange={(v) => editProfile({ name: v })}
+									onSubmit={() => ring.next()}
+								/>
+
+								<Select
+									label="Provider"
+									hint="how the port is exposed"
+									options={providerOptions(
+										context?.providers,
+										profile.provider,
+									)}
+									value={profile.provider}
+									width="100%"
+									maxVisible={6}
+									focused={ring.isFocused("pProvider")}
+									onFocused={() => ring.setFocus("pProvider")}
+									onChange={(v) => editProfile({ provider: v })}
+								/>
+
+								<FormGridItem span="full">
+									<Input
+										label="Options"
+										hint={
+											perProfileIssues.options ?? optionsHint(profile.provider)
+										}
+										value={profile.options}
+										placeholder="key=value, key=value"
+										width="100%"
+										invalid={perProfileIssues.options !== undefined}
+										focused={ring.isFocused("pOptions")}
+										onFocused={() => ring.setFocus("pOptions")}
+										onChange={(v) => editProfile({ options: v })}
+										onSubmit={() => ring.next()}
+									/>
+								</FormGridItem>
+
+								{/* DNS is a block, not a field: turning it on adds five inputs,
+								    so it spans the row and they appear beneath it rather than
+								    shuffling what is already on screen. */}
+								<FormGridItem span="full">
+									<Checkbox
+										label="Cloudflare DNS"
+										caption="Publish this server's address as records on a domain you own"
+										checked={profile.dnsEnabled}
+										focused={ring.isFocused("pDns")}
+										onFocused={() => ring.setFocus("pDns")}
+										onChange={(v) => editProfile({ dnsEnabled: v })}
+									/>
+								</FormGridItem>
+
+								{profile.dnsEnabled ? (
+									<Input
+										label="Zone"
+										hint={perProfileIssues.dnsZone ?? "zone name or id"}
+										value={profile.dnsZone}
+										width="100%"
+										invalid={perProfileIssues.dnsZone !== undefined}
+										focused={ring.isFocused("pDnsZone")}
+										onFocused={() => ring.setFocus("pDnsZone")}
+										onChange={(v) => editProfile({ dnsZone: v })}
+										onSubmit={() => ring.next()}
+									/>
+								) : null}
+
+								{profile.dnsEnabled ? (
+									<Input
+										label="Hostname"
+										hint={perProfileIssues.dnsHostname ?? "e.g. mc.example.com"}
+										value={profile.dnsHostname}
+										width="100%"
+										invalid={perProfileIssues.dnsHostname !== undefined}
+										focused={ring.isFocused("pDnsHostname")}
+										onFocused={() => ring.setFocus("pDnsHostname")}
+										onChange={(v) => editProfile({ dnsHostname: v })}
+										onSubmit={() => ring.next()}
+									/>
+								) : null}
+
+								{profile.dnsEnabled ? (
+									<Input
+										label="TTL"
+										hint={perProfileIssues.dnsTtl ?? "seconds; 1 = automatic"}
+										value={profile.dnsTtl}
+										width="100%"
+										invalid={perProfileIssues.dnsTtl !== undefined}
+										focused={ring.isFocused("pDnsTtl")}
+										onFocused={() => ring.setFocus("pDnsTtl")}
+										onChange={(v) => editProfile({ dnsTtl: v })}
+										onSubmit={() => ring.next()}
+									/>
+								) : null}
+
+								{profile.dnsEnabled ? (
+									<Checkbox
+										label="SRV record"
+										caption="Also publish _minecraft._tcp, so players omit the port"
+										checked={profile.dnsSrv}
+										focused={ring.isFocused("pDnsSrv")}
+										onFocused={() => ring.setFocus("pDnsSrv")}
+										onChange={(v) => editProfile({ dnsSrv: v })}
+									/>
+								) : null}
+
+								{profile.dnsEnabled ? (
+									<FormGridItem span="full">
+										{/* Said in the caption rather than left to be discovered:
+										    the orange cloud proxies HTTP(S), and Minecraft is not
+										    HTTP — a proxied record makes the server unreachable. */}
+										<Checkbox
+											label="Proxied"
+											caption="Route through Cloudflare's proxy — breaks Minecraft; leave off"
+											checked={profile.dnsProxied}
+											focused={ring.isFocused("pDnsProxied")}
+											onFocused={() => ring.setFocus("pDnsProxied")}
+											onChange={(v) => editProfile({ dnsProxied: v })}
+										/>
+									</FormGridItem>
+								) : null}
+							</FormGrid>
+						) : null}
+
+						<box flexDirection="row" gap={2} alignItems="center">
+							<Button
+								size="small"
+								kind="ghost"
+								variant="primary"
+								focused={ring.isFocused("profileAdd")}
+								onFocused={() => ring.setFocus("profileAdd")}
+								onClick={addProfile}
+							>
+								Add profile
+							</Button>
+							<Button
+								size="small"
+								kind="ghost"
+								variant="error"
+								disabled={deleteBlock !== undefined || saving}
+								focused={ring.isFocused("profileDelete")}
+								onFocused={() => ring.setFocus("profileDelete")}
+								onClick={removeProfile}
+							>
+								Delete profile
+							</Button>
+							{/* A disabled button with no stated reason reads as a bug; this is
+							    the one place the two protected profiles are explained. */}
+							<text fg={colors.muted} truncate wrapMode="none">
+								{deleteBlock ?? "Changes apply when you save."}
+							</text>
+						</box>
 					</Section>
 				) : null}
 

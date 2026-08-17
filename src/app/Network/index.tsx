@@ -14,13 +14,16 @@
  */
 
 import { TextAttributes } from "@opentui/core";
-import { useTerminalDimensions } from "@opentui/react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { Button } from "../../components/index.ts";
 import type { ProviderReadiness } from "../../core/network/index.ts";
+import { useHints } from "../../hooks/use-hints.tsx";
 import { useIcons } from "../../hooks/use-icons.tsx";
 import {
 	useNetworkOverview,
 	useNetworkStatus,
 } from "../../hooks/use-network.ts";
+import { useRouter } from "../../hooks/use-router.tsx";
 import { useServers } from "../../hooks/use-servers.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { readinessLabel } from "../../types/network.ts";
@@ -179,8 +182,17 @@ export function Network() {
 	const { colors } = useTheme();
 	const { providers, profiles, loading, error } = useNetworkOverview();
 	const { data: servers } = useServers();
+	const { navigate } = useRouter();
 	const { width } = useTerminalDimensions();
 	const wide = width >= TWO_COLUMN_WIDTH;
+
+	// `p` is a plain character, which is safe here: this page has no text field,
+	// so it never holds an input capture and never competes with the shell's own
+	// single-key shortcuts (digits, q, t — `p` is free).
+	useKeyboard((key) => {
+		if (key.name === "p") navigate("settings", { group: "network" });
+	});
+	useHints([{ keys: "p", label: "manage profiles", when: "idle" }]);
 
 	const ready = providers.filter((p) => p.readiness.kind === "ready").length;
 
@@ -213,7 +225,7 @@ export function Network() {
 		>
 			<Section
 				title="Profiles"
-				subtitle="Defined in config.json; a server names one."
+				subtitle="A server names one; press p to edit them."
 			>
 				{profiles.map((profile) => (
 					<box key={profile.name} flexDirection="row" gap={1} marginTop={1}>
@@ -230,6 +242,20 @@ export function Network() {
 						) : null}
 					</box>
 				))}
+				{/* This page is a live status view and does no writes of its own — the
+				    editor is the Settings page's Network group, which already owns the
+				    draft buffer, validation and Save. Rather than name that group and
+				    leave the user to find it, the shortcut goes straight there. */}
+				<box marginTop={1}>
+					<Button
+						size="small"
+						kind="ghost"
+						variant="primary"
+						onClick={() => navigate("settings", { group: "network" })}
+					>
+						Manage profiles
+					</Button>
+				</box>
 			</Section>
 
 			<Section title="Servers" subtitle="Where each server is reachable now.">
