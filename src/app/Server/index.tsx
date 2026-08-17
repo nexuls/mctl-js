@@ -44,7 +44,7 @@ import { Button, Dialog, ScrollBox } from "../../components/index.ts";
 import { Tabs } from "../../components/Tabs.tsx";
 import { PageHeader, serverStateColor, serverStateIcon } from "../shared.tsx";
 import { DEFAULT_SERVER_TAB, SERVER_TABS, type ServerTabId } from "./tabs.ts";
-import type { ServerTabProps } from "./panels.tsx";
+import type { ServerSettingsFormState, ServerTabProps } from "./panels.tsx";
 import { OverviewTab } from "./tabs/Overview.tsx";
 import { ConsoleTab } from "./tabs/Console.tsx";
 import { PlayersTab } from "./tabs/Players.tsx";
@@ -53,7 +53,7 @@ import { ContentTab } from "./tabs/Content.tsx";
 import { BackupsTab } from "./tabs/Backups.tsx";
 import { PerformanceTab } from "./tabs/Performance.tsx";
 import { NetworkTab } from "./tabs/Network.tsx";
-import { SettingsTab } from "./tabs/Settings.tsx";
+import { SettingsTab, serverSettingsRingIds } from "./tabs/Settings.tsx";
 
 /** Which lifecycle action is currently in flight, for the button labels. */
 type Pending = "start" | "stop" | "restart" | undefined;
@@ -94,6 +94,13 @@ export function ServerDetail() {
 	const [tab, setTab] = useState<ServerTabId>(DEFAULT_SERVER_TAB);
 	const [pending, setPending] = useState<Pending>();
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	// The Settings tab's form state (dirty, and whether its conditional Java field
+	// is on screen). It reaches the container because the container owns the ring
+	// — see `ServerTabProps.onFormState`.
+	const [settingsForm, setSettingsForm] = useState<ServerSettingsFormState>({
+		dirty: false,
+		javaPinned: false,
+	});
 	// A tab can raise a modal of its own (the Players tab's action menu). While one
 	// is up it owns the keyboard, so this page's ring stands down — see `onModal`
 	// on `ServerTabProps`.
@@ -128,6 +135,9 @@ export function ServerDetail() {
 			// caret to move, so it answers no keys and a ring stop there would be a
 			// Tab that lands on nothing.
 			...(tab === "players" ? [PLAYERS_ID] : []),
+			// The Settings tab is a form: its fields join *this* ring rather than
+			// opening one of their own, because only one ring may listen at a time.
+			...(tab === "settings" ? serverSettingsRingIds(settingsForm) : []),
 		],
 		// A modal takes the keyboard while it is up: with both rings listening, one
 		// Tab would move the page's focus *behind* the dialog.
@@ -262,7 +272,14 @@ export function ServerDetail() {
 			case "network":
 				return <NetworkTab {...tabProps} />;
 			case "settings":
-				return <SettingsTab {...tabProps} />;
+				return (
+					<SettingsTab
+						{...tabProps}
+						focus={ring}
+						onFormState={setSettingsForm}
+						onRefresh={refresh}
+					/>
+				);
 		}
 	})();
 

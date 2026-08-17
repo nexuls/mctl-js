@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from "react";
+import type { FocusRing } from "../../hooks/use-focus-ring.ts";
 import { useTheme } from "../../hooks/use-theme.tsx";
 import { ProgressBar } from "../../components/index.ts";
 import type { Server } from "../../types/server.ts";
@@ -43,6 +44,34 @@ export interface ServerTabProps {
 	 * modal state. See `useFocusRing`'s "only one ring listens at a time".
 	 */
 	onModal?: (open: boolean) => void;
+	/**
+	 * The container's focus ring, for a tab whose body is a form.
+	 *
+	 * A tab with several controls cannot open a ring of its own — only one ring
+	 * may listen at a time, so a second would move the page's focus behind the
+	 * tab's. Instead the tab exports its ids (`serverSettingsRingIds`), the
+	 * container splices them into *its* ring while that tab is active, and hands
+	 * the ring back down here.
+	 */
+	focus?: FocusRing;
+	/**
+	 * Reports the state of a tab's form, so the container can build the ring
+	 * members for it: which are disabled (Save/Revert follow `dirty`) and which
+	 * exist at all (a field behind a toggle). Both facts live in the tab, and a
+	 * ring member whose `disabled` disagrees with its control — or that names a
+	 * control not on screen — is the defect `useFocusRing` guards against.
+	 */
+	onFormState?: (state: ServerSettingsFormState) => void;
+	/** Ask the container to re-read the server after this tab wrote to it. */
+	onRefresh?: () => void;
+}
+
+/** The state of a tab's form, reported up so the container can size its ring. */
+export interface ServerSettingsFormState {
+	/** Whether the tab's buffer differs from disk. */
+	dirty: boolean;
+	/** Whether the pinned-Java field is currently on screen. */
+	javaPinned: boolean;
 }
 
 /** A `label: value` detail row. */

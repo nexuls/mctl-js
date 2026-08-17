@@ -78,12 +78,12 @@ export const SERVER_TABS: readonly ServerTab[] = [
 	{
 		id: "settings",
 		label: "Settings",
-		description: "What mctl.json records about this server.",
+		description: "Edit what mctl.json records about this server.",
 	},
 ] as const;
 
 /** The default tab a freshly-opened server page shows. */
-export const DEFAULT_SERVER_TAB: ServerTabId = "content";
+export const DEFAULT_SERVER_TAB: ServerTabId = "overview";
 
 /** Look a tab up by id, falling back to the default. */
 export function serverTab(id: string): ServerTab {
