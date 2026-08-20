@@ -3,11 +3,13 @@
  * read (never written) so MCTL can show what the server is actually configured
  * to do: its port, MOTD, difficulty, gamemode, player cap, and the rest.
  *
- * Core service — no UI, no provider imports. **Read-only by design**: this file
- * belongs to Minecraft, and MCTL owns exactly one file inside a server directory
- * (`mctl.json`, plus the one-off `eula.txt` at create). Re-read from disk on
- * every call, so a value the user edited in another terminal shows up without
- * MCTL knowing anything happened (architecture.md § Statelessness).
+ * Core service — no UI, no provider imports. **This module reads and never
+ * writes.** Editing the file is a separate, deliberate module
+ * (`properties-write.ts`), because the two need opposite dispositions: the
+ * reader coerces and interprets, the writer must preserve. Re-read from disk on
+ * every call, so a value the user edited in another terminal — or in MCTL's own
+ * Properties editor — shows up without MCTL knowing anything happened
+ * (architecture.md § Statelessness).
  *
  * The format is Java's `.properties`, not JSON — which is why the parsing lives
  * here by hand rather than behind Zod. Zod still guards the *interpretation*
@@ -88,8 +90,11 @@ const NUMERIC_DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
  * Decode the escape sequences Java's `Properties.store` writes: `\uXXXX` for
  * anything non-Latin-1 (a MOTD with emoji or CJK arrives this way), plus the
  * usual `\n`/`\t`/`\r` and a backslash-escaped separator.
+ *
+ * Exported for `properties-write.ts`, which has to recover a key from a line it
+ * is about to rewrite — the inverse of the escaping it applies.
  */
-function unescapeValue(value: string): string {
+export function unescapeValue(value: string): string {
 	let out = "";
 	for (let i = 0; i < value.length; i += 1) {
 		const ch = value[i];
@@ -128,6 +133,28 @@ function unescapeValue(value: string): string {
 }
 
 /**
+ * Index of the first *unescaped* key/value separator in a trimmed entry line, or
+ * `-1` for a line that is a bare key.
+ *
+ * Minecraft always writes `=`, but the format allows `:` and bare whitespace and
+ * the file is routinely hand-edited, so all four are accepted. Exported because
+ * `properties-write.ts` has to find the same boundary to know which key a line
+ * it is about to replace belongs to — two different answers there would mean the
+ * writer rewriting a line the reader attributes to another key.
+ */
+export function separatorIndex(trimmed: string): number {
+	for (let j = 0; j < trimmed.length; j += 1) {
+		const ch = trimmed[j];
+		if (ch === "\\") {
+			j += 1;
+			continue;
+		}
+		if (ch === "=" || ch === ":" || ch === " " || ch === "\t") return j;
+	}
+	return -1;
+}
+
+/**
  * Parse a Java `.properties` document into a flat record. Handles `#`/`!`
  * comments, `=`/`:`/whitespace as the key-value separator, backslash line
  * continuation, and the escape sequences above.
@@ -150,20 +177,7 @@ export function parseProperties(text: string): Record<string, string> {
 			continue;
 		}
 
-		// Find the first unescaped separator. Minecraft always writes `=`, but the
-		// format allows `:` and bare whitespace, and a user may have hand-edited.
-		let separator = -1;
-		for (let j = 0; j < trimmed.length; j += 1) {
-			const ch = trimmed[j];
-			if (ch === "\\") {
-				j += 1;
-				continue;
-			}
-			if (ch === "=" || ch === ":" || ch === " " || ch === "\t") {
-				separator = j;
-				break;
-			}
-		}
+		const separator = separatorIndex(trimmed);
 
 		if (separator === -1) {
 			out[unescapeValue(trimmed)] = "";
