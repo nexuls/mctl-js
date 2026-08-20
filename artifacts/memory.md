@@ -5,6 +5,56 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## MCTL now writes a second file in a server directory (2026-08-21, user request)
+
+"Implement server.properties editor inside the server page. I want every single field be editable."
+That conflicts with AGENTS.md § 3 — *MCTL owns exactly one file inside a server directory
+(`mctl.json`)* — and `properties.ts` said **read-only by design** at the top. Said so, then built it;
+this is the record of the deviation.
+
+What keeps it honest is that the writer is **surgical, not a serializer**
+(`core/server/properties-write.ts`):
+
+- Only the lines whose key changed are rewritten. Comments, blank lines, ordering, unknown keys and
+  the file's line endings survive — including the user's own `# ...` notes, which a round-trip
+  through a parsed map would have deleted.
+- Keys the user did not touch are **not written at all**, even ones MCTL has a default for.
+  Materialising 64 defaults into a twelve-line file is a rewrite wearing an edit's clothes, and it
+  would pin values Minecraft is otherwise free to change between versions.
+- Atomic (temp + rename). A truncated `server.properties` boots on defaults — including
+  `level-name=world`, which is one of the ways worlds get "lost".
+
+**The reader's view model is the wrong thing to edit from.** `readProperties` interprets: hardcore
+reports `difficulty: "hard"` whatever the key says, and the MOTD is stripped of `§` colour codes.
+Both are right for a read-out and fatal for an editor — Save would write back a value the user never
+typed. So the editor buffers the **raw string map** and `properties-catalogue.ts` says only how to
+*render* and *validate* each string. Worth remembering as a general shape: a display model and an
+edit model over the same file are two models, not one.
+
+**"Every field" means the file's fields, not the catalogue's.** `propertyFieldsFor(raw)` appends a
+plain text field for every key on disk the catalogue does not know — a mod's own setting, a property
+from an older Minecraft. Without it the promise would quietly be "every field we thought of", and a
+user would find a key in their file that MCTL refuses to show.
+
+**Java `.properties` escaping is not what you would guess.** `Properties.store` escapes `=`, `:`,
+`#` and `!` *in values as well as keys*, escapes only a leading space in a value (every space in a
+key), and `\uXXXX`-escapes anything outside printable ASCII. That is why a vanilla file reads
+`level-type=minecraft\:normal` and a coloured MOTD reads `\u00a76`. Matching Java exactly matters
+because `properties.ts`'s reader was written against Java's output.
+
+**A rendered-frame test of a `FormGrid` needs two settling passes.** The grid picks its column count
+from a *measured* width, which yoga only knows once it has laid out a frame that has fields in it —
+and the fields themselves arrive in an effect. `renderOnce → sleep 60 → renderOnce` caught the grid
+mid-reflow in its one-column fallback, flakily and only in some tests. `→ sleep 30 → renderOnce`
+settles it. Same trap will apply to any future rendered test of a responsive grid.
+
+**What the harness cannot reach.** Which screen the Properties tab shows is its own state behind a
+`Tabs` control, so the rendered tests only ever draw the default screen; the per-screen logic is
+covered through `serverPropertiesRingIds` called directly. The RCON-password masking (masked unless
+the field holds the focus) is therefore untested at the frame level — noted rather than papered over.
+
+---
+
 ## A nested bar is not a keyboard (2026-08-20, user report)
 
 Splitting the Content tab into sub-tabs gave it one ring stop — the bar — and the user's next

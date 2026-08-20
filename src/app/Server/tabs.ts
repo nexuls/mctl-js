@@ -14,6 +14,7 @@ export type ServerTabId =
 	| "console"
 	| "players"
 	| "world"
+	| "properties"
 	| "content"
 	| "backups"
 	| "performance"
@@ -31,8 +32,13 @@ export interface ServerTab {
 
 /**
  * The tabs, in reading order: what the server *is* doing (overview, console,
- * players), then what it *contains* (world, content, backups), then how it is
- * *run* (performance, network, settings).
+ * players), then what it *contains* (world, its properties, content, backups),
+ * then how it is *run* (performance, network, settings).
+ *
+ * World and Properties are two views of the same file on purpose: World reads it
+ * back as prose, with MCTL's interpretations applied (hardcore reported as
+ * `hard`, the MOTD stripped of colour codes), and Properties is the editor,
+ * which shows what is on disk verbatim because Save writes it back.
  */
 export const SERVER_TABS: readonly ServerTab[] = [
 	{
@@ -53,7 +59,12 @@ export const SERVER_TABS: readonly ServerTab[] = [
 	{
 		id: "world",
 		label: "World",
-		description: "The world, and every rule server.properties sets.",
+		description: "The world, and the rules server.properties sets for it.",
+	},
+	{
+		id: "properties",
+		label: "Properties",
+		description: "Edit every field of server.properties.",
 	},
 	{
 		id: "content",

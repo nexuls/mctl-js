@@ -4,8 +4,8 @@
  *
  * **A tabbed multi-screen page.** One server carries far more than a screen of
  * information, and the tabs (`tabs.ts`) split it by the question being asked:
- * Overview / Console / Players / World / Content / Backups / Performance /
- * Network / Settings. This container owns everything the tabs share — the
+ * Overview / Console / Players / World / Properties / Content / Backups /
+ * Performance / Network / Settings. This container owns everything the tabs share — the
  * identity header, the lifecycle action bar, the tab bar, the focus ring and the
  * delete confirmation — and each tab under `tabs/` renders one screen from the
  * `server` + `insight` + `size` it is handed. Adding a screen is one row in
@@ -50,6 +50,11 @@ import { ConsoleTab } from "./tabs/Console.tsx";
 import { PlayersTab } from "./tabs/Players.tsx";
 import { WorldTab } from "./tabs/World.tsx";
 import {
+	PropertiesTab,
+	serverPropertiesRingIds,
+	type ServerPropertiesTabState,
+} from "./tabs/Properties.tsx";
+import {
 	ContentTab,
 	serverContentRingIds,
 	type ServerContentTabState,
@@ -86,6 +91,9 @@ const TAB_OWNS_SCROLL: ReadonlySet<ServerTabId> = new Set<ServerTabId>([
 	"players",
 	// The Content tab pins its own section bar over a scrolling body.
 	"content",
+	// The Properties tab pins a section bar above its fields and the Save row
+	// below them, so only the fields between the two scroll.
+	"properties",
 ]);
 
 export function ServerDetail() {
@@ -117,6 +125,14 @@ export function ServerDetail() {
 		market: false,
 		rows: 0,
 	});
+	// The Properties tab's ring members *are* the fields of whichever of its
+	// screens is open — see `ServerTabProps.onPropertiesState`.
+	const [propertiesState, setPropertiesState] =
+		useState<ServerPropertiesTabState>({
+			keys: [],
+			dirty: false,
+			invalid: false,
+		});
 
 	// The tab bar and the action buttons only honour keys while `focused`, so the
 	// page owns a ring over them — without it both would be mouse-only, which is
@@ -147,6 +163,9 @@ export function ServerDetail() {
 			// and its list of items — which of the three exist depends on the section
 			// on show, which is why the tab reports its state up.
 			...(tab === "content" ? serverContentRingIds(contentState) : []),
+			// The Properties tab is a generated form over `server.properties`: its
+			// screen bar, that screen's fields, and Revert/Save.
+			...(tab === "properties" ? serverPropertiesRingIds(propertiesState) : []),
 			...(tab === "players" ? [PLAYERS_ID] : []),
 			// The Settings tab is a form: its fields join *this* ring rather than
 			// opening one of their own, because only one ring may listen at a time.
@@ -281,6 +300,14 @@ export function ServerDetail() {
 				);
 			case "world":
 				return <WorldTab {...tabProps} />;
+			case "properties":
+				return (
+					<PropertiesTab
+						{...tabProps}
+						focus={ring}
+						onPropertiesState={setPropertiesState}
+					/>
+				);
 			case "content":
 				return (
 					<ContentTab

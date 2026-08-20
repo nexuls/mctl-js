@@ -812,6 +812,39 @@ state reaching the container via `ServerTabProps.onContentState`, the same arran
 tab uses for its form. The list moves a caret with ↑/↓ under its one stop and toggles on
 Space/Enter; a click both selects a row and toggles it.
 
+The **Properties** tab is the editor for `server.properties`, and the one place MCTL writes a file
+inside a server directory that is not `mctl.json` — a deliberate deviation from the "MCTL owns
+exactly one file" rule, recorded in `memory.md`. It rests on three modules:
+
+- `core/server/properties.ts` — reads, and only reads. Unchanged in intent; it now exports
+  `separatorIndex` and `unescapeValue` so the writer finds a key boundary the same way the reader
+  does.
+- `core/server/properties-catalogue.ts` — pure data: the 64 documented keys with label, kind
+  (boolean / int+range / enum / string), default, one-line hint and which screen they belong on,
+  plus `propertyFieldsFor(raw)`, which appends a text field for **every key on disk the catalogue
+  does not know**. That last part is what makes "every field is editable" true rather than
+  "every field we thought of".
+- `core/server/properties-write.ts` — a *surgical* editor, not a serializer. It rewrites only the
+  lines whose key changed, preserves comments, blank lines, ordering, unknown keys and the file's
+  line endings, appends genuinely new keys at the end, and writes atomically. Keys the user did not
+  touch are never written, so opening the tab on a twelve-line file and pressing nothing leaves
+  twelve lines.
+
+The catalogue is a **second, deliberately different view of the same file** from the `ServerProperties`
+view model. That model interprets (hardcore reported as `hard` whatever the difficulty key says, the
+MOTD stripped of `§` codes), which is right for a read-out and fatal for an editor — saving from it
+would write back values the user never typed. `hooks/use-server-properties.ts` therefore buffers the
+**raw string map** off the polled `insight`, follows disk while clean and never while dirty (the same
+`adopted` ref as `useServerSettings`, and it matters more here because the insight re-polls every two
+seconds), and commits only the changed keys.
+
+The tab itself is generated from the catalogue: nine screens behind a nested `Tabs` (so it is in
+`TAB_OWNS_SCROLL`), with the bar pinned above the fields and Revert/Save pinned below them. Unlike
+the Content tab's three fixed stops, its ring members **are** the active screen's fields —
+`serverPropertiesRingIds({keys, dirty, invalid})`, reported up through
+`ServerTabProps.onPropertiesState`. Renumbering on a screen switch is fine there: switching screen is
+as deliberate an act as switching tab. There is no CLI peer yet — see `progress.md`.
+
 The **Settings** tab is the third screen with its own write, and the first that is a *form*: it
 edits `mctl.json` through `hooks/use-server-settings.ts` over `ServerManager.editServer` — exactly
 `EditServerOptions` (name, memory, runtime, network profile, Java pin) and nothing more, because

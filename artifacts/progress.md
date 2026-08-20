@@ -3,11 +3,52 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-20 (Content tab: nested sub-tabs, then a keyboard for its body)_
+_Last updated: 2026-08-21 (Properties tab: a full editor for `server.properties`)_
 
 ---
 
 ## Done
+
+- **A Properties tab, editing every field of `server.properties` (2026-08-21, user request).**
+  "Implement server.properties editor inside the server page. I want every single field be editable."
+  This is MCTL's first write to a file in a server directory other than `mctl.json` — a deliberate
+  deviation from AGENTS.md § 3, recorded in `memory.md` with the mitigations.
+  - `src/core/server/properties-catalogue.ts` (new) — pure data: the **64 documented keys** with
+    label, kind (boolean / int+range / enum / string), Minecraft's default, a one-line hint and the
+    screen each belongs on, plus `normalizeProperty` (legacy numeric `gamemode=0` → `survival`, and
+    nothing else), `validateProperty`, and `propertyFieldsFor(raw)` — which appends a plain text
+    field for **every key on disk the catalogue does not know**, so "every field" means the file's
+    fields and not the catalogue's.
+  - `src/core/server/properties-write.ts` (new) — a surgical editor: rewrites only the lines whose
+    key changed, preserves comments / blank lines / ordering / unknown keys / CRLF, replaces all
+    occurrences of a duplicated key, appends genuinely new keys at the end, writes atomically, and
+    creates the file with Minecraft's own two header lines when the server has never booted.
+  - `src/core/server/properties.ts` — unchanged in intent (still reads and never writes); now
+    exports `separatorIndex` and `unescapeValue` so the writer locates a key exactly as the reader
+    does, and its header points at the new module.
+  - `src/hooks/use-server-properties.ts` (new) — buffers the **raw string map** off the polled
+    `insight` (never the coerced `ServerProperties`, which interprets), follows disk while clean and
+    never while dirty via the `adopted` ref, tracks a `changed` set, validates per field, and commits
+    only the changed keys.
+  - `src/app/Server/tabs/Properties.tsx` (new) — the form is *generated* from the catalogue: a kind
+    becomes a control. Nine screens behind a nested `Tabs` (so `"properties"` joined
+    `TAB_OWNS_SCROLL`), bar pinned above and Revert/Save pinned below the scrolling fields. Fields
+    are labelled by their **key** (what the wiki calls them), changed ones get a trailing `*`, the
+    bar's labels carry a per-screen pending count, and the RCON password is masked unless the field
+    holds the focus. Ctrl+S saves; the toast says a running server keeps what it booted with *and*
+    may overwrite these when it saves.
+  - Ring: `serverPropertiesRingIds({keys, dirty, invalid})`, reported up through the new
+    `ServerTabProps.onPropertiesState`. Unlike the Content tab's fixed stops the members **are** the
+    active screen's fields — a screen switch legitimately renumbers, because it is as deliberate as
+    a tab switch.
+  - `src/app/Server/tabs.ts` — new `"properties"` tab after World; World's description now says it
+    shows *the rules*, since Properties owns editing them.
+  - Tests (**679 total**, +36): the writer's preservation guarantees (comments, ordering, CRLF,
+    duplicates, continuations, `:`/space separators, a value containing its own key), Java escaping
+    round-tripped through the real reader, catalogue consistency and the unknown-key path, and eight
+    rendered/ring cases for the tab.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 679 pass / 0 fail, `bun run format` clean. The
+    live TUI was **not** driven by hand this session — the rendered-frame tests are the evidence.
 
 - **The Content tab's body answers the keyboard (2026-08-20, user report).** "The content body
   doesn't have keyboard support. Tab doesn't work." The nested bar was the tab's only ring stop, so
@@ -1520,6 +1561,18 @@ Carried over from Phase 3, deliberately not done:
 
 The self-contained ones were closed on 2026-08-13 (see the entry at the top of *Done*). What is left
 falls into three buckets, and the bucket is the reason it is still here:
+
+**Carried forward from the Properties tab (2026-08-21):**
+
+- **No CLI peer.** The domain logic is in core (`properties-catalogue.ts` + `properties-write.ts`),
+  so nothing is trapped in the TUI, but there is no `mctl set <server> <key> <value>` / `mctl get`
+  projecting it yet. That is the natural next command, and it is a thin one.
+- **Two frame-level blind spots**, both because the harness cannot press the tab's own screen bar:
+  only the default (General) screen is ever drawn, and the RCON-password masking is untested. The
+  per-screen ring logic is covered by calling `serverPropertiesRingIds` directly.
+- **The catalogue is a snapshot of Minecraft 1.21.** New keys will fall through to the *Other*
+  screen as plain text fields — which is the designed fallback, not a break — but they get no label,
+  no range check and no group until someone adds a row.
 
 1. **Needs something MCTL cannot supply itself** — a Cloudflare zone and token, a playit account, an
    RCON client. Listed below as unverified rather than unimplemented.

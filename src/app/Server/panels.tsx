@@ -16,6 +16,7 @@ import { ProgressBar } from "../../components/index.ts";
 import type { Server } from "../../types/server.ts";
 import type { ServerInsight, ServerSize } from "../../core/server/inspect.ts";
 import type { ServerContentTabState } from "./tabs/Content.tsx";
+import type { ServerPropertiesTabState } from "./tabs/Properties.tsx";
 
 /**
  * Label column width inside a panel, so every row's values line up — across
@@ -69,6 +70,13 @@ export interface ServerTabProps {
 	 * only the tab knows whether its screen has a button or any rows to select.
 	 */
 	onContentState?: (state: ServerContentTabState) => void;
+	/**
+	 * Reports which fields the Properties tab's current screen has on show, and
+	 * whether its buffer is committable — the same contract as {@link onFormState}
+	 * and {@link onContentState}. The members here *are* the fields, so the
+	 * container cannot build them without asking.
+	 */
+	onPropertiesState?: (state: ServerPropertiesTabState) => void;
 	/** Ask the container to re-read the server after this tab wrote to it. */
 	onRefresh?: () => void;
 }
