@@ -49,7 +49,11 @@ import { OverviewTab } from "./tabs/Overview.tsx";
 import { ConsoleTab } from "./tabs/Console.tsx";
 import { PlayersTab } from "./tabs/Players.tsx";
 import { WorldTab } from "./tabs/World.tsx";
-import { ContentTab } from "./tabs/Content.tsx";
+import {
+	ContentTab,
+	serverContentRingIds,
+	type ServerContentTabState,
+} from "./tabs/Content.tsx";
 import { BackupsTab } from "./tabs/Backups.tsx";
 import { PerformanceTab } from "./tabs/Performance.tsx";
 import { NETWORK_APPLY_ID, NetworkTab } from "./tabs/Network.tsx";
@@ -63,14 +67,6 @@ const TABS_ID = "__tabs";
 
 /** Ring id of the Console tab's command line. */
 const CONSOLE_ID = "__console";
-
-/**
- * Ring id of the Content tab's nested section bar. Its rows are checkboxes with
- * no caret, so the bar is the only thing on that tab a key can move — it joins
- * the ring while the tab is active so ←/→ can switch sections, exactly as they
- * switch tabs on the bar above it.
- */
-const CONTENT_ID = "__content";
 
 /**
  * Ring id of the Players tab's card grid. Like the console's command line, it
@@ -115,6 +111,12 @@ export function ServerDetail() {
 	// is up it owns the keyboard, so this page's ring stands down — see `onModal`
 	// on `ServerTabProps`.
 	const [tabModal, setTabModal] = useState(false);
+	// The Content tab's ring contribution depends on which of its nested sections
+	// is open — see `ServerTabProps.onContentState`.
+	const [contentState, setContentState] = useState<ServerContentTabState>({
+		market: false,
+		rows: 0,
+	});
 
 	// The tab bar and the action buttons only honour keys while `focused`, so the
 	// page owns a ring over them — without it both would be mouse-only, which is
@@ -141,9 +143,10 @@ export function ServerDetail() {
 			...actions,
 			{ id: "remove", disabled: running },
 			...(tab === "console" ? [CONSOLE_ID] : []),
-			// The Content tab's one stop is its nested section bar; its rows are
-			// checkboxes with no caret, so there is nothing else there to land on.
-			...(tab === "content" ? [CONTENT_ID] : []),
+			// The Content tab's stops: its nested section bar, the screen's one button
+			// and its list of items — which of the three exist depends on the section
+			// on show, which is why the tab reports its state up.
+			...(tab === "content" ? serverContentRingIds(contentState) : []),
 			...(tab === "players" ? [PLAYERS_ID] : []),
 			// The Settings tab is a form: its fields join *this* ring rather than
 			// opening one of their own, because only one ring may listen at a time.
@@ -282,8 +285,8 @@ export function ServerDetail() {
 				return (
 					<ContentTab
 						{...tabProps}
-						focused={ring.isFocused(CONTENT_ID)}
-						onFocused={() => ring.setFocus(CONTENT_ID)}
+						focus={ring}
+						onContentState={setContentState}
 					/>
 				);
 			case "backups":

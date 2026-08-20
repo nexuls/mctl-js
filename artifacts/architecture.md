@@ -806,8 +806,11 @@ three rows apiece buried everything under them. The bar is pinned and only the s
 scrolls, so the tab is in `TAB_OWNS_SCROLL` (an inner scrollbox needs a definite height). Its
 entries are derived from the listing each render — a section with no panel gets no entry, and the
 active id falls back to the first entry rather than being corrected in an effect, since the sections
-land a round after mount. It joins the container's ring for that bar alone (`CONTENT_ID`): the rows
-are checkboxes with no caret, so a click parks or restores a jar and ←/→ switch sections.
+land a round after mount. It contributes three ring members through
+`serverContentRingIds(state)` — the bar, the screen's marketplace button and its list — with the
+state reaching the container via `ServerTabProps.onContentState`, the same arrangement the Settings
+tab uses for its form. The list moves a caret with ↑/↓ under its one stop and toggles on
+Space/Enter; a click both selects a row and toggles it.
 
 The **Settings** tab is the third screen with its own write, and the first that is a *form*: it
 edits `mctl.json` through `hooks/use-server-settings.ts` over `ServerManager.editServer` — exactly

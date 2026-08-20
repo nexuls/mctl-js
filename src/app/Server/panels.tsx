@@ -15,6 +15,7 @@ import { useTheme } from "../../hooks/use-theme.tsx";
 import { ProgressBar } from "../../components/index.ts";
 import type { Server } from "../../types/server.ts";
 import type { ServerInsight, ServerSize } from "../../core/server/inspect.ts";
+import type { ServerContentTabState } from "./tabs/Content.tsx";
 
 /**
  * Label column width inside a panel, so every row's values line up — across
@@ -62,6 +63,12 @@ export interface ServerTabProps {
 	 * control not on screen — is the defect `useFocusRing` guards against.
 	 */
 	onFormState?: (state: ServerSettingsFormState) => void;
+	/**
+	 * Reports which controls the Content tab's current sub-tab has on screen, for
+	 * the same reason as {@link onFormState}: the container builds the ring, and
+	 * only the tab knows whether its screen has a button or any rows to select.
+	 */
+	onContentState?: (state: ServerContentTabState) => void;
 	/** Ask the container to re-read the server after this tab wrote to it. */
 	onRefresh?: () => void;
 }

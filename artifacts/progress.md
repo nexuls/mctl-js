@@ -3,11 +3,31 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-20 (Content tab split into nested sub-tabs)_
+_Last updated: 2026-08-20 (Content tab: nested sub-tabs, then a keyboard for its body)_
 
 ---
 
 ## Done
+
+- **The Content tab's body answers the keyboard (2026-08-20, user report).** "The content body
+  doesn't have keyboard support. Tab doesn't work." The nested bar was the tab's only ring stop, so
+  Tab reached nothing else on the screen.
+  - `src/app/Server/tabs/Content.tsx` — three exported ring ids (`CONTENT_TABS_ID`,
+    `CONTENT_MARKET_ID`, `CONTENT_LIST_ID`) and `serverContentRingIds(state)`, on the Settings tab's
+    precedent: the ids are always present and merely `disabled` where the control is not on screen,
+    so Tab does not renumber as the user moves between sections. The tab reports
+    `{market, rows}` up through the new `ServerTabProps.onContentState`.
+  - The list gained a caret: a 2-cell column reserved on **every** row (an inserted caret would
+    shift the row sideways as the selection moved), seeded and clamped on the item keys exactly as
+    the Players grid does. ↑/↓ (j/k) move it, Space **and** Enter toggle the item, a click both
+    selects and toggles. The caret is drawn muted when the list does not hold the ring — where the
+    keyboard would land stays useful while the focus is on the bar.
+  - Context hints follow the ring: "switch section" on the bar, "select item / enable / disable /
+    leave list" on the list.
+  - Tests (**643 total**, +2): the keyboard case drives ↓ then Space through a stand-in `FocusRing`
+    and asserts only the caret's jar was parked; a second covers the caret being drawn unfocused.
+    The rule assertion in "rows are in name order" was updated for the panel-less list chrome.
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 643 pass / 0 fail, `bun run format` clean.
 
 - **The Content tab is a nested tab bar (2026-08-20, user request).** "Currently mods, datapacks,
   etc is showing on single place. This will be difficult if we have a lot of mods." Mods, Plugins,

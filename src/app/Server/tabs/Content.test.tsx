@@ -20,9 +20,10 @@ import { ThemeRegistry } from "../../../core/theme/registry.ts";
 import { ThemeProvider } from "../../../hooks/use-theme.tsx";
 import { IconProvider } from "../../../hooks/use-icons.tsx";
 import { ToastProvider } from "../../../hooks/use-toast.tsx";
+import type { FocusRing } from "../../../hooks/use-focus-ring.ts";
 import { buildZip } from "../../../lib/zip.fixture.ts";
 import type { Server } from "../../../types/server.ts";
-import { ContentTab } from "./Content.tsx";
+import { CONTENT_LIST_ID, ContentTab } from "./Content.tsx";
 
 let dir: string;
 let cache: string;
@@ -90,8 +91,26 @@ function fabricMod(name: string, version: string, description?: string) {
 	];
 }
 
+/**
+ * A stand-in for the container's focus ring, parked on one id.
+ *
+ * The Content tab does not own a ring — the Server page does, and splices this
+ * tab's ids into it (`serverContentRingIds`). A test that wants the list to
+ * answer the keyboard therefore has to hand the tab a ring that says it holds
+ * the focus, which is exactly what the container does at runtime.
+ */
+function ringOn(id: string): FocusRing {
+	return {
+		focus: id,
+		isFocused: (candidate) => candidate === id,
+		setFocus: () => {},
+		next: () => {},
+		prev: () => {},
+	};
+}
+
 /** Mount the tab and hand back the harness, settled on its first listing. */
-async function mountTab(width = 100, height = 40) {
+async function mountTab(width = 100, height = 40, focus?: FocusRing) {
 	const registry = await new ThemeRegistry().load();
 	const harness = await createTestRenderer({ width, height });
 	createRoot(harness.renderer).render(
@@ -101,7 +120,7 @@ async function mountTab(width = 100, height = 40) {
 			    checkbox is invisible in a captured frame. */}
 			<IconProvider initialMode="ascii">
 				<ToastProvider>
-					<ContentTab server={server} />
+					<ContentTab server={server} focus={focus} />
 				</ToastProvider>
 			</IconProvider>
 		</ThemeProvider>,
@@ -177,14 +196,13 @@ test("rows are in name order whatever their state, separated by a rule", async (
 	// "Aaa" is parked and still comes first: grouping by state would move a row
 	// out from under the pointer the moment its checkbox was clicked.
 	expect(row("Aaa")).toBeLessThan(row("Zzz"));
-	// One rule between the two rows, and none under the last one. A row rule is a
-	// run of ─ *inside* a panel's sides, which is what tells it apart from the
-	// panels' own top and bottom borders. It sits three lines under the name,
-	// because a row is a name line plus the two rows reserved for a description.
-	const isRule = (line: string | undefined) =>
-		/^\s*│\s*─+\s*│\s*$/.test(line ?? "");
+	// One rule between the two rows, and none under the last one — the two other
+	// full-width rules are the list's own top and bottom edges. A row's rule sits
+	// three lines under its name, because a row is a name line plus the two rows
+	// reserved for a description.
+	const isRule = (line: string | undefined) => /^\s*─+\s*$/.test(line ?? "");
 	expect(isRule(lines[row("Aaa") + 3])).toBe(true);
-	expect(lines.filter(isRule).length).toBe(1);
+	expect(lines.filter(isRule).length).toBe(3);
 });
 
 test("clicking a row's checkbox parks the jar", async () => {
@@ -339,4 +357,43 @@ test("below the icon width the column is dropped again", async () => {
 	// Seven cells are worth more to the name than to the picture on a small
 	// terminal, so the icon column is not reserved at all down there.
 	expect((columnOf(wide) ?? 0) - (columnOf(narrow) ?? 0)).toBe(7);
+});
+
+test("the list answers the keyboard while it holds the ring", async () => {
+	await jar("mods/alpha.jar", fabricMod("Alpha", "1.0"));
+	await jar("mods/beta.jar", fabricMod("Beta", "1.0"));
+	const harness = await mountTab(100, 40, ringOn(CONTENT_LIST_ID));
+
+	/** The row the caret is on, by the `>` the ascii set draws in its first cells. */
+	const caretRow = () =>
+		harness
+			.captureCharFrame()
+			.split("\n")
+			.find((line) => line.trimStart().startsWith(">")) ?? "";
+
+	// The caret seeds itself on the first row, so a keyboard user arrives with
+	// something selected rather than having to press a key to make one appear.
+	expect(caretRow()).toContain("Alpha");
+
+	harness.mockInput.pressArrow("down");
+	await Bun.sleep(30);
+	harness.renderOnce();
+	expect(caretRow()).toContain("Beta");
+
+	// Space is the keyboard peer of the row's checkbox: it parks the jar the caret
+	// is on, and nothing else.
+	harness.mockInput.pressKey(" ");
+	await Bun.sleep(220);
+	expect(existsSync(join(dir, "mods", "beta.jar.disabled"))).toBe(true);
+	expect(existsSync(join(dir, "mods", "alpha.jar"))).toBe(true);
+});
+
+test("the caret is drawn even when the list does not hold the ring", async () => {
+	await jar("mods/alpha.jar", fabricMod("Alpha", "1.0"));
+	// Where the keyboard would land stays useful information while the focus sits
+	// on the bar above — and reserving the column on every row is what stops the
+	// list shifting sideways as the caret moves.
+	const frame = await mount();
+	const row = frame.split("\n").find((line) => line.includes("Alpha")) ?? "";
+	expect(row.trimStart().startsWith(">")).toBe(true);
 });

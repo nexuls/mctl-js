@@ -5,6 +5,30 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## A nested bar is not a keyboard (2026-08-20, user report)
+
+Splitting the Content tab into sub-tabs gave it one ring stop — the bar — and the user's next
+sentence was "the content body doesn't have keyboard support. Tab doesn't work." The lesson is
+narrow and worth keeping: **every screen a tab can show needs its own ring members, not just the
+control that switches screens.** A body reachable only by mouse reads as broken.
+
+The shape that works here, and the one to copy for any future tab with variable controls:
+
+- The tab exports its ids *and* a `serverXRingIds(state)` builder; the container splices the result
+  in while the tab is active. Ids stay present and go `disabled` when their control is off screen —
+  omitting them renumbers the ring under the user's fingers.
+- The state travels up through a `ServerTabProps.onX` callback, because a member's `disabled` must
+  be the same expression as its control's and only the tab knows it. `onFormState` (Settings) and
+  now `onContentState` (Content) are the two instances.
+- A list under one ring stop moves its own caret (↑/↓) and acts on Space/Enter — `useKeyboard`
+  guarded by `focused`, exactly as the Players grid does. Reserve the caret column on every row.
+
+Also: the Content tab's chrome changed under me mid-session (the user dropped `Panel` for a list
+bracketed by top/bottom rules). A rendered-frame test that asserts panel *sides* (`│ ─── │`) breaks
+on that kind of restyle — assert the shape of the rule, not the chrome around it.
+
+---
+
 ## A long list gets a nested tab bar, not a longer page (2026-08-20, user request)
 
 The Content tab stacked mods, plugins, datapacks, the resource pack and the on-disk totals in one

@@ -55,8 +55,8 @@
  */
 
 import type { BoxProps } from "@opentui/react";
-import { useTerminalDimensions } from "@opentui/react";
-import { useState } from "react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { useEffect, useState } from "react";
 import {
 	Button,
 	Checkbox,
@@ -64,6 +64,8 @@ import {
 	Tabs,
 	type TabItem,
 } from "../../../components/index.ts";
+import type { FocusItem } from "../../../hooks/use-focus-ring.ts";
+import { useHints } from "../../../hooks/use-hints.tsx";
 import { useIcons } from "../../../hooks/use-icons.tsx";
 import { useServerContent } from "../../../hooks/use-server-content.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
@@ -81,6 +83,49 @@ import { Detail, EmptyNote, Panel, type ServerTabProps } from "../panels.tsx";
  * panels that are not sections at all.
  */
 type ContentSubTabId = ContentSection["id"] | "resource" | "disk";
+
+/** Ring id of the nested section bar — the tab's first stop, so ←/→ are there on arrival. */
+export const CONTENT_TABS_ID = "__content-tabs";
+
+/** Ring id of the screen's *Browse marketplace* button. */
+export const CONTENT_MARKET_ID = "__content-market";
+
+/** Ring id of the screen's list of installed items. */
+export const CONTENT_LIST_ID = "__content-list";
+
+/**
+ * What the container needs to know about the screen currently on show, so it can
+ * build this tab's ring members.
+ *
+ * It travels up through `ServerTabProps.onContentState` for the same reason the
+ * Settings tab's form state does: a member's `disabled` must be the *same
+ * expression* as its control's, and which controls exist depends on the sub-tab —
+ * a fact that lives here. A stop that lands on nothing is what that rule prevents.
+ */
+export interface ServerContentTabState {
+	/** Whether the screen offers a marketplace button at all. */
+	market: boolean;
+	/** How many rows its list has; `0` when the screen has no list. */
+	rows: number;
+}
+
+/**
+ * This tab's contribution to the container's focus ring, in Tab order: the
+ * section bar, the screen's one button, then its list.
+ *
+ * The ids are always present and merely *disabled* where the control is not on
+ * screen, so Tab does not renumber under the user's fingers as they move between
+ * sections.
+ */
+export function serverContentRingIds(
+	state: ServerContentTabState,
+): FocusItem[] {
+	return [
+		CONTENT_TABS_ID,
+		{ id: CONTENT_MARKET_ID, disabled: !state.market },
+		{ id: CONTENT_LIST_ID, disabled: state.rows === 0 },
+	];
+}
 
 /** Human title per section, in the order the tab lists them. */
 const SECTION_TITLES: Record<ContentSection["id"], string> = {
@@ -146,6 +191,15 @@ function sizeLabel(item: ContentItem): string | undefined {
 }
 
 /**
+ * Cells reserved at the head of every row for the selection caret.
+ *
+ * Reserved on *every* row, not just the selected one: a caret that inserted
+ * itself would shift the whole row sideways as the selection moved, which reads
+ * as the list twitching rather than as a caret travelling down it.
+ */
+const CARET_WIDTH = 2;
+
+/**
  * Where a row's second line starts, so it sits under the item's name rather than
  * under its checkbox. Derived, not eyeballed: the {@link Checkbox}'s frame pays a
  * cell of padding, `[x]` is three, and the caption is a cell further along.
@@ -172,6 +226,9 @@ function ContentRow({
 	detailed,
 	icons: showIcons,
 	last,
+	selected,
+	listFocused,
+	onSelect,
 	onToggle,
 }: {
 	item: ContentItem;
@@ -179,6 +236,12 @@ function ContentRow({
 	/** Whether this section reserves the leading icon column at all. */
 	icons: boolean;
 	last: boolean;
+	/** Whether the list's caret is on this row. */
+	selected: boolean;
+	/** Whether the *list* holds the page's focus ring. */
+	listFocused: boolean;
+	/** Move the caret here — a click on the row selects it as well as toggling. */
+	onSelect: () => void;
 	onToggle: () => void;
 }) {
 	const { colors } = useTheme();
@@ -250,56 +313,74 @@ function ContentRow({
 		</box>
 	);
 
-	if (!showIcons) return <box {...rule}>{body}</box>;
+	// The caret is drawn even when the list does not hold the ring, in the muted
+	// ink instead of the accent: it is *where the keyboard would land*, which stays
+	// true — and useful — while the focus sits on the bar above.
+	const caret = (
+		<text
+			flexShrink={0}
+			width={CARET_WIDTH}
+			fg={listFocused ? colors.primary : colors.muted}
+		>
+			{selected ? icons.caret : " "}
+		</text>
+	);
 
+	// A row that is not the selected one still reports a click, so the pointer and
+	// the keyboard agree about where the caret is.
 	return (
-		<box flexDirection="row" gap={1} {...rule}>
-			{/*
-			 * The column is reserved whether or not *this* item has an icon, so the
-			 * names in a section stay in one line rather than stepping in and out by
-			 * seven cells depending on what each jar happened to ship.
-			 *
-			 * `cover` fills the box and centre-crops. A mod logo is very nearly
-			 * always square, so there is nothing to crop; what this buys is that a
-			 * logo which is *not* square still fills the column instead of sitting
-			 * letterboxed inside it, which reads as a broken picture at this size.
-			 * The protocol is left at `auto`, which resolves to Kitty or Sixel where
-			 * the terminal has them and Unicode half-blocks everywhere else — under
-			 * tmux that is always blocks.
-			 */}
-			{/*
-			 * The explicit background is what makes a transparent picture work. The
-			 * block renderer blends a sampled alpha into whatever the frame buffer
-			 * already holds for that cell, and an unpainted cell holds *black* — so
-			 * a logo with a transparent ground (most of them) draws its corners as
-			 * black squares. Painting the theme's own background here first gives
-			 * the blend something correct to land on. Found in a rendered frame.
-			 */}
-			<box
-				width={ICON_WIDTH}
-				height={ICON_HEIGHT}
-				flexShrink={0}
-				backgroundColor={colors.background}
-			>
-				{/*
-				 * The size goes on the `<image>` itself, not only on this box. An
-				 * unsized image is laid out `auto` and draws at a fraction of the
-				 * space its parent reserved — the box alone keeps the *names*
-				 * aligned but leaves the picture small and adrift inside it.
-				 *
-				 * An item that ships no icon draws the placeholder rather than
-				 * leaving a hole: plenty of jars have no logo at all (and every
-				 * `plugin.yml` declares none), so an empty box is the common case,
-				 * not the exception, and a column of them reads as a rendering
-				 * failure rather than as "this one shipped no picture".
-				 */}
-				<image
-					source={item.icon ?? PLACEHOLDER_ICON}
-					fit="cover"
-					width={ICON_WIDTH}
-					height={ICON_HEIGHT}
-				/>
-			</box>
+		<box flexDirection="row" gap={1} {...rule} onMouseDown={onSelect}>
+			{caret}
+			{!showIcons ? null : (
+				<>
+					{/*
+					 * The column is reserved whether or not *this* item has an icon, so the
+					 * names in a section stay in one line rather than stepping in and out by
+					 * seven cells depending on what each jar happened to ship.
+					 *
+					 * `cover` fills the box and centre-crops. A mod logo is very nearly
+					 * always square, so there is nothing to crop; what this buys is that a
+					 * logo which is *not* square still fills the column instead of sitting
+					 * letterboxed inside it, which reads as a broken picture at this size.
+					 * The protocol is left at `auto`, which resolves to Kitty or Sixel where
+					 * the terminal has them and Unicode half-blocks everywhere else — under
+					 * tmux that is always blocks.
+					 */}
+					{/*
+					 * The explicit background is what makes a transparent picture work. The
+					 * block renderer blends a sampled alpha into whatever the frame buffer
+					 * already holds for that cell, and an unpainted cell holds *black* — so
+					 * a logo with a transparent ground (most of them) draws its corners as
+					 * black squares. Painting the theme's own background here first gives
+					 * the blend something correct to land on. Found in a rendered frame.
+					 */}
+					<box
+						width={ICON_WIDTH}
+						height={ICON_HEIGHT}
+						flexShrink={0}
+						backgroundColor={colors.background}
+					>
+						{/*
+						 * The size goes on the `<image>` itself, not only on this box. An
+						 * unsized image is laid out `auto` and draws at a fraction of the
+						 * space its parent reserved — the box alone keeps the *names*
+						 * aligned but leaves the picture small and adrift inside it.
+						 *
+						 * An item that ships no icon draws the placeholder rather than
+						 * leaving a hole: plenty of jars have no logo at all (and every
+						 * `plugin.yml` declares none), so an empty box is the common case,
+						 * not the exception, and a column of them reads as a rendering
+						 * failure rather than as "this one shipped no picture".
+						 */}
+						<image
+							source={item.icon ?? PLACEHOLDER_ICON}
+							fit="cover"
+							width={ICON_WIDTH}
+							height={ICON_HEIGHT}
+						/>
+					</box>
+				</>
+			)}
 			{body}
 		</box>
 	);
@@ -310,11 +391,19 @@ function SectionBody({
 	section,
 	detailed,
 	icons,
+	selectedKey,
+	listFocused,
+	onSelect,
 	onToggle,
 }: {
 	section: ContentSection;
 	detailed: boolean;
 	icons: boolean;
+	/** Key of the row the caret is on, if any. */
+	selectedKey: string | undefined;
+	/** Whether the list holds the page's focus ring. */
+	listFocused: boolean;
+	onSelect: (item: ContentItem) => void;
 	onToggle: (item: ContentItem) => void;
 }) {
 	if (!section.present) {
@@ -336,6 +425,9 @@ function SectionBody({
 					detailed={detailed}
 					icons={icons}
 					last={index === section.items.length - 1}
+					selected={item.key === selectedKey}
+					listFocused={listFocused}
+					onSelect={() => onSelect(item)}
 					onToggle={() => onToggle(item)}
 				/>
 			))}
@@ -343,19 +435,13 @@ function SectionBody({
 	);
 }
 
-/** Props for {@link ContentTab}. */
-export interface ContentTabProps extends ServerTabProps {
-	/** Move the page's focus ring onto the nested bar when it is clicked. */
-	onFocused?: () => void;
-}
-
 export function ContentTab({
 	server,
 	insight,
 	size,
-	focused,
-	onFocused,
-}: ContentTabProps) {
+	focus,
+	onContentState,
+}: ServerTabProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { width } = useTerminalDimensions();
@@ -365,6 +451,7 @@ export function ContentTab({
 		insight?.properties?.levelName,
 	);
 	const [sub, setSub] = useState<ContentSubTabId>("mods");
+	const [selectedKey, setSelectedKey] = useState<string>();
 	const empty = icons.emptyValue;
 	const raw = insight?.properties?.raw ?? {};
 	const measuring = `measuring${icons.ellipsis}`;
@@ -417,11 +504,6 @@ export function ContentTab({
 		// });
 	};
 
-	// No keyboard handler of its own: the only key this tab answers is ←/→ on the
-	// nested bar, which {@link Tabs} handles while it holds the ring. The rows have
-	// no caret to move — switching an item is the checkbox's click, and its
-	// keyboard peer is `mctl content enable|disable`.
-
 	/** A section's panel: its counts and its marketplace button, then its rows. */
 	const panel = (section: ContentSection) => {
 		// A kind that does not load this sort of content has no panel at all: a
@@ -435,7 +517,7 @@ export function ContentTab({
 		const enabled = section.items.filter((item) => item.enabled).length;
 		const disabled = section.items.length - enabled;
 		return (
-			<Panel key={section.id} title={SECTION_TITLES[section.id]}>
+			<box key={section.id} paddingBottom={1}>
 				{section.supported ? null : (
 					<box marginBottom={1}>
 						<text fg={colors.warning} truncate wrapMode="none">
@@ -460,16 +542,29 @@ export function ContentTab({
 							size="small"
 							kind="ghost"
 							variant="info"
+							focused={focus?.isFocused(CONTENT_MARKET_ID)}
+							onFocused={() => focus?.setFocus(CONTENT_MARKET_ID)}
 							onClick={() => market(section.id)}
 						>
 							Browse marketplace
 						</Button>
 					) : null}
 				</box>
-				<box marginTop={1} flexDirection="column">
+				<box
+					// marginTop={1}
+					flexDirection="column"
+					border={["top", "bottom"]}
+					borderColor={colors.border}
+				>
 					<SectionBody
 						section={section}
 						detailed={detailed}
+						selectedKey={selectedKey}
+						listFocused={focus?.isFocused(CONTENT_LIST_ID) === true}
+						onSelect={(item) => {
+							setSelectedKey(item.key);
+							focus?.setFocus(CONTENT_LIST_ID);
+						}}
 						// Every row has a picture now — its own or the placeholder — so
 						// the column is reserved whenever the terminal is wide enough to
 						// pay for it, rather than depending on what the section's jars
@@ -486,7 +581,7 @@ export function ContentTab({
 						</EmptyNote>
 					</box>
 				) : null}
-			</Panel>
+			</box>
 		);
 	};
 
@@ -505,6 +600,8 @@ export function ContentTab({
 					size="small"
 					kind="ghost"
 					variant="info"
+					focused={focus?.isFocused(CONTENT_MARKET_ID)}
+					onFocused={() => focus?.setFocus(CONTENT_MARKET_ID)}
 					onClick={() =>
 						toast.info("Resource pack marketplace is not built yet", {
 							description:
@@ -613,6 +710,70 @@ export function ContentTab({
 		items.some((item) => item.id === sub) ? sub : items[0]?.id
 	) as ContentSubTabId;
 	const shown = sections.find((section) => section.id === active);
+	const rows = shown?.items ?? [];
+
+	// Keep the caret alive across polls and re-seed it when the screen changes.
+	// Keyed on the *keys*, not on `rows`: the listing is rebuilt every poll, so the
+	// array identity changes constantly while its membership rarely does.
+	const rowKeys = rows.map((item) => item.key).join("|");
+	useEffect(() => {
+		const keys = rowKeys === "" ? [] : rowKeys.split("|");
+		if (keys.length === 0) {
+			if (selectedKey !== undefined) setSelectedKey(undefined);
+			return;
+		}
+		if (!selectedKey || !keys.includes(selectedKey)) setSelectedKey(keys[0]);
+	}, [rowKeys, selectedKey]);
+
+	// The container owns the ring, so it needs the two facts only this tab has:
+	// whether the screen on show has a button, and whether it has any rows.
+	const hasMarket = shown ? shown.supported : active === "resource";
+	useEffect(() => {
+		onContentState?.({ market: hasMarket, rows: rows.length });
+		// Leaving the tab would otherwise strand these members in the container's
+		// ring for the *next* tab.
+		return () => onContentState?.({ market: false, rows: 0 });
+	}, [hasMarket, rows.length, onContentState]);
+
+	const listFocused = focus?.isFocused(CONTENT_LIST_ID) === true;
+	const selected = rows.find((item) => item.key === selectedKey);
+
+	const move = (delta: number) => {
+		if (rows.length === 0) return;
+		const from = rows.findIndex((item) => item.key === selectedKey);
+		const next = Math.max(0, Math.min(rows.length - 1, from + delta));
+		setSelectedKey(rows[next]?.key);
+	};
+
+	// The list answers keys only while it holds the ring — otherwise ←/→ belong to
+	// one of the two tab bars, exactly as they do on the Players grid. Space is the
+	// keyboard peer of the row's checkbox; Enter does the same, because a list of
+	// checkboxes is one of the few places both readings are obvious.
+	useKeyboard((key) => {
+		if (!listFocused) return;
+		if (key.name === "down" || key.name === "j") move(1);
+		else if (key.name === "up" || key.name === "k") move(-1);
+		else if (key.name === "space" || key.name === "return") {
+			if (selected) void run(selected);
+		}
+	});
+
+	// Both sets are registered against the same key signatures the container
+	// advertises, so a context hint *replaces* "switch tab" rather than
+	// contradicting it: on this tab the arrows move within the page, and the strip
+	// says which "within" is currently under them.
+	useHints(
+		[{ keys: [icons.arrowLeft, icons.arrowRight], label: "switch section" }],
+		{ scope: "context", active: focus?.isFocused(CONTENT_TABS_ID) === true },
+	);
+	useHints(
+		[
+			{ keys: [icons.arrowUp, icons.arrowDown], label: "select item" },
+			{ keys: "Space", label: "enable / disable" },
+			{ keys: "Tab", label: "leave list" },
+		],
+		{ scope: "context", active: listFocused },
+	);
 
 	const body = shown ? (
 		<>
@@ -638,14 +799,14 @@ export function ContentTab({
 				items={items}
 				activeId={active}
 				onChange={(next) => setSub(next as ContentSubTabId)}
-				focused={focused}
-				onFocused={onFocused}
+				focused={focus?.isFocused(CONTENT_TABS_ID)}
+				onFocused={() => focus?.setFocus(CONTENT_TABS_ID)}
 				paddingX={1}
 			/>
 			{/* `key` remounts on a switch, so each screen opens at its own top rather
 			    than inheriting the previous one's scroll offset. */}
 			<ScrollBox key={active} flexGrow={1} enableAccel>
-				<box flexDirection="column" paddingX={1} paddingTop={1}>
+				<box flexDirection="column" paddingX={1}>
 					{loading && installed === 0 ? (
 						<box paddingBottom={1}>
 							<EmptyNote>Reading what is installed…</EmptyNote>
