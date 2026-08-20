@@ -79,6 +79,36 @@ export const JAR_MANIFESTS = [
 /** Entry name a zipped datapack or resource pack describes itself in. */
 export const PACK_MANIFEST = "pack.mcmeta";
 
+/**
+ * The `pack.mcmeta` to read out of an archive (or a directory listing) that has
+ * none at its root.
+ *
+ * A correctly built pack keeps `pack.mcmeta` at the root, but the zip a user
+ * actually downloads is very often made by compressing the pack's *folder*, so
+ * everything sits one directory down: `MyPack/pack.mcmeta`. That wrapper is the
+ * only nesting accepted here — deeper hits are someone else's pack, not this
+ * one. Towns and Towers, for instance, bundles
+ * `resources/<patch>/pack.mcmeta` for the compatibility packs it ships, and
+ * naming the whole jar after one of those would be worse than not naming it.
+ *
+ * Ties are broken alphabetically so the answer never depends on the order the
+ * central directory happens to list entries in.
+ *
+ * @param names every entry name in the archive, or a directory's own listing
+ *   already joined as `<child>/pack.mcmeta`.
+ * @returns the entry to read, or `undefined` when nothing looks like one.
+ */
+export function pickPackManifest(names: readonly string[]): string | undefined {
+	const root = names.find((name) => name === PACK_MANIFEST);
+	if (root) return root;
+	return names
+		.filter((name) => {
+			const segments = name.split("/");
+			return segments.length === 2 && segments[1] === PACK_MANIFEST;
+		})
+		.sort((a, b) => a.localeCompare(b))[0];
+}
+
 /** Collapse whitespace and trim — manifest descriptions are frequently multi-line. */
 function oneLine(text: string | undefined): string | undefined {
 	if (text === undefined) return undefined;

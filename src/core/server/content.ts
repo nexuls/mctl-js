@@ -50,6 +50,7 @@ import {
 	parseJarMeta,
 	parsePackMcmeta,
 	pickIconEntry,
+	pickPackManifest,
 	type ContentLoader,
 	type ContentMeta,
 } from "./content-meta.ts";
@@ -193,18 +194,75 @@ async function readJarMeta(path: string): Promise<ContentMeta | undefined> {
 	}
 }
 
-/** Read a datapack's `pack.mcmeta`, whether it is zipped or an unpacked folder. */
-async function readPackMeta(
+/**
+ * The directory inside an unpacked datapack that actually holds its
+ * `pack.mcmeta` — the pack's own root, or the single wrapper folder a zip of
+ * the pack's *directory* unpacks into. `undefined` when neither has one.
+ *
+ * Only one level is looked at, and only when the root has no manifest: see
+ * {@link pickPackManifest} for why deeper hits belong to a different pack.
+ */
+async function unpackedPackRoot(path: string): Promise<string | undefined> {
+	if (await pathExists(join(path, PACK_MANIFEST))) return path;
+	for (const child of await readDirIfExists(path)) {
+		if (child.startsWith(".")) continue;
+		if (await pathExists(join(path, child, PACK_MANIFEST))) {
+			return join(path, child);
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Read whatever describes one entry of a `datapacks/` directory — which holds
+ * three different kinds of thing, not one, and reading only `pack.mcmeta` gets
+ * two of them wrong.
+ *
+ *  - **An unpacked pack**: a folder with `pack.mcmeta` in it, or one level down
+ *    when what was unpacked was a zip of the pack's own directory.
+ *  - **A zipped pack**: the same two shapes inside an archive.
+ *  - **A mod jar**: a mod that ships world data is installed by dropping the
+ *    *mod jar itself* into `world/datapacks/` — Towns and Towers and Cristel
+ *    Lib are both used that way. Such a jar names itself in its mod manifest;
+ *    its `pack.mcmeta` is either absent or carries nothing but a format number,
+ *    so a pack-only reader lists a real mod as an un-named filename. The mod
+ *    manifests are therefore tried **first**, exactly as they are for `mods/`,
+ *    and `pack.mcmeta` is the fallback.
+ *
+ * @param packRoot for an unpacked pack, the directory {@link unpackedPackRoot}
+ *   resolved; ignored for an archive.
+ */
+async function readDatapackMeta(
 	path: string,
 	directory: boolean,
+	packRoot: string | undefined,
 ): Promise<ContentMeta | undefined> {
 	try {
-		const text = directory
-			? await readTextIfExists(join(path, PACK_MANIFEST))
-			: (await readZipText(path, [PACK_MANIFEST])).get(PACK_MANIFEST);
-		return text === undefined ? undefined : parsePackMcmeta(text);
+		if (directory) {
+			const text =
+				packRoot === undefined
+					? undefined
+					: await readTextIfExists(join(packRoot, PACK_MANIFEST));
+			return text === undefined ? undefined : parsePackMcmeta(text);
+		}
+
+		// One pass for every manifest whose name is known in advance — the six mod
+		// manifests plus a root `pack.mcmeta`.
+		const entries = await readZipText(path, [...JAR_MANIFESTS, PACK_MANIFEST]);
+		const mod = parseJarMeta(entries);
+		if (mod) return mod;
+		const root = entries.get(PACK_MANIFEST);
+		if (root !== undefined) return parsePackMcmeta(root);
+
+		// Nothing at the root: the wrapper-folder zip. A second pass over the
+		// central directory, paid only by an archive that had no root manifest,
+		// because the entry's name is not knowable before the listing is read.
+		const nested = await readZipEntry(path, pickPackManifest);
+		return nested === undefined
+			? undefined
+			: parsePackMcmeta(Buffer.from(nested.bytes).toString("utf8"));
 	} catch (err) {
-		logger.debug({ path, err: String(err) }, "unreadable pack.mcmeta");
+		logger.debug({ path, err: String(err) }, "unreadable datapack manifest");
 		return undefined;
 	}
 }
@@ -282,16 +340,23 @@ async function readItem(
 		return undefined;
 	}
 
+	// Only a datapack is ever a directory; a directory in `mods/` or `plugins/` is
+	// a loader's own working folder, not content, and has nothing to read.
+	const packRoot =
+		section === "datapacks" && directory
+			? await unpackedPackRoot(path)
+			: undefined;
 	const meta =
 		section === "datapacks"
-			? await readPackMeta(path, directory)
+			? await readDatapackMeta(path, directory, packRoot)
 			: directory
 				? undefined
 				: await readJarMeta(path);
 
-	// An unpacked datapack keeps its `pack.png` beside its `pack.mcmeta`, so it is
-	// already a file on disk and needs no extraction or cache entry at all.
-	const packPng = join(path, "pack.png");
+	// An unpacked datapack keeps its `pack.png` beside its `pack.mcmeta` — in the
+	// wrapper folder when it has one — so it is already a file on disk and needs
+	// no extraction or cache entry at all.
+	const packPng = join(packRoot ?? path, "pack.png");
 	const icon = directory
 		? (await pathExists(packPng))
 			? packPng

@@ -199,6 +199,63 @@ describe("readServerContent", () => {
 		]);
 	});
 
+	test("a mod jar dropped into datapacks/ is named by its mod manifest", async () => {
+		// How Towns and Towers and Cristel Lib are actually installed: the mod jar
+		// itself goes into `world/datapacks/`. Reading only `pack.mcmeta` shows the
+		// filename and a format number, which is the bug this pins.
+		await jar("world/datapacks/cristellib-neoforge-1.21.1-3.1.7.jar", [
+			{
+				name: "META-INF/neoforge.mods.toml",
+				data: '[[mods]]\nmodId="cristellib"\ndisplayName="Cristel Lib"\nversion="3.1.7"\n',
+			},
+		]);
+		expect((await section("datapacks")).items[0]).toMatchObject({
+			name: "Cristel Lib",
+			version: "3.1.7",
+			loader: "neoforge",
+			derivedName: false,
+		});
+	});
+
+	test("a mod jar's own pack.mcmeta never outranks its mod manifest", async () => {
+		await jar("world/datapacks/cloth-config.jar", [
+			{
+				name: "fabric.mod.json",
+				data: '{"id":"cloth-config","name":"Cloth Config v15 API","version":"15.0.140"}',
+			},
+			{ name: "pack.mcmeta", data: '{"pack":{"pack_format":4}}' },
+		]);
+		expect((await section("datapacks")).items[0]).toMatchObject({
+			name: "Cloth Config v15 API",
+			version: "15.0.140",
+			loader: "fabric",
+		});
+	});
+
+	test("a pack zipped with its own folder around it is still read", async () => {
+		await jar("world/datapacks/wrapped.zip", [
+			{
+				name: "MyPack/pack.mcmeta",
+				data: '{"pack":{"pack_format":48,"description":"Wrapped rules"}}',
+			},
+		]);
+		// The same shape unpacked, where `pack.png` also sits in the wrapper.
+		const nested = join(dir, "world", "datapacks", "unwrapped", "MyPack");
+		await mkdir(nested, { recursive: true });
+		await writeFile(
+			join(nested, "pack.mcmeta"),
+			'{"pack":{"pack_format":48,"description":"Unwrapped rules"}}',
+		);
+		await writeFile(join(nested, "pack.png"), "png");
+
+		const items = (await section("datapacks")).items;
+		expect(items.map((item) => [item.name, item.description])).toEqual([
+			["unwrapped", "Unwrapped rules"],
+			["wrapped", "Wrapped rules"],
+		]);
+		expect(items[0]?.icon).toBe(join(nested, "pack.png"));
+	});
+
 	test("datapacks are read from the world that is actually configured", async () => {
 		await jar("creative/datapacks/pack.zip", [
 			{ name: "pack.mcmeta", data: '{"pack":{"pack_format":48}}' },

@@ -16,6 +16,7 @@ import {
 	parseMcmodInfo,
 	parseModsToml,
 	pickIconEntry,
+	pickPackManifest,
 	parsePackMcmeta,
 	parsePluginYml,
 	parseQuiltMod,
@@ -456,5 +457,36 @@ describe("pickIconEntry", () => {
 
 	test("a root icon still beats a nested one", () => {
 		expect(pickIconEntry(["assets/x/icon.png", "logo.png"])).toBe("logo.png");
+	});
+});
+
+describe("pickPackManifest", () => {
+	test("the root manifest wins", () => {
+		expect(pickPackManifest(["MyPack/pack.mcmeta", "pack.mcmeta"])).toBe(
+			"pack.mcmeta",
+		);
+	});
+
+	test("a zip of the pack's own folder is read one level down", () => {
+		expect(pickPackManifest(["MyPack/pack.mcmeta", "MyPack/data/x.json"])).toBe(
+			"MyPack/pack.mcmeta",
+		);
+	});
+
+	test("a deeper manifest belongs to a bundled pack and is ignored", () => {
+		// Towns and Towers ships compatibility packs under `resources/`; naming the
+		// whole jar after one of them would be worse than not naming it.
+		expect(
+			pickPackManifest([
+				"fabric.mod.json",
+				"resources/t_and_t_waystones_patch/pack.mcmeta",
+			]),
+		).toBeUndefined();
+	});
+
+	test("ties are broken alphabetically, not by listing order", () => {
+		expect(pickPackManifest(["b/pack.mcmeta", "a/pack.mcmeta"])).toBe(
+			"a/pack.mcmeta",
+		);
 	});
 });

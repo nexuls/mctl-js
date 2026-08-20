@@ -3,11 +3,34 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-17 (network profile management + the Server settings form)_
+_Last updated: 2026-08-20 (datapack variants: mod jars and wrapper-folder packs)_
 
 ---
 
 ## Done
+
+- **Datapacks that are mod jars, or zipped with a folder around them, are read properly (2026-08-20,
+  user report).** "The datapack have some variants, that is not well retrieved. Similar to what
+  happened to the mods." On the user's own `create-server`, `world/datapacks/` holds three **mod
+  jars** — the way Towns and Towers, Cristel Lib and Cloth Config are actually installed — and the
+  listing showed `t and t-fabric-neoforge-1.13.11` with no version at all, `cristellib-…` with
+  nothing, and `format 4` for the one that had a `pack.mcmeta`.
+  - `src/core/server/content-meta.ts` — new exported **`pickPackManifest(names)`**: the root
+    `pack.mcmeta`, else the one exactly **one** directory down (the zip-of-the-pack's-folder shape),
+    alphabetical on a tie. Deeper hits are deliberately ignored — T&T bundles
+    `resources/<patch>/pack.mcmeta` for its compatibility packs.
+  - `src/core/server/content.ts` — `readPackMeta` became **`readDatapackMeta`**: for an archive it
+    reads the six jar manifests *and* a root `pack.mcmeta` in one pass, prefers the mod manifest
+    (`parseJarMeta`), and only falls back to a second pass for a nested one. New
+    `unpackedPackRoot(path)` resolves the wrapper folder for an unpacked pack, and the `pack.png`
+    icon is now looked for there rather than only at the entry's root.
+  - Tests (**640 total**, +7): four over `pickPackManifest`, and three in `content.test.ts` (a mod
+    jar in `datapacks/`, a jar whose `pack.mcmeta` must not outrank its mod manifest, and the
+    wrapper-folder shape zipped *and* unpacked including its icon).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 640 pass / 0 fail, `bun run format` clean.
+    `mctl content create-server` now lists **Cloth Config v15 API 15.0.140**, **Cristel Lib 3.1.7**
+    and **Towns and Towers 1.13.11** under DATAPACKS, and the same three (with icons and
+    descriptions) render in the TUI's Content tab at 140×44.
 
 - **The reported tunnel/DNS failures, fixed at the cause (2026-08-17, user report).** "The
   cloudflared DNS doesn't seem to work, neither the cloudflare tunnels." Diagnosed from the user's

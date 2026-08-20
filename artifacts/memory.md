@@ -340,6 +340,16 @@ metadata in a list view. Add option to enable or disable mods. Add a dummy butto
   - **Forge's template writes `version="${file.jarVersion}"`** and the loader substitutes it at
     runtime from `META-INF/MANIFEST.MF`'s `Implementation-Version`. Unresolved, every Forge mod in
     the list shows that literal placeholder.
+  - **A `datapacks/` directory holds three different things, and only one of them is a plain pack.**
+    A mod that ships world data is installed by dropping the **mod jar itself** into
+    `world/datapacks/` (Towns and Towers, Cristel Lib, Cloth Config on the user's `create-server`), so
+    a datapack entry is read with the *mod* manifests first and `pack.mcmeta` only as the fallback —
+    reading only `pack.mcmeta` listed three real mods as `t and t-fabric-neoforge-1.13.11` /
+    `format 4`. The second variant is the **wrapper folder**: a zip made by compressing the pack's own
+    directory keeps everything one level down (`MyPack/pack.mcmeta`), which `pickPackManifest` accepts
+    — exactly one level, because deeper hits belong to a *bundled* pack (T&T ships
+    `resources/<patch>/pack.mcmeta`). The unpacked variant follows the same rule, and its `pack.png`
+    is looked for in the wrapper too.
   - **A `pack.mcmeta` has a description and no name**, which is why `ContentItem.derivedName` means
     "nothing described this at all", not "the name came from the filename" — the first cut said
     "no readable manifest" under every datapack.
