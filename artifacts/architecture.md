@@ -768,7 +768,7 @@ case a compile error.
 
 Its route is in `OWN_SCROLL`: the chrome is pinned and only the tab body scrolls. `TAB_OWNS_SCROLL`
 applies the same rule one level down for the Console tab, which pins a command line under its own
-scrolling pane. The console itself is `ConsoleView` in `app/Server/tabs/Console.tsx` and that tab is
+scrolling pane, and for the Content tab, which pins its nested section bar. The console itself is `ConsoleView` in `app/Server/tabs/Console.tsx` and that tab is
 its **only** entry point; its input capture follows `focused` rather than mounting, so the tab bar's
 ←/→ still work when the ring is not on the command line.
 
@@ -797,8 +797,17 @@ single argument field) that turns a selection into one `runPlayerAction` call.
 
 The **Content** tab is the second screen with its own data source and its own write: it reads
 through `hooks/use-server-content.ts` (over `core/server/content.ts`) rather than the shared
-`insight`, lists one section per directory with a Phase-5 *Browse marketplace* placeholder, and joins
-the container's ring so ↑/↓ select and Space parks or restores a jar. Its CLI peer is `mctl content`.
+`insight`, and shows one section per directory with a Phase-5 *Browse marketplace* placeholder. Its
+CLI peer is `mctl content`.
+
+It is also the one tab with a **nested tab bar**: mods, plugins, datapacks, the resource pack and
+the on-disk totals are five screens behind a second `Tabs`, because a modpack's hundred mods at
+three rows apiece buried everything under them. The bar is pinned and only the screen below it
+scrolls, so the tab is in `TAB_OWNS_SCROLL` (an inner scrollbox needs a definite height). Its
+entries are derived from the listing each render — a section with no panel gets no entry, and the
+active id falls back to the first entry rather than being corrected in an effect, since the sections
+land a round after mount. It joins the container's ring for that bar alone (`CONTENT_ID`): the rows
+are checkboxes with no caret, so a click parks or restores a jar and ←/→ switch sections.
 
 The **Settings** tab is the third screen with its own write, and the first that is a *form*: it
 edits `mctl.json` through `hooks/use-server-settings.ts` over `ServerManager.editServer` — exactly

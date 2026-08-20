@@ -119,6 +119,27 @@ async function mount(width = 100, height = 40): Promise<string> {
 	return (await mountTab(width, height)).captureCharFrame();
 }
 
+/**
+ * Click a section in the tab's nested bar and hand back the frame that follows.
+ *
+ * The sections are separate screens now, so anything but Mods — the first entry,
+ * and therefore what a fresh mount shows — has to be opened before it can be
+ * asserted on. The click lands on the label in the bar's own row, exactly as a
+ * user's would.
+ */
+async function openSection(
+	harness: Awaited<ReturnType<typeof mountTab>>,
+	label: string,
+): Promise<string> {
+	const lines = harness.captureCharFrame().split("\n");
+	const y = lines.findIndex((line) => line.includes(`| ${label}`));
+	expect(y).toBeGreaterThan(-1);
+	await harness.mockMouse.click((lines[y] as string).indexOf(label), y);
+	await Bun.sleep(60);
+	harness.renderOnce();
+	return harness.captureCharFrame();
+}
+
 test("a mod is listed under the name its manifest gives it", async () => {
 	await jar(
 		"mods/sodium-0.6.0+mc1.21.4.jar",
@@ -200,11 +221,42 @@ test("an absent directory reads differently from an empty one", async () => {
 });
 
 test("every section offers the marketplace placeholder", async () => {
-	const frame = await mount();
-	// Mods, plugins, datapacks and the resource pack — four sections, four
-	// buttons. They are placeholders (Phase 5), but a section without one would
-	// be the odd one out.
-	expect(frame.split("Browse marketplace").length - 1).toBe(4);
+	const harness = await mountTab();
+	// Mods, plugins, datapacks and the resource pack — four screens, one button
+	// each. They are placeholders (Phase 5), but a section without one would be
+	// the odd one out. One at a time, because each is its own sub-tab now.
+	const mods = harness.captureCharFrame();
+	expect(mods.split("Browse marketplace").length - 1).toBe(1);
+	for (const label of ["Plugins", "Datapacks", "Resource pack"]) {
+		const frame = await openSection(harness, label);
+		expect(frame.split("Browse marketplace").length - 1).toBe(1);
+	}
+});
+
+test("each section is its own screen behind the nested bar", async () => {
+	await jar("mods/sodium.jar", fabricMod("Sodium", "0.6.0"));
+	await jar("world/datapacks/tweaks.zip", [
+		{
+			name: "pack.mcmeta",
+			data: '{"pack":{"pack_format":48,"description":"Vanilla Tweaks"}}',
+		},
+	]);
+	const harness = await mountTab();
+	// A fresh mount opens on Mods, and the bar carries each section's count so
+	// the user can see which is worth opening without opening it.
+	const mods = harness.captureCharFrame();
+	expect(mods).toContain("Mods 1");
+	expect(mods).toContain("Datapacks 1");
+	expect(mods).toContain("Sodium");
+	// The point of the split: a long mod list no longer sits above the datapacks.
+	expect(mods).not.toContain("Vanilla Tweaks");
+
+	const datapacks = await openSection(harness, "Datapacks");
+	expect(datapacks).toContain("Vanilla Tweaks");
+	expect(datapacks).not.toContain("Sodium");
+
+	// The bar itself stays put — it is pinned above the screen that scrolls.
+	expect(datapacks).toContain("Mods 1");
 });
 
 test("datapacks are listed but say they cannot be switched here", async () => {
@@ -214,7 +266,7 @@ test("datapacks are listed but say they cannot be switched here", async () => {
 			data: '{"pack":{"pack_format":48,"description":"Vanilla Tweaks"}}',
 		},
 	]);
-	const frame = await mount();
+	const frame = await openSection(await mountTab(), "Datapacks");
 	expect(frame).toContain("Vanilla Tweaks");
 	expect(frame).toContain("/datapack");
 });

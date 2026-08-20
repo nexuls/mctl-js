@@ -3,11 +3,31 @@
 Baseline state for the next session. What's done, what's half-done and where it stopped, what to pick
 up next. Updated at the end of every session that changes code or decisions.
 
-_Last updated: 2026-08-20 (datapack variants: mod jars and wrapper-folder packs)_
+_Last updated: 2026-08-20 (Content tab split into nested sub-tabs)_
 
 ---
 
 ## Done
+
+- **The Content tab is a nested tab bar (2026-08-20, user request).** "Currently mods, datapacks,
+  etc is showing on single place. This will be difficult if we have a lot of mods." Mods, Plugins,
+  Datapacks, Resource pack and On disk are now five screens behind a second `Tabs` inside the tab,
+  instead of one stacked column.
+  - `src/app/Server/tabs/Content.tsx` — sub-tab id type `ContentSubTabId`, bar entries derived from
+    the listing each render (a section with no panel gets no entry; the label carries the item count
+    for a present directory), and the active id **falls back to the first entry** rather than being
+    corrected in an effect — the sections land a round after mount, so a remembered id names nothing
+    on the first frames. The bar is pinned and the body scrolls under it; the `Columns` layout that
+    paired Resource pack with On disk is gone now that each is its own screen, and the
+    rename/`.jar.disabled` footnote is shown only on a present, toggleable section.
+  - `src/app/Server/index.tsx` — `"content"` joined `TAB_OWNS_SCROLL` (an inner scrollbox needs a
+    definite height), and `CONTENT_ID` joined the focus ring while the tab is active so ←/→ switch
+    sections. The tab previously claimed no ring stop at all.
+  - Tests (**641 total**, +1): the marketplace-placeholder case walks the four screens instead of
+    counting four buttons in one frame, the datapack case opens its section first, and a new case
+    covers the split itself (counts on the bar, Sodium not visible from Datapacks and vice versa,
+    bar still pinned).
+  - Verified: `bunx tsc --noEmit` clean, `bun test` 641 pass / 0 fail, `bun run format` clean.
 
 - **Datapacks that are mod jars, or zipped with a folder around them, are read properly (2026-08-20,
   user report).** "The datapack have some variants, that is not well retrieved. Similar to what

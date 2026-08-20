@@ -23,8 +23,19 @@
  *
  * The list is **rows separated by a rule, with no selected row**: the checkbox on
  * each row is the only control, so there is nothing for a caret to point at. That
- * is also why the items arrive in plain name order — see `core/server/content.ts`
- * — and why the tab takes no keys at all.
+ * is also why the items arrive in plain name order — see `core/server/content.ts`.
+ *
+ * **The sections are a nested tab bar, not one stacked page.** A modpack server
+ * carries a hundred mods at three rows apiece, so a single column put the
+ * datapacks and the resource pack hundreds of rows below the fold. Each section
+ * — plus the resource pack and the on-disk totals — is its own screen behind a
+ * second {@link Tabs} bar, which is pinned while only the screen under it
+ * scrolls (this tab is therefore in the container's `TAB_OWNS_SCROLL`: an inner
+ * scrollbox needs a definite height, which a surrounding one cannot give it).
+ *
+ * The bar answers ←/→ while it holds the page's focus ring, which is the tab's
+ * only keyboard: the rows themselves still have no caret, and switching an item
+ * is the checkbox's click.
  *
  * **Enabling and disabling is a rename**, to and from `*.jar.disabled` — the
  * ecosystem's own convention, and the reason a disabled jar is listed at all.
@@ -45,7 +56,14 @@
 
 import type { BoxProps } from "@opentui/react";
 import { useTerminalDimensions } from "@opentui/react";
-import { Button, Checkbox } from "../../../components/index.ts";
+import { useState } from "react";
+import {
+	Button,
+	Checkbox,
+	ScrollBox,
+	Tabs,
+	type TabItem,
+} from "../../../components/index.ts";
 import { useIcons } from "../../../hooks/use-icons.tsx";
 import { useServerContent } from "../../../hooks/use-server-content.ts";
 import { useTheme } from "../../../hooks/use-theme.tsx";
@@ -56,14 +74,13 @@ import type {
 	ContentItem,
 	ContentSection,
 } from "../../../core/server/content.ts";
-import {
-	Columns,
-	Detail,
-	EmptyNote,
-	Panel,
-	TWO_COLUMN_WIDTH,
-	type ServerTabProps,
-} from "../panels.tsx";
+import { Detail, EmptyNote, Panel, type ServerTabProps } from "../panels.tsx";
+
+/**
+ * One screen of the Content tab: a content section, or one of the two summary
+ * panels that are not sections at all.
+ */
+type ContentSubTabId = ContentSection["id"] | "resource" | "disk";
 
 /** Human title per section, in the order the tab lists them. */
 const SECTION_TITLES: Record<ContentSection["id"], string> = {
@@ -326,7 +343,19 @@ function SectionBody({
 	);
 }
 
-export function ContentTab({ server, insight, size }: ServerTabProps) {
+/** Props for {@link ContentTab}. */
+export interface ContentTabProps extends ServerTabProps {
+	/** Move the page's focus ring onto the nested bar when it is clicked. */
+	onFocused?: () => void;
+}
+
+export function ContentTab({
+	server,
+	insight,
+	size,
+	focused,
+	onFocused,
+}: ContentTabProps) {
 	const { colors } = useTheme();
 	const { icons } = useIcons();
 	const { width } = useTerminalDimensions();
@@ -335,6 +364,7 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 		server,
 		insight?.properties?.levelName,
 	);
+	const [sub, setSub] = useState<ContentSubTabId>("mods");
 	const empty = icons.emptyValue;
 	const raw = insight?.properties?.raw ?? {};
 	const measuring = `measuring${icons.ellipsis}`;
@@ -387,10 +417,10 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 		// });
 	};
 
-	// No keyboard handler and no context hints: the list has no caret to move, so
-	// the tab claims none of the page's keys and ←/→ always belong to the tab bar.
-	// Switching an item is the checkbox's click; the keyboard peer is
-	// `mctl content enable|disable`.
+	// No keyboard handler of its own: the only key this tab answers is ←/→ on the
+	// nested bar, which {@link Tabs} handles while it holds the ring. The rows have
+	// no caret to move — switching an item is the checkbox's click, and its
+	// keyboard peer is `mctl content enable|disable`.
 
 	/** A section's panel: its counts and its marketplace button, then its rows. */
 	const panel = (section: ContentSection) => {
@@ -552,29 +582,78 @@ export function ContentTab({ server, insight, size }: ServerTabProps) {
 		</Panel>
 	);
 
-	return (
-		<box flexDirection="column" paddingX={1}>
-			{loading && installed === 0 ? (
-				<box paddingBottom={1}>
-					<EmptyNote>Reading what is installed…</EmptyNote>
-				</box>
+	// Only the sections that would draw a panel become sub-tabs, by exactly the
+	// rule `panel()` applies: a bar entry leading to an explanation of why there
+	// is nothing there is worse than no entry at all.
+	const sections = listing.sections.filter(
+		(section) => section.supported || section.items.length > 0,
+	);
+
+	// The count rides on the label because it is the number the bar exists for —
+	// which section is worth opening. A section whose directory is absent shows no
+	// count rather than `(0)`: "not a thing here" and "empty" are different, and
+	// the panel says which.
+	const items: TabItem[] = [
+		...sections.map((section) => ({
+			id: section.id,
+			label: section.present
+				? `${SECTION_TITLES[section.id]} ${section.items.length}`
+				: SECTION_TITLES[section.id],
+		})),
+		{ id: "resource", label: "Resource pack" },
+		{ id: "disk", label: "On disk" },
+	];
+
+	// Derived rather than corrected in an effect: the sections land a round after
+	// mount, so the remembered id names nothing on the first frames (and stops
+	// naming anything if a kind's last stray jar is removed under it). Falling back
+	// to the first entry keeps the bar and the body in agreement without a write.
+	// `items` is never empty — the last two entries do not depend on the listing.
+	const active = (
+		items.some((item) => item.id === sub) ? sub : items[0]?.id
+	) as ContentSubTabId;
+	const shown = sections.find((section) => section.id === active);
+
+	const body = shown ? (
+		<>
+			{panel(shown)}
+			{shown.present && shown.toggleable ? (
+				<EmptyNote>
+					{`Disabling renames a jar to *${".jar.disabled"}, which every loader ignores. Nothing is deleted, and it takes effect at the next start.`}
+				</EmptyNote>
 			) : null}
+		</>
+	) : active === "disk" ? (
+		onDisk
+	) : (
+		resourcePack
+	);
 
-			{/* The lists take the full width: a mod's name, version and description
-			    on one row is already most of a terminal, and halving it would leave
-			    every row truncated. Only the two summary panels below share a row. */}
-			{listing.sections.map((section) => panel(section))}
-
-			<Columns
-				wide={width >= TWO_COLUMN_WIDTH}
-				left={resourcePack}
-				right={onDisk}
-				paddingX={0}
+	return (
+		// The bar is pinned and only the screen under it scrolls, which is the whole
+		// point of the split: a hundred-mod list must not carry the section bar off
+		// the top of the terminal with it.
+		<box flexDirection="column" flexGrow={1}>
+			<Tabs
+				items={items}
+				activeId={active}
+				onChange={(next) => setSub(next as ContentSubTabId)}
+				focused={focused}
+				onFocused={onFocused}
+				paddingX={1}
 			/>
-
-			<EmptyNote>
-				{`Disabling renames a jar to *${".jar.disabled"}, which every loader ignores. Nothing is deleted, and it takes effect at the next start.`}
-			</EmptyNote>
+			{/* `key` remounts on a switch, so each screen opens at its own top rather
+			    than inheriting the previous one's scroll offset. */}
+			<ScrollBox key={active} flexGrow={1} enableAccel>
+				<box flexDirection="column" paddingX={1} paddingTop={1}>
+					{loading && installed === 0 ? (
+						<box paddingBottom={1}>
+							<EmptyNote>Reading what is installed…</EmptyNote>
+						</box>
+					) : null}
+					{body}
+				</box>
+			</ScrollBox>
 		</box>
 	);
 }

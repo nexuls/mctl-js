@@ -65,6 +65,14 @@ const TABS_ID = "__tabs";
 const CONSOLE_ID = "__console";
 
 /**
+ * Ring id of the Content tab's nested section bar. Its rows are checkboxes with
+ * no caret, so the bar is the only thing on that tab a key can move — it joins
+ * the ring while the tab is active so ←/→ can switch sections, exactly as they
+ * switch tabs on the bar above it.
+ */
+const CONTENT_ID = "__content";
+
+/**
  * Ring id of the Players tab's card grid. Like the console's command line, it
  * joins the ring only while its tab is active — so ←/→ still reach the tab bar
  * whenever the grid does not hold the focus.
@@ -80,6 +88,8 @@ const PLAYERS_ID = "__players";
 const TAB_OWNS_SCROLL: ReadonlySet<ServerTabId> = new Set<ServerTabId>([
 	"console",
 	"players",
+	// The Content tab pins its own section bar over a scrolling body.
+	"content",
 ]);
 
 export function ServerDetail() {
@@ -131,9 +141,9 @@ export function ServerDetail() {
 			...actions,
 			{ id: "remove", disabled: running },
 			...(tab === "console" ? [CONSOLE_ID] : []),
-			// The Content tab is deliberately absent: its rows are checkboxes with no
-			// caret to move, so it answers no keys and a ring stop there would be a
-			// Tab that lands on nothing.
+			// The Content tab's one stop is its nested section bar; its rows are
+			// checkboxes with no caret, so there is nothing else there to land on.
+			...(tab === "content" ? [CONTENT_ID] : []),
 			...(tab === "players" ? [PLAYERS_ID] : []),
 			// The Settings tab is a form: its fields join *this* ring rather than
 			// opening one of their own, because only one ring may listen at a time.
@@ -269,7 +279,13 @@ export function ServerDetail() {
 			case "world":
 				return <WorldTab {...tabProps} />;
 			case "content":
-				return <ContentTab {...tabProps} />;
+				return (
+					<ContentTab
+						{...tabProps}
+						focused={ring.isFocused(CONTENT_ID)}
+						onFocused={() => ring.setFocus(CONTENT_ID)}
+					/>
+				);
 			case "backups":
 				return <BackupsTab {...tabProps} />;
 			case "performance":

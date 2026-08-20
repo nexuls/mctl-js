@@ -5,6 +5,29 @@ delete entries that stop being true. Newest-relevant first.
 
 ---
 
+## A long list gets a nested tab bar, not a longer page (2026-08-20, user request)
+
+The Content tab stacked mods, plugins, datapacks, the resource pack and the on-disk totals in one
+column. On a modpack server that is a hundred mods at three rows apiece, so everything below the mod
+list was unreachable in practice. The fix the user asked for is a **second `Tabs` inside the tab**.
+
+Two things it taught, both reusable:
+
+- **A pinned inner bar means the tab owns its scrolling.** `components/Tabs.tsx` is itself a
+  `ScrollBox` (height 2), and an inner scrollbox needs a definite height a surrounding one cannot
+  give it — so the tab has to join `TAB_OWNS_SCROLL` in `app/Server/index.tsx` and render its own
+  `ScrollBox` under the bar. Same rule the router applies to pages one level up.
+- **Derive the active sub-tab, do not store-and-correct it.** `useServerContent` returns an empty
+  listing for the first round, so any remembered id names nothing on the first frames (and stops
+  naming anything if a section's last stray jar is removed). Keeping the id in state but resolving
+  `items.some(...) ? sub : items[0].id` at render keeps bar and body in agreement with no effect and
+  no flash.
+
+Both `Tabs` instances call `useKeyboard` for ←/→ and only the focused one answers, so nesting them
+needs nothing special beyond a ring stop for the inner bar (`CONTENT_ID`).
+
+---
+
 ## Why the tunnel and the DNS "didn't work" (2026-08-17, user report)
 
 User: "the cloudflared DNS doesn't seem to work, neither the cloudflare tunnels." Diagnosed from
