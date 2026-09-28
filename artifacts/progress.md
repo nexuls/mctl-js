@@ -1505,6 +1505,12 @@ roadmap in `plan.md`.
     distance for both players; and the app driven under **tmux** at 120×40 rendered the Offline cards
     with real values (`seen 6m ago` / `6m played` / `1 deaths` / `lvl 0 · survival`), no stderr.
 
+- **`MaxListenersExceededWarning` on the Settings page — fixed** (2026-09-28). Every `useKeyboard`
+  adds a `keypress` listener to the single `renderer.keyInput` emitter, so a page with ~40 controls
+  sailed past Node's default ceiling of 10 and printed the warning over the alternate screen.
+  Nothing leaks (the hook unsubscribes on unmount), so `renderApp()` now raises the ceiling to 200
+  right after `createCliRenderer`. See `memory.md` § OpenTUI gotchas.
+
 ## In progress
 
 - Nothing mid-implementation. All the above compiles, tests, and runs.

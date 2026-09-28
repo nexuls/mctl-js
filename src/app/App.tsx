@@ -112,6 +112,16 @@ export async function renderApp(): Promise<void> {
 		enableMouseMovement: true,
 	});
 
+	// `useKeyboard` is per-control, not per-page: OpenTUI has no focus manager, so
+	// every Switch/Select/Checkbox/Button and every focus ring subscribes to the
+	// renderer's single `keypress` emitter and filters by its own `focused` flag.
+	// A form-heavy page (Settings mounts ~40 controls) therefore blows past Node's
+	// default 10-listener ceiling and prints a MaxListenersExceededWarning over the
+	// alternate screen. The listeners are unsubscribed on unmount — nothing leaks —
+	// so raise the ceiling rather than silence it entirely: 200 is far above any
+	// page we render, and a genuine leak would still trip the warning.
+	renderer.keyInput.setMaxListeners(200);
+
 	// Stop the event system when the renderer shuts down (Ctrl+C / quit), so
 	// watchers and the tail don't outlive the UI.
 	renderer.on("destroy", () => void events.stop());

@@ -1842,6 +1842,16 @@ Disabled buttons are also acquiring tabs."
 - **Box border *sides* are `border={["top"|"right"|"bottom"|"left"]}`** — `border?: boolean |
   BorderSides[]`. There is **no** `borderTop`/`borderRight`/`borderBottom`/`borderLeft` prop (they
   fail typecheck). `borderColor` colours whichever sides are on.
+- **`useKeyboard` listeners hit Node's 10-listener ceiling on form-heavy pages.** Every `useKeyboard`
+  subscribes to the *one* `renderer.keyInput` emitter (`AppContext.keyHandler` is `renderer.keyInput`,
+  an `InternalKeyHandler extends EventEmitter`) and filters by its own `focused` flag — there is no
+  focus manager, so the count scales with mounted controls (Switch, Checkbox, Select, Button, every
+  `useFocusRing`). Settings mounts ~40 such controls, so opening it printed a
+  `MaxListenersExceededWarning` (11 keypress listeners) straight over the alternate screen.
+  - **Not a leak** — `useKeyboard`'s effect cleanup unsubscribes on unmount. **Fix:**
+    `renderer.keyInput.setMaxListeners(200)` in `renderApp()`, right after `createCliRenderer`. 200,
+    not 0/Infinity, so a genuine leak would still trip the warning.
+
 - **`CliRenderer` extends EventEmitter and emits `"destroy"`** (`RendererEvents.DESTROY`). Use
   `renderer.on("destroy", …)` to tear down process-wide resources (we stop the event system there).
   Note `useQuit` does `renderer.destroy()` then `process.exit(0)`, so on an explicit quit the OS also
